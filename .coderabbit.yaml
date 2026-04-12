@@ -15,5 +15,6 @@ reviews:
     base_branches:
       - main
       - develop
+      - "feature/.*"
 chat:
   auto_reply: true
