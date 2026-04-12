@@ -1,0 +1,28 @@
+services:
+  db:
+    image: mysql:8.4.8
+    container_name: mysql-potential
+    env_file:
+      - .env
+    volumes:
+      - ./db-data:/var/lib/mysql
+    ports:
+      - "${DB_PORT}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 7
+    networks:
+      network-potential:
+
+  redis:
+    image: redis:8.6.1
+    container_name: redis-potential
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      network-potential:
+
+networks:
+  network-potential:

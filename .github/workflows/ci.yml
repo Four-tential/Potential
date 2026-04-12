@@ -1,0 +1,49 @@
+name: ci.yml
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, dev ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: JDK 21 셋업
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: gradlew 권한 셋업
+        run: chmod +x gradlew
+
+      - name: SonarCloud 캐싱
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: 빌드 및 테스트 분석
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION_KEY }}
+        run: ./gradlew clean build jacocoTestReport sonar
+
+      - name: JaCoCo 리포트 업로드
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: build/reports/jacoco/test/html/
