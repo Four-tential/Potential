@@ -2,7 +2,6 @@ package four_tential.potential.domain.attendances.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UuidGenerator;
@@ -13,9 +12,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Getter
 @Entity
 @Table(name = "attendances")
-@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
 public class Attendance {
@@ -52,12 +51,13 @@ public class Attendance {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Builder
-    public Attendance(UUID orderId, UUID memberId, UUID courseId) {
-        this.orderId = orderId;
-        this.memberId = memberId;
-        this.courseId = courseId;
-        this.status = AttendanceStatus.ABSENT;
+    public static Attendance register(UUID orderId, UUID memberId, UUID courseId) {
+        Attendance attendance = new Attendance();
+        attendance.orderId = orderId;
+        attendance.memberId = memberId;
+        attendance.courseId = courseId;
+        attendance.status = AttendanceStatus.ABSENT;
+        return attendance;
     }
 
     public void attend(String qrCode) {
