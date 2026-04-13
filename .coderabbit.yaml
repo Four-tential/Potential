@@ -15,6 +15,6 @@ reviews:
     base_branches:
       - main
       - dev
-      - "FT-*"
+      - "FT-.*"
 chat:
   auto_reply: true
