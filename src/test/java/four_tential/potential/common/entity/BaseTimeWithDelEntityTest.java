@@ -1,5 +1,6 @@
 package four_tential.potential.common.entity;
 
+import four_tential.potential.domain.member.MemberStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -23,11 +24,13 @@ class BaseTimeWithDelEntityTest {
         assertThat(entity.isDeleted()).isFalse();
         assertThat(entity.getDeletedAt()).isNull();
 
+        LocalDateTime beforeDelete = LocalDateTime.now();
         entity.delete();
+        LocalDateTime afterDelete = LocalDateTime.now();
 
         assertThat(entity.isDeleted()).isTrue();
         assertThat(entity.getDeletedAt()).isNotNull();
-        assertThat(entity.getDeletedAt()).isBeforeOrEqualTo(LocalDateTime.now());
+        assertThat(entity.getDeletedAt()).isAfterOrEqualTo(beforeDelete).isBeforeOrEqualTo(afterDelete);
     }
 
     @Test
@@ -40,5 +43,24 @@ class BaseTimeWithDelEntityTest {
 
         assertThat(entity.isDeleted()).isFalse();
         assertThat(entity.getDeletedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("MemberStatus의 모든 값이 존재 체크")
+    void values() {
+        assertThat(MemberStatus.values())
+                .containsExactly(
+                        MemberStatus.ACTIVE,
+                        MemberStatus.SUSPENDED,
+                        MemberStatus.WITHDRAWAL
+                );
+    }
+
+    @Test
+    @DisplayName("문자열로 MemberStatus를 조회할 수 있는지 체크")
+    void valueOf() {
+        assertThat(MemberStatus.valueOf("ACTIVE")).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(MemberStatus.valueOf("SUSPENDED")).isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(MemberStatus.valueOf("WITHDRAWAL")).isEqualTo(MemberStatus.WITHDRAWAL);
     }
 }

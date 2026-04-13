@@ -32,9 +32,29 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false, length = 60)
     private String name;
 
-    @Column(name = "pf_image_url", nullable = false, length = 300)
+    @Column(name = "pf_image_url", length = 300)
     private String profileImageUrl;
 
     @Column(name = "withdrawal_at")
     private LocalDateTime withdrawalAt;
+
+    public static Member register(String email, String password, String phone, String name) {
+        Member member = new Member();
+        member.email = email;
+        member.password = password;
+        member.phone = phone;
+        member.name = name;
+        member.profileImageUrl = null;
+        return member;
+    }
+
+    public static Member register(String email, String password, String phone, String name, String profileImageUrl) {
+        Member member = new Member();
+        member.email = email;
+        member.password = password;
+        member.phone = phone;
+        member.name = name;
+        member.profileImageUrl = profileImageUrl;
+        return member;
+    }
 }
