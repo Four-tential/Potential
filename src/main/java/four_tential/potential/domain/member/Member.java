@@ -12,9 +12,7 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "members", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_members_id", columnNames = {"id"})
-})
+@Table(name = "members")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Member extends BaseTimeEntity {
     @Id
