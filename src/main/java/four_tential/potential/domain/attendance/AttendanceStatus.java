@@ -1,4 +1,4 @@
-package four_tential.potential.domain.attendances.entity;
+package four_tential.potential.domain.attendance;
 
 import lombok.Getter;
 
