@@ -93,6 +93,9 @@ dependencies {
     // Testcontainers
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 
+    // PortOne
+    implementation 'io.portone:server-sdk:0.23.0'
+
     // QR code
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.zxing:javase:3.5.3'

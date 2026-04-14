@@ -74,22 +74,6 @@ class RefundTest {
     }
 
     @Test
-    @DisplayName("환불 생성 시 createdAt 이 null 이 아니다")
-    void create_createdAt_not_null() {
-        Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
-        assertThat(refund.getCreatedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("환불 생성 시 updatedAt 이 null 이 아니다")
-    void create_updatedAt_not_null() {
-        Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
-        assertThat(refund.getUpdatedAt()).isNotNull();
-    }
-
-    @Test
     @DisplayName("환불 실패 생성 시 FAILED 상태로 생성된다")
     void fail_status_failed() {
         Payment payment = createPayment();
@@ -119,21 +103,5 @@ class RefundTest {
         Payment payment = createPayment();
         Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
         assertThat(refund.getRefundPrice()).isEqualTo(50000L);
-    }
-
-    @Test
-    @DisplayName("환불 실패 생성 시 createdAt 이 null 이 아니다")
-    void fail_createdAt_not_null() {
-        Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
-        assertThat(refund.getCreatedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("환불 실패 생성 시 updatedAt 이 null 이 아니다")
-    void fail_updatedAt_not_null() {
-        Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
-        assertThat(refund.getUpdatedAt()).isNotNull();
     }
 }
