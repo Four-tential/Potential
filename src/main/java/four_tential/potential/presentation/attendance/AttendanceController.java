@@ -3,6 +3,7 @@ package four_tential.potential.presentation.attendance;
 import four_tential.potential.application.attendance.AttendanceService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.domain.attendance.Attendance;
+import four_tential.potential.domain.attendance.dto.AttendanceResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -50,20 +51,22 @@ public class AttendanceController {
 
     // 출석 현황 조회 — 강사: 전체 / 수강생: 본인
     @GetMapping("/courses/{courseId}/attendances")
-    public ResponseEntity<?> getAttendances(
+    public ResponseEntity<BaseResponse<AttendanceResponse>> getAttendances(
             @PathVariable UUID courseId,
             @AuthenticationPrincipal MemberPrincipal principal
     ) {
+        AttendanceResponse response;
+
         if ("INSTRUCTOR".equals(principal.role())) {
             List<Attendance> attendances = attendanceService.findAllByCourse(courseId);
-            return ResponseEntity.ok(
-                    BaseResponse.success(HttpStatus.OK.name(), "출석 현황 조회가 완료되었습니다", attendances)
-            );
+            response = AttendanceResponse.ofInstructor(attendances);
+        } else {
+            Attendance attendance = attendanceService.findMyAttendance(principal.memberId(), courseId);
+            response = AttendanceResponse.ofStudent(attendance);
         }
 
-        Attendance attendance = attendanceService.findMyAttendance(principal.memberId(), courseId);
         return ResponseEntity.ok(
-                BaseResponse.success(HttpStatus.OK.name(), "출석 정보 조회가 완료되었습니다", attendance)
+                BaseResponse.success(HttpStatus.OK.name(), "출석 현황 조회가 완료되었습니다", response)
         );
     }
 }
