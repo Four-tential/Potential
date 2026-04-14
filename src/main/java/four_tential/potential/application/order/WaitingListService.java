@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.WaitingListRepository;
 import four_tential.potential.infra.redis.RedisConstants;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class
@@ -24,75 +26,63 @@ WaitingListService {
     private final RedissonClient redissonClient;
 
     public boolean tryOccupyingStock(UUID courseId, UUID memberId) {
-        String lockKey = RedisConstants.ORDER_LOCK_PREFIX + courseId + ":" + memberId;
-        RLock lock = redissonClient.getLock(lockKey);
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+        String stockKey = RedisConstants.COURSE_STOCK_PREFIX + courseId;
 
-        try{
-            if (lock.tryLock(5, 10, TimeUnit.SECONDS)) {
-                String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
-                String stockKey = RedisConstants.COURSE_STOCK_PREFIX + courseId;
+        // Lua 스크립트를 사용하여 중복 점유 확인 및 재고 차감을 원자적으로 처리
+        // 리턴 코드: 1 (성공), -1 (중복), 0 (재고 부족)
+        String luaScript =
+                "if redis.call('exists', KEYS[1]) == 1 then " +
+                "  return -1 " +
+                "end " +
+                "local stock = tonumber(redis.call('get', KEYS[2])) " +
+                "if stock and stock > 0 then " +
+                "  redis.call('decr', KEYS[2]) " +
+                "  redis.call('setex', KEYS[1], 600, 'OCCUPIED') " +
+                "  return 1 " +
+                "else " +
+                "  return 0 " +
+                "end";
 
-                // 이미 해당 강의의 재고를 점유하고 있는지 확인
-                if (Boolean.TRUE.equals(redisTemplate.hasKey(occupancyKey))) {
-                    throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
-                }
+        Long result = redisTemplate.execute(
+                new org.springframework.data.redis.core.script.DefaultRedisScript<>(luaScript, Long.class),
+                java.util.List.of(occupancyKey, stockKey)
+        );
 
-                // Redis에서 재고 차감
-                Long stock = redisTemplate.opsForValue().decrement(stockKey);
-
-                if (stock != null && stock >= 0) {
-                    // 재고 점유 성공 시 10분 유지
-                    redisTemplate.opsForValue().set(occupancyKey, "OCCUPIED", Duration.ofMinutes(10));
-                    return true;
-                }
-
-                // 재고 부족
-                redisTemplate.opsForValue().increment(stockKey);
-                return false;
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ServiceErrorException(OrderExceptionEnum.ERR_LOCK_INTERRUPTED);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
+        if (result == null) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_SYSTEM_ERROR);
         }
-        return false;
+
+        if (result == -1) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
+        }
+
+        return result == 1;
     }
 
     public void rollbackOccupiedStock(UUID courseId, UUID memberId) {
-        String lockKey = RedisConstants.ORDER_LOCK_PREFIX + courseId + ":" + memberId;
-        RLock lock = redissonClient.getLock(lockKey);
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+        String stockKey = RedisConstants.COURSE_STOCK_PREFIX + courseId;
 
-        try {
-            if (lock.tryLock(5, 10, TimeUnit.SECONDS)) {
-                String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
-                String stockKey = RedisConstants.COURSE_STOCK_PREFIX + courseId;
+        // Lua 스크립트를 사용하여 점유 확인, 삭제, 재고 복구를 원자적으로 처리
+        // 리턴 코드: 변경된 재고 수량 (성공), -1 (점유 데이터 없음)
+        String luaScript =
+                "if redis.call('exists', KEYS[1]) == 1 then " +
+                "  redis.call('del', KEYS[1]) " +
+                "  return redis.call('incr', KEYS[2]) " +
+                "else " +
+                "  return -1 " +
+                "end";
 
-                // Lua 스크립트를 사용하여 점유 확인, 삭제, 재고 복구를 원자적으로 처리
-                String luaScript =
-                        "if redis.call('exists', KEYS[1]) == 1 then " +
-                                "  redis.call('del', KEYS[1]) " +
-                                "  return redis.call('incr', KEYS[2]) " +
-                                "else " +
-                                "  return nil " +
-                                "end";
+        Long result = redisTemplate.execute(
+                new org.springframework.data.redis.core.script.DefaultRedisScript<>(luaScript, Long.class),
+                java.util.List.of(occupancyKey, stockKey)
+        );
 
-                redisTemplate.execute(
-                        new org.springframework.data.redis.core.script.DefaultRedisScript<>(luaScript, Long.class),
-                        java.util.List.of(occupancyKey, stockKey)
-                );
-            } else {
-                throw new ServiceErrorException(OrderExceptionEnum.ERR_LOCK_ACQUISITION_FAILED);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ServiceErrorException(OrderExceptionEnum.ERR_LOCK_INTERRUPTED);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
+        if (result == null || result == -1) {
+            log.warn("재고 롤백 실패: 점유 데이터를 찾을 수 없습니다. courseId={}, memberId={}", courseId, memberId);
+        } else {
+            log.info("재고 롤백 성공: courseId={}, memberId={}, 현재 재고={}", courseId, memberId, result);
         }
     }
 
@@ -123,7 +113,7 @@ WaitingListService {
         );
 
         if (result == null) {
-            throw new ServiceErrorException(OrderExceptionEnum.ERR_LOCK_INTERRUPTED);
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_SYSTEM_ERROR);
         }
 
         if (result == -1) {

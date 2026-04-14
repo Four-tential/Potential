@@ -32,7 +32,11 @@ public class OrderFacade {
                 );
             } catch (Exception e) {
                 // DB 저장 실패 시 Redis 재고 복구 (보상 트랜잭션)
-                waitingListService.rollbackOccupiedStock(request.courseId(), memberId);
+                try {
+                    waitingListService.rollbackOccupiedStock(request.courseId(), memberId);
+                } catch (Exception rollbackEx) {
+                    e.addSuppressed(rollbackEx);
+                }
                 throw e;
             }
         }

@@ -22,7 +22,9 @@ class OrderTest {
         String titleSnap = "테스트 코스";
 
         // when
+        LocalDateTime beforeRegister = LocalDateTime.now();
         Order order = Order.register(memberId, courseId, orderCount, priceSnap, titleSnap);
+        LocalDateTime afterRegister = LocalDateTime.now();
 
         // then
         assertThat(order).isNotNull();
@@ -33,7 +35,8 @@ class OrderTest {
         assertThat(order.getTotalPriceSnap()).isEqualTo(priceSnap.multiply(BigInteger.valueOf(orderCount)));
         assertThat(order.getTitleSnap()).isEqualTo(titleSnap);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(order.getExpireAt()).isAfter(LocalDateTime.now());
-        assertThat(order.getExpireAt()).isBeforeOrEqualTo(LocalDateTime.now().plusMinutes(Order.ORDER_EXPIRATION_MINUTES));
+        assertThat(order.getExpireAt())
+                .isAfterOrEqualTo(beforeRegister.plusMinutes(Order.ORDER_EXPIRATION_MINUTES))
+                .isBeforeOrEqualTo(afterRegister.plusMinutes(Order.ORDER_EXPIRATION_MINUTES));
     }
 }
