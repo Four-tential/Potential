@@ -34,7 +34,7 @@ class WebhookTest {
     @DisplayName("웹훅 수신 시 reciveAt 이 null 이 아니다")
     void receive_reciveAt_not_null() {
         Webhook webhook = Webhook.receive("rec_id_123", "Transaction.Paid");
-        assertThat(webhook.getReciveAt()).isNotNull();
+        assertThat(webhook.getReceivedAt()).isNotNull();
     }
 
     @Test

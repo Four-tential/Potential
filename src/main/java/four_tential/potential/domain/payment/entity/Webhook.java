@@ -31,8 +31,8 @@ public class Webhook {
     @Column(name = "event_status", nullable = false, length = 100)
     private String eventStatus;
 
-    @Column(name = "recive_at")
-    private LocalDateTime reciveAt;
+    @Column(name = "received_at")
+    private LocalDateTime receivedAt;
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
@@ -45,7 +45,7 @@ public class Webhook {
         webhook.recWebhookId = recWebhookId;
         webhook.eventStatus = eventStatus;
         webhook.status = WebhookStatus.PENDING;
-        webhook.reciveAt = LocalDateTime.now();
+        webhook.recivedAt = LocalDateTime.now();
         webhook.createdAt = LocalDateTime.now();
         return webhook;
     }
