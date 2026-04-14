@@ -100,6 +100,20 @@ class AttendanceControllerTest {
         }
 
         @Test
+        @DisplayName("수강생이 아니면 ERR_SCAN_ONLY_STUDENT 예외가 발생한다")
+        void scan_notStudent_throwsException() {
+            // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.scan(request, instructorPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_SCAN_ONLY_STUDENT.getMessage());
+
+            verify(attendanceService, never()).scan(any(), any());
+        }
+
+        @Test
         @DisplayName("QR 토큰이 없으면 예외가 전파된다")
         void scan_tokenNotFound_propagatesException() {
             // given
