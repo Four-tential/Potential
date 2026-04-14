@@ -54,16 +54,22 @@ public class DistributedLockAspect {
         RLock rLock = redissonClient.getLock(key);
 
         // watchDog 을 먼저 활성화 하고 필요한 경우에 leaseTime 활용을 위한 분기
-        boolean isLock = distributedLock.leaseTime() > 0
-                ? rLock.tryLock(
-                distributedLock.waitTime(),
-                distributedLock.leaseTime(),
-                distributedLock.timeUnit()
-        )
-                : rLock.tryLock(
-                distributedLock.waitTime(),
-                distributedLock.timeUnit()
-        );
+        boolean isLock;
+        try {
+            isLock = distributedLock.leaseTime() > 0
+                    ? rLock.tryLock(
+                    distributedLock.waitTime(),
+                    distributedLock.leaseTime(),
+                    distributedLock.timeUnit()
+            )
+                    : rLock.tryLock(
+                    distributedLock.waitTime(),
+                    distributedLock.timeUnit()
+            );
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceErrorException(ERR_GET_DISTRIBUTED_LOCK_FAIL);
+        }
 
         if (!isLock) {
             throw new ServiceErrorException(ERR_GET_DISTRIBUTED_LOCK_FAIL);

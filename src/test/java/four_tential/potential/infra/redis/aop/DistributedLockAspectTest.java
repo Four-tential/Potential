@@ -133,6 +133,19 @@ class DistributedLockAspectTest {
     }
 
     @Test
+    @DisplayName("tryLock 중 인터럽트 발생 - 인터럽트 상태 복원 후 ServiceErrorException 발생")
+    void lock_interrupted_restoresInterruptAndThrows() throws Throwable {
+        given(distributedLock.key()).willReturn("'testKey'");
+        given(redissonClient.getLock("dLock:testKey")).willReturn(rLock);
+        given(rLock.tryLock(5L, 10L, TimeUnit.SECONDS)).willThrow(new InterruptedException());
+
+        assertThatThrownBy(() -> distributedLockAspect.lock(joinPoint, distributedLock))
+                .isInstanceOf(ServiceErrorException.class);
+        assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        verify(aopInTransaction, never()).proceed(any());
+    }
+
+    @Test
     @DisplayName("현재 스레드가 락 미보유 - unlock 미호출")
     void lock_notHeldByCurrentThread_doesNotUnlock() throws Throwable {
         given(distributedLock.key()).willReturn("'testKey'");
