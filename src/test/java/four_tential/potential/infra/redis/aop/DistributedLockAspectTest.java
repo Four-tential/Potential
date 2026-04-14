@@ -50,7 +50,6 @@ class DistributedLockAspectTest {
         given(distributedLock.key()).willReturn("'testKey'");
         given(redissonClient.getLock("dLock:testKey")).willReturn(rLock);
         given(rLock.tryLock(5L, 10L, TimeUnit.SECONDS)).willReturn(true);
-        given(rLock.isHeldByCurrentThread()).willReturn(true);
         given(aopInTransaction.proceed(joinPoint)).willReturn("result");
 
         Object result = distributedLockAspect.lock(joinPoint, distributedLock);
@@ -75,7 +74,7 @@ class DistributedLockAspectTest {
 
     @Test
     @DisplayName("빈 키 - ServiceErrorException 발생")
-    void lock_blankKey_throwsIllegalArgumentException() {
+    void lock_blankKey_throwsServiceErrorException() {
         given(distributedLock.key()).willReturn("''");
 
         assertThatThrownBy(() -> distributedLockAspect.lock(joinPoint, distributedLock))
@@ -90,7 +89,6 @@ class DistributedLockAspectTest {
         given(distributedLock.leaseTime()).willReturn(-1L);
         given(redissonClient.getLock("dLock:testKey")).willReturn(rLock);
         given(rLock.tryLock(5L, TimeUnit.SECONDS)).willReturn(true);
-        given(rLock.isHeldByCurrentThread()).willReturn(true);
         given(aopInTransaction.proceed(joinPoint)).willReturn(null);
 
         distributedLockAspect.lock(joinPoint, distributedLock);
@@ -107,7 +105,6 @@ class DistributedLockAspectTest {
         given(distributedLock.key()).willReturn("'testKey'");
         given(redissonClient.getLock("dLock:testKey")).willReturn(rLock);
         given(rLock.tryLock(5L, 10L, TimeUnit.SECONDS)).willReturn(true);
-        given(rLock.isHeldByCurrentThread()).willReturn(true);
         given(aopInTransaction.proceed(joinPoint)).willThrow(new RuntimeException("비즈니스 로직 예외"));
 
         assertThatThrownBy(() -> distributedLockAspect.lock(joinPoint, distributedLock))
@@ -124,12 +121,12 @@ class DistributedLockAspectTest {
         given(distributedLock.key()).willReturn("#orderId");
         given(redissonClient.getLock("dLock:42")).willReturn(rLock);
         given(rLock.tryLock(5L, 10L, TimeUnit.SECONDS)).willReturn(true);
-        given(rLock.isHeldByCurrentThread()).willReturn(true);
         given(aopInTransaction.proceed(joinPoint)).willReturn(null);
 
         distributedLockAspect.lock(joinPoint, distributedLock);
 
         verify(redissonClient).getLock("dLock:42");
+        verify(rLock).unlock();
     }
 
     @Test
@@ -143,19 +140,6 @@ class DistributedLockAspectTest {
                 .isInstanceOf(ServiceErrorException.class);
         assertThat(Thread.currentThread().isInterrupted()).isTrue();
         verify(aopInTransaction, never()).proceed(any());
-    }
-
-    @Test
-    @DisplayName("현재 스레드가 락 미보유 - unlock 미호출")
-    void lock_notHeldByCurrentThread_doesNotUnlock() throws Throwable {
-        given(distributedLock.key()).willReturn("'testKey'");
-        given(redissonClient.getLock("dLock:testKey")).willReturn(rLock);
-        given(rLock.tryLock(5L, 10L, TimeUnit.SECONDS)).willReturn(true);
-        given(rLock.isHeldByCurrentThread()).willReturn(false);
-        given(aopInTransaction.proceed(joinPoint)).willReturn(null);
-
-        distributedLockAspect.lock(joinPoint, distributedLock);
-
         verify(rLock, never()).unlock();
     }
 }

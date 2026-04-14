@@ -78,9 +78,7 @@ public class DistributedLockAspect {
         try {
             return aopInTransaction.proceed(joinPoint);
         } finally {
-            if (rLock.isHeldByCurrentThread()) {
-                rLock.unlock();
-            }
+            rLock.unlock();
         }
     }
 }
