@@ -37,8 +37,8 @@ public class JwtFilter extends OncePerRequestFilter {
 
     // 통과 API 패턴 기록 (Path Pattern 사용)
     private static final List<PathPattern> EXCLUDE_PATTERNS = List.of(
-            patternParser.parse("/v1/api/members/signup"),
-            patternParser.parse("/v1/api/members/signin")
+            patternParser.parse("/v1/api/auth/signup"),
+            patternParser.parse("/v1/api/auth/login")
     );
 
     @Override
