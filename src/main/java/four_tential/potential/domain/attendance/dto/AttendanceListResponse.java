@@ -11,7 +11,7 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class AttendanceResponse {
+public class AttendanceListResponse {
 
     // 강사용 집계 (수강생 조회 시 null)
     private Integer totalCount;
@@ -32,7 +32,7 @@ public class AttendanceResponse {
     }
 
     // 강사용 팩토리 메서드
-    public static AttendanceResponse ofInstructor(List<Attendance> attendances) {
+    public static AttendanceListResponse ofInstructor(List<Attendance> attendances) {
         List<AttendanceDetail> details = attendances.stream()
                 .map(a -> AttendanceDetail.builder()
                         .attendanceId(a.getId())
@@ -46,7 +46,7 @@ public class AttendanceResponse {
                 .filter(a -> a.getStatus() == AttendanceStatus.ATTEND)
                 .count();
 
-        return AttendanceResponse.builder()
+        return AttendanceListResponse.builder()
                 .totalCount(attendances.size())
                 .attendCount((int) attendCount)
                 .absentCount(attendances.size() - (int) attendCount)
@@ -55,8 +55,8 @@ public class AttendanceResponse {
     }
 
     // 수강생용 팩토리 메서드
-    public static AttendanceResponse ofStudent(Attendance attendance) {
-        return AttendanceResponse.builder()
+    public static AttendanceListResponse ofStudent(Attendance attendance) {
+        return AttendanceListResponse.builder()
                 .totalCount(null)
                 .attendCount(null)
                 .absentCount(null)

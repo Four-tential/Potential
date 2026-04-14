@@ -11,7 +11,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class AttendanceResponseTest {
+class AttendanceListResponseTest {
 
     private static final UUID ORDER_ID  = UUID.randomUUID();
     private static final UUID MEMBER_ID = UUID.randomUUID();
@@ -30,7 +30,7 @@ class AttendanceResponseTest {
             a1.attend("token");
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofInstructor(List.of(a1, a2));
+            AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2));
 
             // then
             assertThat(response.getTotalCount()).isEqualTo(2);
@@ -47,7 +47,7 @@ class AttendanceResponseTest {
             a2.attend("token-2");
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofInstructor(List.of(a1, a2, a3));
+            AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2, a3));
 
             // then
             assertThat(response.getAttendCount()).isEqualTo(2);
@@ -62,7 +62,7 @@ class AttendanceResponseTest {
             a1.attend("token");
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofInstructor(List.of(a1));
+            AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1));
 
             // then
             assertThat(response.getAttendances()).hasSize(1);
@@ -75,7 +75,7 @@ class AttendanceResponseTest {
         @DisplayName("수강생이 없으면 모든 집계가 0이다")
         void ofInstructor_emptyList() {
             // when
-            AttendanceResponse response = AttendanceResponse.ofInstructor(List.of());
+            AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of());
 
             // then
             assertThat(response.getTotalCount()).isZero();
@@ -92,7 +92,7 @@ class AttendanceResponseTest {
             Attendance a2 = Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID);
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofInstructor(List.of(a1, a2));
+            AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2));
 
             // then
             assertThat(response.getAttendCount()).isZero();
@@ -111,7 +111,7 @@ class AttendanceResponseTest {
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofStudent(attendance);
+            AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
             assertThat(response.getTotalCount()).isNull();
@@ -126,7 +126,7 @@ class AttendanceResponseTest {
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofStudent(attendance);
+            AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
             assertThat(response.getAttendances()).hasSize(1);
@@ -140,7 +140,7 @@ class AttendanceResponseTest {
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofStudent(attendance);
+            AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
             assertThat(response.getAttendances().get(0).getStatus()).isEqualTo(AttendanceStatus.ABSENT);
@@ -155,7 +155,7 @@ class AttendanceResponseTest {
             attendance.attend("qr-token");
 
             // when
-            AttendanceResponse response = AttendanceResponse.ofStudent(attendance);
+            AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
             assertThat(response.getAttendances().get(0).getStatus()).isEqualTo(AttendanceStatus.ATTEND);

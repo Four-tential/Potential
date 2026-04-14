@@ -4,6 +4,7 @@ import four_tential.potential.application.attendance.AttendanceService;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
+import four_tential.potential.domain.attendance.dto.AttendanceScanRequest;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -87,10 +88,11 @@ class AttendanceControllerTest {
         @DisplayName("스캔 성공 시 200과 성공 메시지를 반환한다")
         void scan_success() {
             // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
             doNothing().when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
 
             // when
-            ResponseEntity<?> response = attendanceController.scan(QR_TOKEN, studentPrincipal);
+            ResponseEntity<?> response = attendanceController.scan(request, studentPrincipal);
 
             // then
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -101,11 +103,12 @@ class AttendanceControllerTest {
         @DisplayName("QR 토큰이 없으면 예외가 전파된다")
         void scan_tokenNotFound_propagatesException() {
             // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
             doThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_FOUND))
                     .when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
 
             // when & then
-            assertThatThrownBy(() -> attendanceController.scan(QR_TOKEN, studentPrincipal))
+            assertThatThrownBy(() -> attendanceController.scan(request, studentPrincipal))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_NOT_FOUND.getMessage());
         }
@@ -114,11 +117,12 @@ class AttendanceControllerTest {
         @DisplayName("이미 출석 처리된 경우 예외가 전파된다")
         void scan_alreadyChecked_propagatesException() {
             // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
             doThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED))
                     .when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
 
             // when & then
-            assertThatThrownBy(() -> attendanceController.scan(QR_TOKEN, studentPrincipal))
+            assertThatThrownBy(() -> attendanceController.scan(request, studentPrincipal))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_ALREADY_CHECKED.getMessage());
         }
