@@ -37,6 +37,11 @@ jwt:
     accessExpire: 1800000
     refreshExpire: 60480000
 
+# PortOne
+portone:
+  api-secret: ${PORTONE_API_SECRET:test-api-secret}
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET:test-webhook-secret}
+
 logging:
   level:
     root: info

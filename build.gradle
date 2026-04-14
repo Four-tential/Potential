@@ -92,6 +92,9 @@ dependencies {
 
     // Testcontainers
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+
+    // PortOne
+    implementation 'io.portone:server-sdk:0.23.0'
 }
 
 tasks.named('test') {
