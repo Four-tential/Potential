@@ -9,14 +9,7 @@ public class MemberFixture {
     public static final String DEFAULT_PROFILE_IMAGE_URL = "https://cdn.example.com/images/profile.jpg";
 
     public static Member defaultMember() {
-        return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_PHONE, DEFAULT_NAME);
-    }
-
-    public static Member memberWithProfileImage() {
-        return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_PHONE, DEFAULT_NAME, DEFAULT_PROFILE_IMAGE_URL);
-    }
-
-    public static Member memberWithEmail(String email) {
-        return Member.register(email, DEFAULT_PASSWORD, DEFAULT_PHONE, DEFAULT_NAME);
+        return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_PHONE, DEFAULT_NAME,
+                MemberRole.ROLE_STUDENT, MemberStatus.ACTIVE);
     }
 }
