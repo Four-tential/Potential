@@ -18,6 +18,7 @@ public enum AttendanceExceptionEnum implements ServiceErrorCode {
     ERR_QR_NOT_FOUND(HttpStatus.NOT_FOUND, "QR 토큰이 존재하지 않습니다"),
     ERR_QR_EXPIRED(HttpStatus.REQUEST_TIMEOUT, "QR 코드 유효시간이 만료되었습니다"),
     ERR_ALREADY_CHECKED(HttpStatus.CONFLICT, "이미 출석 처리된 수강생입니다"),
+    ERR_SCAN_ONLY_STUDENT(HttpStatus.CONFLICT, "학생만 QR 스캔할 수 있습니다"),
 
     // 출석 권한 관련
     ERR_ORDER_NOT_CONFIRMED(HttpStatus.FORBIDDEN, "예약이 확정된 수강생만 출석할 수 있습니다"),

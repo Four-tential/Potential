@@ -16,9 +16,9 @@ class AttendanceExceptionEnumTest {
     class EnumValuesTest {
 
         @Test
-        @DisplayName("총 12개의 에러 코드가 정의되어 있다")
+        @DisplayName("총 13개의 에러 코드가 정의되어 있다")
         void enum_hasTwelveValues() {
-            assertThat(AttendanceExceptionEnum.values()).hasSize(12);
+            assertThat(AttendanceExceptionEnum.values()).hasSize(13);
         }
 
         @ParameterizedTest

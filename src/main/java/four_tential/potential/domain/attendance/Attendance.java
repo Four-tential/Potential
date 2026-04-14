@@ -1,13 +1,11 @@
 package four_tential.potential.domain.attendance;
 
+import four_tential.potential.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UuidGenerator;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -16,8 +14,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "attendances")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@EntityListeners(AuditingEntityListener.class)
-public class Attendance {
+public class Attendance extends BaseTimeEntity {
 
     @Id
     @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
@@ -42,14 +39,6 @@ public class Attendance {
 
     @Column(name = "attendance_at")
     private LocalDateTime attendanceAt;
-
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     public static Attendance register(UUID orderId, UUID memberId, UUID courseId) {
         Attendance attendance = new Attendance();
