@@ -1,5 +1,6 @@
 package four_tential.potential.domain.member.member_onboard;
 
+import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.fixture.MemberOnBoardFixture;
 import four_tential.potential.domain.member.member.Member;
@@ -52,30 +53,30 @@ class MemberOnBoardTest {
     }
 
     @Test
-    @DisplayName("register() 시 member가 null이면 IllegalArgumentException이 발생")
+    @DisplayName("register() 시 member가 null이면 ServiceErrorException이 발생")
     void registerWithNullMember() {
         assertThatThrownBy(() -> MemberOnBoard.register(null, MemberOnBoardGoal.HOBBY))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("회원을 입력해주세요");
     }
 
     @Test
-    @DisplayName("register() 시 goal이 null이면 IllegalArgumentException이 발생")
+    @DisplayName("register() 시 goal이 null이면 ServiceErrorException이 발생")
     void registerWithNullGoal() {
         Member member = MemberFixture.defaultMember();
 
         assertThatThrownBy(() -> MemberOnBoard.register(member, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("목표를 입력해주세요");
     }
 
     @Test
-    @DisplayName("updateGoal() 시 goal이 null이면 IllegalArgumentException이 발생")
+    @DisplayName("updateGoal() 시 goal이 null이면 ServiceErrorException이 발생")
     void updateGoalWithNull() {
         MemberOnBoard memberOnBoard = MemberOnBoardFixture.defaultMemberOnBoard();
 
         assertThatThrownBy(() -> memberOnBoard.updateGoal(null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("목표를 입력해주세요");
     }
 }

@@ -1,6 +1,8 @@
 package four_tential.potential.domain.member.member_onboard;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.MemberExceptionEnum;
 import four_tential.potential.domain.member.member.Member;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -31,11 +33,11 @@ public class MemberOnBoard extends BaseTimeEntity {
 
     public static MemberOnBoard register(Member member, MemberOnBoardGoal goal) {
         if (member == null) {
-            throw new IllegalArgumentException("회원을 입력해주세요");
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_MEMBER);
         }
 
         if (goal == null) {
-            throw new IllegalArgumentException("목표를 입력해주세요");
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_ONBOARD_GOAL);
         }
 
         MemberOnBoard memberOnBoard = new MemberOnBoard();
@@ -46,7 +48,7 @@ public class MemberOnBoard extends BaseTimeEntity {
 
     public void updateGoal(MemberOnBoardGoal goal) {
         if (goal == null) {
-            throw new IllegalArgumentException("목표를 입력해주세요");
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_ONBOARD_GOAL);
         }
 
         this.goal = goal;

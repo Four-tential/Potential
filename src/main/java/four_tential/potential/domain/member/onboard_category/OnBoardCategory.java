@@ -1,6 +1,8 @@
 package four_tential.potential.domain.member.onboard_category;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.MemberExceptionEnum;
 import four_tential.potential.domain.member.member.Member;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -33,11 +35,11 @@ public class OnBoardCategory extends BaseTimeEntity {
 
     public static OnBoardCategory register(Member member, String categoryCode) {
         if (member == null) {
-            throw new IllegalArgumentException("회원을 입력해주세요");
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_MEMBER);
         }
 
-        if(categoryCode == null || categoryCode.isBlank()) {
-            throw new IllegalArgumentException("카테고리를 입력해주세요");
+        if (categoryCode == null || categoryCode.isBlank()) {
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_CATEGORY);
         }
 
         OnBoardCategory onBoardCategory = new OnBoardCategory();

@@ -1,5 +1,6 @@
 package four_tential.potential.domain.member.onboard_category;
 
+import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.fixture.OnBoardCategoryFixture;
 import four_tential.potential.domain.member.member.Member;
@@ -52,30 +53,30 @@ class OnBoardCategoryTest {
     }
 
     @Test
-    @DisplayName("register() 시 member가 null이면 IllegalArgumentException이 발생")
+    @DisplayName("register() 시 member가 null이면 ServiceErrorException이 발생")
     void registerWithNullMember() {
         assertThatThrownBy(() -> OnBoardCategory.register(null, "COOK"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("회원을 입력해주세요");
     }
 
     @Test
-    @DisplayName("register() 시 categoryCode가 null이면 IllegalArgumentException이 발생")
+    @DisplayName("register() 시 categoryCode가 null이면 ServiceErrorException이 발생")
     void registerWithNullCategoryCode() {
         Member member = MemberFixture.defaultMember();
 
         assertThatThrownBy(() -> OnBoardCategory.register(member, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("카테고리를 입력해주세요");
     }
 
     @Test
-    @DisplayName("register() 시 categoryCode가 공백이면 IllegalArgumentException이 발생")
+    @DisplayName("register() 시 categoryCode가 공백이면 ServiceErrorException이 발생")
     void registerWithBlankCategoryCode() {
         Member member = MemberFixture.defaultMember();
 
         assertThatThrownBy(() -> OnBoardCategory.register(member, ""))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("카테고리를 입력해주세요");
     }
 }
