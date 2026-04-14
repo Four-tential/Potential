@@ -103,20 +103,6 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("결제 생성 시 createdAt 이 null 이 아니다")
-    void create_createdAt_not_null() {
-        Payment payment = createPayment();
-        assertThat(payment.getCreatedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("결제 생성 시 updatedAt 이 null 이 아니다")
-    void create_updatedAt_not_null() {
-        Payment payment = createPayment();
-        assertThat(payment.getUpdatedAt()).isNotNull();
-    }
-
-    @Test
     @DisplayName("결제 생성 시 paidAt 이 null 이다")
     void create_paidAt_null() {
         Payment payment = createPayment();

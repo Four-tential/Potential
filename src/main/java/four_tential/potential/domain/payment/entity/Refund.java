@@ -1,5 +1,6 @@
 package four_tential.potential.domain.payment.entity;
 
+import four_tential.potential.common.entity.BaseTimeEntity;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import jakarta.persistence.*;
@@ -15,7 +16,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "refunds")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Refund {
+public class Refund extends BaseTimeEntity {
 
     @Id
     @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
@@ -40,12 +41,6 @@ public class Refund {
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public static Refund create(Payment payment, Long refundPrice, RefundReason reason) {
         Refund refund = new Refund();
         refund.payment = payment;
@@ -53,8 +48,6 @@ public class Refund {
         refund.reason = reason;
         refund.status = RefundStatus.COMPLETED;
         refund.refundedAt = LocalDateTime.now();
-        refund.createdAt = LocalDateTime.now();
-        refund.updatedAt = LocalDateTime.now();
         return refund;
     }
 
@@ -64,8 +57,6 @@ public class Refund {
         refund.refundPrice = refundPrice;
         refund.reason = reason;
         refund.status = RefundStatus.FAILED;
-        refund.createdAt = LocalDateTime.now();
-        refund.updatedAt = LocalDateTime.now();
         return refund;
     }
 }

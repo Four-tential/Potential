@@ -38,13 +38,6 @@ class WebhookTest {
     }
 
     @Test
-    @DisplayName("웹훅 수신 시 createdAt 이 null 이 아니다")
-    void receive_createdAt_not_null() {
-        Webhook webhook = Webhook.receive("rec_id_123", "Transaction.Paid");
-        assertThat(webhook.getCreatedAt()).isNotNull();
-    }
-
-    @Test
     @DisplayName("웹훅 수신 시 completedAt 이 null 이다")
     void receive_completedAt_null() {
         Webhook webhook = Webhook.receive("rec_id_123", "Transaction.Paid");

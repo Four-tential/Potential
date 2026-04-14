@@ -11,6 +11,6 @@ public class MemberFixture {
     public static final String DEFAULT_PROFILE_IMAGE_URL = "https://cdn.example.com/images/profile.jpg";
 
     public static Member defaultMember() {
-        return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_PHONE, DEFAULT_NAME);
+        return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_NAME, DEFAULT_PHONE);
     }
 }

@@ -37,16 +37,12 @@ public class Webhook {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
     public static Webhook receive(String recWebhookId, String eventStatus) {
         Webhook webhook = new Webhook();
         webhook.recWebhookId = recWebhookId;
         webhook.eventStatus = eventStatus;
         webhook.status = WebhookStatus.PENDING;
         webhook.receivedAt = LocalDateTime.now();
-        webhook.createdAt = LocalDateTime.now();
         return webhook;
     }
 }
