@@ -50,12 +50,12 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawal_at")
     private LocalDateTime withdrawalAt;
 
-    public static Member register(String email, String password, String phone, String name) {
+    public static Member register(String email, String password, String name, String phone) {
         Member member = new Member();
         member.email = email;
         member.password = password;
-        member.phone = phone;
         member.name = name;
+        member.phone = phone;
         member.role = MemberRole.ROLE_STUDENT;
         member.status = MemberStatus.ACTIVE;
         member.profileImageUrl = null;
