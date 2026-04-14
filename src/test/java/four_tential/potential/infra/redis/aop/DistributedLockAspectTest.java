@@ -70,16 +70,17 @@ class DistributedLockAspectTest {
         assertThatThrownBy(() -> distributedLockAspect.lock(joinPoint, distributedLock))
                 .isInstanceOf(ServiceErrorException.class);
         verify(aopInTransaction, never()).proceed(any());
+        verify(rLock, never()).unlock();
     }
 
     @Test
-    @DisplayName("빈 키 - IllegalArgumentException 발생")
+    @DisplayName("빈 키 - ServiceErrorException 발생")
     void lock_blankKey_throwsIllegalArgumentException() {
         given(distributedLock.key()).willReturn("''");
 
         assertThatThrownBy(() -> distributedLockAspect.lock(joinPoint, distributedLock))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("키 이름은 비어 있을 수 없습니다");
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessageContaining("락의 키는 비어있을 수 없습니다");
     }
 
     @Test
@@ -96,6 +97,8 @@ class DistributedLockAspectTest {
 
         verify(rLock).tryLock(5L, TimeUnit.SECONDS);
         verify(rLock, never()).tryLock(anyLong(), anyLong(), any());
+        verify(aopInTransaction).proceed(joinPoint);
+        verify(rLock).unlock();
     }
 
     @Test
