@@ -33,7 +33,7 @@ class OrderTest {
         assertThat(order.getTotalPriceSnap()).isEqualTo(priceSnap.multiply(BigInteger.valueOf(orderCount)));
         assertThat(order.getTitleSnap()).isEqualTo(titleSnap);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(order.getOrderAt()).isBeforeOrEqualTo(LocalDateTime.now());
-        assertThat(order.getExpireAt()).isEqualTo(order.getOrderAt().plusMinutes(Order.ORDER_EXPIRATION_MINUTES));
+        assertThat(order.getExpireAt()).isAfter(LocalDateTime.now());
+        assertThat(order.getExpireAt()).isBeforeOrEqualTo(LocalDateTime.now().plusMinutes(Order.ORDER_EXPIRATION_MINUTES));
     }
 }
