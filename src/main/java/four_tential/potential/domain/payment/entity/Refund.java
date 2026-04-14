@@ -22,8 +22,9 @@ public class Refund {
     @Column(nullable = false, updatable = false, columnDefinition = "BINARY(16)")
     private UUID id;
 
-    @Column(name = "payment_id", nullable = false, columnDefinition = "BINARY(16)")
-    private UUID paymentId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_id", nullable = false)
+    private Payment payment;
 
     @Column(name = "refund_price", nullable = false)
     private Long refundPrice;
@@ -45,16 +46,24 @@ public class Refund {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public static Refund create(
-            UUID paymentId,
-            Long refundPrice,
-            RefundReason reason) {
+    public static Refund create(Payment payment, Long refundPrice, RefundReason reason) {
         Refund refund = new Refund();
-        refund.paymentId = paymentId;
+        refund.payment = payment;
         refund.refundPrice = refundPrice;
         refund.reason = reason;
         refund.status = RefundStatus.COMPLETED;
         refund.refundedAt = LocalDateTime.now();
+        refund.createdAt = LocalDateTime.now();
+        refund.updatedAt = LocalDateTime.now();
+        return refund;
+    }
+
+    public static Refund fail(Payment payment, Long refundPrice, RefundReason reason) {
+        Refund refund = new Refund();
+        refund.payment = payment;
+        refund.refundPrice = refundPrice;
+        refund.reason = reason;
+        refund.status = RefundStatus.FAILED;
         refund.createdAt = LocalDateTime.now();
         refund.updatedAt = LocalDateTime.now();
         return refund;
