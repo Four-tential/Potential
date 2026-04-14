@@ -1,5 +1,6 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.domain.payment.port.PaymentGateway;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -8,4 +9,5 @@ import org.springframework.stereotype.Service;
 public class PaymentFacade {
     private final PaymentService paymentService;
     private final WebhookService webhookService;
+    private final PaymentGateway paymentGateway;
 }
