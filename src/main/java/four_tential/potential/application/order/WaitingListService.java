@@ -6,14 +6,10 @@ import four_tential.potential.domain.order.WaitingListRepository;
 import four_tential.potential.infra.redis.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -23,7 +19,6 @@ WaitingListService {
 
     private final WaitingListRepository waitingListRepository;
     private final StringRedisTemplate redisTemplate;
-    private final RedissonClient redissonClient;
 
     public boolean tryOccupyingStock(UUID courseId, UUID memberId) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
