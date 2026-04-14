@@ -51,7 +51,7 @@ public class WaitingList {
         waitingList.memberId = memberId;
         waitingList.courseId = courseId;
         waitingList.waitNumber = waitNumber;
-        waitingList.status = WaitingStatus.PENDING;
+        waitingList.status = WaitingStatus.WAITING;
         waitingList.waitedAt = LocalDateTime.now();
         waitingList.expiredAt = waitingList.waitedAt.plusMinutes(WAITING_LIST_EXPIRATION_MINUTES);
         return waitingList;
