@@ -1,12 +1,9 @@
 package four_tential.potential;
 
+import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
-@ActiveProfiles("test")
-class PotentialApplicationTests {
+class PotentialApplicationTests extends RedisTestContainer {
     @Test
     void contextLoads() {
     }

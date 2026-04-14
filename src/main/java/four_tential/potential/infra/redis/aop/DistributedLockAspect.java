@@ -11,6 +11,8 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
@@ -22,6 +24,7 @@ import static four_tential.potential.common.exception.domain.CommonExceptionEnum
 @Aspect
 @Component
 @RequiredArgsConstructor
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class DistributedLockAspect {
     private final RedissonClient redissonClient;
     private final AopInTransaction aopInTransaction;
@@ -35,17 +38,30 @@ public class DistributedLockAspect {
         Object[] argsArr = joinPoint.getArgs();
 
         StandardEvaluationContext standardEvaluationContext = new StandardEvaluationContext();
-        for (int index = 0; index < paramNameArr.length; index++) {
-            standardEvaluationContext.setVariable(paramNameArr[index], argsArr[index]);
+        for (int index = 0; index < argsArr.length; index++) {
+            if (paramNameArr != null && index < paramNameArr.length && paramNameArr[index] != null) {
+                standardEvaluationContext.setVariable(paramNameArr[index], argsArr[index]);
+            }
         }
 
-        String key = "dLock:" + parser.parseExpression(distributedLock.key()).getValue(standardEvaluationContext, String.class);
+        String evaluatedKey = parser.parseExpression(distributedLock.key()).getValue(standardEvaluationContext, String.class);
+        if (evaluatedKey == null || evaluatedKey.isBlank()) {
+            throw new IllegalArgumentException("@DistributedLock 로 분산락 사용시 키 이름은 비어 있을 수 없습니다");
+        }
+
+        String key = "dLock:" + evaluatedKey;
         RLock rLock = redissonClient.getLock(key);
 
-        boolean isLock = rLock.tryLock(
-                distributedLock.waitTime()
-                , distributedLock.leaseTime()
-                , distributedLock.timeUnit()
+        // watchDog 을 먼저 활성화 하고 필요한 경우에 leaseTime 활용을 위한 분기
+        boolean isLock = distributedLock.leaseTime() > 0
+                ? rLock.tryLock(
+                distributedLock.waitTime(),
+                distributedLock.leaseTime(),
+                distributedLock.timeUnit()
+        )
+                : rLock.tryLock(
+                distributedLock.waitTime(),
+                distributedLock.timeUnit()
         );
 
         if (!isLock) {
@@ -55,7 +71,7 @@ public class DistributedLockAspect {
         try {
             return aopInTransaction.proceed(joinPoint);
         } finally {
-            if(rLock.isHeldByCurrentThread()) {
+            if (rLock.isHeldByCurrentThread()) {
                 rLock.unlock();
             }
         }
