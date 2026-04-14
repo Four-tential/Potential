@@ -37,6 +37,12 @@ jwt:
     accessExpire: 1800000
     refreshExpire: 60480000
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
 logging:
   level:
     root: info
