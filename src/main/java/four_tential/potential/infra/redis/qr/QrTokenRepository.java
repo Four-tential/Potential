@@ -16,27 +16,25 @@ public class QrTokenRepository {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    // QR 생성 시 두 키 동시 저장
-    public void save(UUID courseId, String token) {
-        // courseId 기준 키
-        redisTemplate.opsForValue().set(
+    public boolean saveIfAbsent(UUID courseId, String token) {
+        // SETNX : 키가 없을 때만 저장, 성공하면 true / 이미 존재하면 false
+        Boolean saved = redisTemplate.opsForValue().setIfAbsent(
                 QR_ATTENDANCE_PREFIX + courseId,
                 token,
-                QR_TTL_SECONDS,
-                TimeUnit.SECONDS
+                QR_TTL_SECONDS, TimeUnit.SECONDS
         );
-        // token 기준 키
+
+        if (!Boolean.TRUE.equals(saved)) {
+            return false; // 이미 활성 QR 존재
+        }
+
+        // courseId 키 저장 성공한 경우에만 token 역조회 키 저장
         redisTemplate.opsForValue().set(
                 QR_TOKEN_PREFIX + token,
                 courseId.toString(),
-                QR_TTL_SECONDS,
-                TimeUnit.SECONDS
+                QR_TTL_SECONDS, TimeUnit.SECONDS
         );
-    }
-
-    // 코스 기준 활성 QR 존재 여부 (중복 생성 방지)
-    public boolean existsByCourseId(UUID courseId) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(QR_ATTENDANCE_PREFIX + courseId));
+        return true;
     }
 
     // 스캔 시 token -> courseId 역조회

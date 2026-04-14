@@ -29,14 +29,13 @@ public class AttendanceService {
             2. 코스 시작 후 10분 이내 인 지
         */
 
-        // 활성 QR 중복 확인
-        if (qrTokenRepository.existsByCourseId(courseId)) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE);
-        }
-
         String token = UUID.randomUUID().toString();
 
-        qrTokenRepository.save(courseId, token);
+        // SETNX 원자적 연산: 중복 확인 + 저장을 한 번에 처리
+        boolean saved = qrTokenRepository.saveIfAbsent(courseId, token);
+        if (!saved) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE);
+        }
 
         return qrCodeGenerator.generate(token);
     }

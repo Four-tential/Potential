@@ -40,21 +40,24 @@ class QrTokenRepositoryTest {
     }
 
     @Nested
-    @DisplayName("save() - QR 토큰 저장")
-    class SaveTest {
+    @DisplayName("saveIfAbsent() - QR 토큰 원자적 저장")
+    class SaveIfAbsentTest {
 
         @Test
-        @DisplayName("courseId 기준 키와 token 기준 키 두 개를 저장한다")
-        void save_storesTwoKeys() {
-            // when
-            qrTokenRepository.save(COURSE_ID, TOKEN);
-
-            // then
-            verify(valueOperations).set(
+        @DisplayName("활성 QR 이 없으면 저장 후 true 를 반환한다")
+        void saveIfAbsent_returnsTrue() {
+            // given
+            when(valueOperations.setIfAbsent(
                     QR_ATTENDANCE_PREFIX + COURSE_ID,
                     TOKEN,
                     QR_TTL_SECONDS, TimeUnit.SECONDS
-            );
+            )).thenReturn(true);
+
+            // when
+            boolean result = qrTokenRepository.saveIfAbsent(COURSE_ID, TOKEN);
+
+            // then
+            assertThat(result).isTrue();
             verify(valueOperations).set(
                     QR_TOKEN_PREFIX + TOKEN,
                     COURSE_ID.toString(),
@@ -63,59 +66,59 @@ class QrTokenRepositoryTest {
         }
 
         @Test
-        @DisplayName("TTL 은 600초로 설정된다")
-        void save_ttlIs600Seconds() {
-            // when
-            qrTokenRepository.save(COURSE_ID, TOKEN);
-
-            // then
-            verify(valueOperations, times(2)).set(
-                    anyString(), anyString(), eq(600L), eq(TimeUnit.SECONDS)
-            );
-        }
-    }
-
-    @Nested
-    @DisplayName("existsByCourseId() - 활성 QR 존재 여부")
-    class ExistsByCourseIdTest {
-
-        @Test
-        @DisplayName("활성 QR 이 존재하면 true 를 반환한다")
-        void existsByCourseId_returnsTrue() {
+        @DisplayName("활성 QR 이 이미 존재하면 false 를 반환하고 token 키를 저장하지 않는다")
+        void saveIfAbsent_returnsFalse() {
             // given
-            when(redisTemplate.hasKey(QR_ATTENDANCE_PREFIX + COURSE_ID)).thenReturn(true);
+            when(valueOperations.setIfAbsent(
+                    QR_ATTENDANCE_PREFIX + COURSE_ID,
+                    TOKEN,
+                    QR_TTL_SECONDS, TimeUnit.SECONDS
+            )).thenReturn(false);
 
             // when
-            boolean result = qrTokenRepository.existsByCourseId(COURSE_ID);
-
-            // then
-            assertThat(result).isTrue();
-        }
-
-        @Test
-        @DisplayName("활성 QR 이 없으면 false 를 반환한다")
-        void existsByCourseId_returnsFalse() {
-            // given
-            when(redisTemplate.hasKey(QR_ATTENDANCE_PREFIX + COURSE_ID)).thenReturn(false);
-
-            // when
-            boolean result = qrTokenRepository.existsByCourseId(COURSE_ID);
+            boolean result = qrTokenRepository.saveIfAbsent(COURSE_ID, TOKEN);
 
             // then
             assertThat(result).isFalse();
+            verify(valueOperations, never()).set(
+                    eq(QR_TOKEN_PREFIX + TOKEN),
+                    anyString(),
+                    anyLong(), any()
+            );
         }
 
         @Test
         @DisplayName("Redis 가 null 을 반환하면 false 를 반환한다")
-        void existsByCourseId_nullReturnsFalse() {
+        void saveIfAbsent_nullReturnsFalse() {
             // given
-            when(redisTemplate.hasKey(QR_ATTENDANCE_PREFIX + COURSE_ID)).thenReturn(null);
+            when(valueOperations.setIfAbsent(
+                    QR_ATTENDANCE_PREFIX + COURSE_ID,
+                    TOKEN,
+                    QR_TTL_SECONDS, TimeUnit.SECONDS
+            )).thenReturn(null);
 
             // when
-            boolean result = qrTokenRepository.existsByCourseId(COURSE_ID);
+            boolean result = qrTokenRepository.saveIfAbsent(COURSE_ID, TOKEN);
 
             // then
             assertThat(result).isFalse();
+        }
+
+        @Test
+        @DisplayName("TTL 은 600초로 설정된다")
+        void saveIfAbsent_ttlIs600Seconds() {
+            // given
+            when(valueOperations.setIfAbsent(
+                    anyString(), anyString(), eq(600L), eq(TimeUnit.SECONDS)
+            )).thenReturn(true);
+
+            // when
+            qrTokenRepository.saveIfAbsent(COURSE_ID, TOKEN);
+
+            // then
+            verify(valueOperations).setIfAbsent(
+                    anyString(), anyString(), eq(600L), eq(TimeUnit.SECONDS)
+            );
         }
     }
 

@@ -53,7 +53,7 @@ class AttendanceServiceTest {
         @DisplayName("정상적으로 QR 이미지를 생성하고 byte[] 를 반환한다")
         void createQr_success() {
             // given
-            when(qrTokenRepository.existsByCourseId(COURSE_ID)).thenReturn(false);
+            when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
             // when
@@ -61,7 +61,7 @@ class AttendanceServiceTest {
 
             // then
             assertThat(result).isEqualTo(QR_IMAGE);
-            verify(qrTokenRepository).save(eq(COURSE_ID), any());
+            verify(qrTokenRepository).saveIfAbsent(eq(COURSE_ID), any());
             verify(qrCodeGenerator).generate(any());
         }
 
@@ -69,29 +69,28 @@ class AttendanceServiceTest {
         @DisplayName("활성 QR 이 이미 존재하면 ERR_QR_ALREADY_ACTIVE 를 던진다")
         void createQr_alreadyActive_throwsException() {
             // given
-            when(qrTokenRepository.existsByCourseId(COURSE_ID)).thenReturn(true);
+            when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(false);
 
             // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE.getMessage());
 
-            verify(qrTokenRepository, never()).save(any(), any());
             verify(qrCodeGenerator, never()).generate(any());
         }
 
         @Test
-        @DisplayName("QR 생성 시 Redis 에 저장한다")
+        @DisplayName("QR 생성 시 Redis 에 원자적으로 저장한다")
         void createQr_savesToRedis() {
             // given
-            when(qrTokenRepository.existsByCourseId(COURSE_ID)).thenReturn(false);
+            when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
             // when
             attendanceService.createQr(COURSE_ID, MEMBER_ID);
 
             // then
-            verify(qrTokenRepository, times(1)).save(eq(COURSE_ID), any());
+            verify(qrTokenRepository, times(1)).saveIfAbsent(eq(COURSE_ID), any());
         }
     }
 
