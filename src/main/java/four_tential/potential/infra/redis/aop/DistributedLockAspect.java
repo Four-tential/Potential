@@ -18,6 +18,7 @@ import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 
+import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_DISTRIBUTED_LOCK_KEY_NULL;
 import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_GET_DISTRIBUTED_LOCK_FAIL;
 
 @Slf4j
@@ -46,7 +47,7 @@ public class DistributedLockAspect {
 
         String evaluatedKey = parser.parseExpression(distributedLock.key()).getValue(standardEvaluationContext, String.class);
         if (evaluatedKey == null || evaluatedKey.isBlank()) {
-            throw new IllegalArgumentException("@DistributedLock 로 분산락 사용시 키 이름은 비어 있을 수 없습니다");
+            throw new ServiceErrorException(ERR_DISTRIBUTED_LOCK_KEY_NULL);
         }
 
         String key = "dLock:" + evaluatedKey;
