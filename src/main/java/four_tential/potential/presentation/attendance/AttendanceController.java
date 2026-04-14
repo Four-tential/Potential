@@ -2,6 +2,8 @@ package four_tential.potential.presentation.attendance;
 
 import four_tential.potential.application.attendance.AttendanceService;
 import four_tential.potential.common.dto.BaseResponse;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.domain.attendance.dto.AttendanceScanRequest;
@@ -46,6 +48,9 @@ public class AttendanceController {
             @RequestBody @Valid AttendanceScanRequest request,
             @AuthenticationPrincipal MemberPrincipal principal
     ) {
+        if (!MemberRole.ROLE_STUDENT.name().equals(principal.role())) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_SCAN_ONLY_STUDENT);
+        }
         attendanceService.scan(request.getQrToken(), principal.memberId());
         return ResponseEntity.ok(
                 BaseResponse.success(HttpStatus.OK.name(), "출석 처리가 완료되었습니다", null)
