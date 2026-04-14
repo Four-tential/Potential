@@ -11,7 +11,12 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "onboard_categories")
+@Table(name = "onboard_categories", uniqueConstraints = {
+        @UniqueConstraint(
+                name = "uk_onboard_categories_member_category",
+                columnNames = {"member_id", "category_code"}
+        )
+})
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class OnBoardCategory extends BaseTimeEntity {
     @Id
@@ -27,6 +32,14 @@ public class OnBoardCategory extends BaseTimeEntity {
     private String categoryCode;
 
     public static OnBoardCategory register(Member member, String categoryCode) {
+        if (member == null) {
+            throw new IllegalArgumentException("회원을 입력해주세요");
+        }
+
+        if(categoryCode == null || categoryCode.isBlank()) {
+            throw new IllegalArgumentException("카테고리를 입력해주세요");
+        }
+
         OnBoardCategory onBoardCategory = new OnBoardCategory();
         onBoardCategory.member = member;
         onBoardCategory.categoryCode = categoryCode;

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OnBoardCategoryTest {
 
@@ -48,5 +49,33 @@ class OnBoardCategoryTest {
         assertThat(categories)
                 .extracting(onBoardCategory -> onBoardCategory.getMember())
                 .containsOnly(member);
+    }
+
+    @Test
+    @DisplayName("register() 시 member가 null이면 IllegalArgumentException이 발생")
+    void registerWithNullMember() {
+        assertThatThrownBy(() -> OnBoardCategory.register(null, "COOK"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("회원을 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("register() 시 categoryCode가 null이면 IllegalArgumentException이 발생")
+    void registerWithNullCategoryCode() {
+        Member member = MemberFixture.defaultMember();
+
+        assertThatThrownBy(() -> OnBoardCategory.register(member, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("카테고리를 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("register() 시 categoryCode가 공백이면 IllegalArgumentException이 발생")
+    void registerWithBlankCategoryCode() {
+        Member member = MemberFixture.defaultMember();
+
+        assertThatThrownBy(() -> OnBoardCategory.register(member, ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("카테고리를 입력해주세요");
     }
 }

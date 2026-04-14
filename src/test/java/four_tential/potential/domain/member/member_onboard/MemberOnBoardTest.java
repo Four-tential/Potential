@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MemberOnBoardTest {
 
@@ -48,5 +49,33 @@ class MemberOnBoardTest {
             MemberOnBoard memberOnBoard = MemberOnBoard.register(member, goal);
             assertThat(memberOnBoard.getGoal()).isEqualTo(goal);
         }
+    }
+
+    @Test
+    @DisplayName("register() 시 member가 null이면 IllegalArgumentException이 발생")
+    void registerWithNullMember() {
+        assertThatThrownBy(() -> MemberOnBoard.register(null, MemberOnBoardGoal.HOBBY))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("회원을 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("register() 시 goal이 null이면 IllegalArgumentException이 발생")
+    void registerWithNullGoal() {
+        Member member = MemberFixture.defaultMember();
+
+        assertThatThrownBy(() -> MemberOnBoard.register(member, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("목표를 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("updateGoal() 시 goal이 null이면 IllegalArgumentException이 발생")
+    void updateGoalWithNull() {
+        MemberOnBoard memberOnBoard = MemberOnBoardFixture.defaultMemberOnBoard();
+
+        assertThatThrownBy(() -> memberOnBoard.updateGoal(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("목표를 입력해주세요");
     }
 }
