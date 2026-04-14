@@ -31,7 +31,7 @@ public class Webhook {
     @Column(name = "event_status", nullable = false, length = 100)
     private String eventStatus;
 
-    @Column(name = "received_at")
+    @Column(name = "received_at", nullable = false)
     private LocalDateTime receivedAt;
 
     @Column(name = "completed_at")
