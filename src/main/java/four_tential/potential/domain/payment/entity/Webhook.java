@@ -45,7 +45,7 @@ public class Webhook {
         webhook.recWebhookId = recWebhookId;
         webhook.eventStatus = eventStatus;
         webhook.status = WebhookStatus.PENDING;
-        webhook.recivedAt = LocalDateTime.now();
+        webhook.receivedAt = LocalDateTime.now();
         webhook.createdAt = LocalDateTime.now();
         return webhook;
     }
