@@ -1,5 +1,6 @@
-package four_tential.potential.domain.member;
+package four_tential.potential.domain.member.member;
 
+import four_tential.potential.domain.member.fixture.MemberFixture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

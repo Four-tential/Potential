@@ -1,6 +1,6 @@
 package four_tential.potential.common.entity;
 
-import four_tential.potential.domain.member.MemberStatus;
+import four_tential.potential.domain.member.member.MemberStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

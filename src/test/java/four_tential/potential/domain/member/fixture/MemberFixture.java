@@ -1,4 +1,6 @@
-package four_tential.potential.domain.member;
+package four_tential.potential.domain.member.fixture;
+
+import four_tential.potential.domain.member.member.Member;
 
 public class MemberFixture {
 
