@@ -1,9 +1,13 @@
 package four_tential.potential;
 
-import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.Test;
+import org.redisson.client.RedisClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-class PotentialApplicationTests extends RedisTestContainer {
+class PotentialApplicationTests {
+    @MockitoBean
+    RedisClient redisClient;
+
     @Test
     void contextLoads() {
     }

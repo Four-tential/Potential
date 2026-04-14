@@ -95,7 +95,7 @@ dependencies {
 
     // Testcontainers
     testImplementation 'org.testcontainers:testcontainers:2.0.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.3'
     testImplementation 'com.redis:testcontainers-redis:2.2.4'
 
     // PortOne
