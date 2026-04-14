@@ -17,11 +17,12 @@ public class PortOneClient implements PaymentGateway {
     @Override
     public PaymentGatewayResponse getPayment(String pgKey) {
         // TODO: PortOne API 키 준비 후 구현
-        return null;
+        throw new UnsupportedOperationException("PortOne API 키 준비 후 구현 예정");
     }
 
     @Override
     public void cancelPayment(PaymentGatewayRequest request) {
         // TODO: PortOne API 키 준비 후 구현
+        throw new UnsupportedOperationException("PortOne API 키 준비 후 구현 예정");
     }
 }

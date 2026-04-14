@@ -9,32 +9,53 @@ import static org.junit.jupiter.api.Assertions.*;
 class PaymentGatewayResponseTest {
 
     @Test
-    @DisplayName("PaymentGatewayResponse 생성 시 값이 올바르게 저장된다")
-    void constructor_creates_response_correctly() {
+    @DisplayName("생성 시 pgKey 가 올바르게 저장된다")
+    void constructor_pgKey() {
         PaymentGatewayResponse response = new PaymentGatewayResponse(
                 "portone_key_123", "PAID", 100000L);
-
         assertThat(response.pgKey()).isEqualTo("portone_key_123");
+    }
+
+    @Test
+    @DisplayName("생성 시 status 가 PAID 로 저장된다")
+    void constructor_status_paid() {
+        PaymentGatewayResponse response = new PaymentGatewayResponse(
+                "portone_key_123", "PAID", 100000L);
         assertThat(response.status()).isEqualTo("PAID");
+    }
+
+    @Test
+    @DisplayName("생성 시 status 가 FAILED 로 저장된다")
+    void constructor_status_failed() {
+        PaymentGatewayResponse response = new PaymentGatewayResponse(
+                "portone_key_123", "FAILED", 0L);
+        assertThat(response.status()).isEqualTo("FAILED");
+    }
+
+    @Test
+    @DisplayName("생성 시 status 가 CANCELLED 로 저장된다")
+    void constructor_status_cancelled() {
+        PaymentGatewayResponse response = new PaymentGatewayResponse(
+                "portone_key_123", "CANCELLED", 100000L);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    @DisplayName("생성 시 totalAmount 가 올바르게 저장된다")
+    void constructor_totalAmount() {
+        PaymentGatewayResponse response = new PaymentGatewayResponse(
+                "portone_key_123", "PAID", 100000L);
         assertThat(response.totalAmount()).isEqualTo(100000L);
     }
 
     @Test
-    @DisplayName("PAID 상태로 생성된 response 의 status 가 PAID 이다")
-    void status_paid() {
-        PaymentGatewayResponse response = new PaymentGatewayResponse(
+    @DisplayName("동일한 값으로 생성한 두 Response 는 동등하다")
+    void equals_same_values() {
+        PaymentGatewayResponse response1 = new PaymentGatewayResponse(
                 "portone_key_123", "PAID", 100000L);
-
-        assertThat(response.status()).isEqualTo("PAID");
-    }
-
-    @Test
-    @DisplayName("FAILED 상태로 생성된 response 의 status 가 FAILED 이다")
-    void status_failed() {
-        PaymentGatewayResponse response = new PaymentGatewayResponse(
-                "portone_key_123", "FAILED", 0L);
-
-        assertThat(response.status()).isEqualTo("FAILED");
+        PaymentGatewayResponse response2 = new PaymentGatewayResponse(
+                "portone_key_123", "PAID", 100000L);
+        assertThat(response1).isEqualTo(response2);
     }
 
 }
