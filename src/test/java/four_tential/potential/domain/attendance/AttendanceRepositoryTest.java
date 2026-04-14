@@ -1,12 +1,14 @@
 package four_tential.potential.domain.attendance;
 
-import four_tential.potential.infra.jpa.JpaAuditingConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.utility.TestcontainersConfiguration;
+
 
 import java.util.List;
 import java.util.Optional;
@@ -14,9 +16,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
+@SpringBootTest
 @ActiveProfiles("test")
-@Import(JpaAuditingConfig.class)
+@Import(TestcontainersConfiguration.class)
+@Transactional
 class AttendanceRepositoryTest {
 
     @Autowired
