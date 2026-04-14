@@ -1,5 +1,6 @@
 package four_tential.potential.domain.payment.entity;
 
+import four_tential.potential.common.entity.BaseTimeEntity;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import jakarta.persistence.*;
@@ -15,7 +16,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "payments")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Payment {
+public class Payment extends BaseTimeEntity {
 
     @Id
     @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
@@ -54,12 +55,6 @@ public class Payment {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public static Payment create(
             UUID orderId,
             UUID memberId,
@@ -77,8 +72,6 @@ public class Payment {
         payment.paidTotalPrice = paidTotalPrice;
         payment.payWay = payWay;
         payment.status = PaymentStatus.PENDING;
-        payment.createdAt = LocalDateTime.now();
-        payment.updatedAt = LocalDateTime.now();
         return payment;
     }
 }
