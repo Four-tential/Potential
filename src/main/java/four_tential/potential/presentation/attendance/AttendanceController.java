@@ -5,6 +5,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.domain.attendance.dto.AttendanceScanRequest;
+import four_tential.potential.domain.member.member.MemberRole;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -59,7 +60,7 @@ public class AttendanceController {
     ) {
         AttendanceListResponse response;
 
-        if ("INSTRUCTOR".equals(principal.role())) {
+        if (MemberRole.ROLE_INSTRUCTOR.name().equals(principal.role())) {
             List<Attendance> attendances = attendanceService.findAllByCourse(courseId);
             response = AttendanceListResponse.ofInstructor(attendances);
         } else {

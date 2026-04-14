@@ -44,8 +44,8 @@ class AttendanceControllerTest {
 
     @BeforeEach
     void setUp() {
-        instructorPrincipal = new MemberPrincipal(MEMBER_ID, "instructor@test.com", "INSTRUCTOR");
-        studentPrincipal    = new MemberPrincipal(MEMBER_ID, "student@test.com", "STUDENT");
+        instructorPrincipal = new MemberPrincipal(MEMBER_ID, "instructor@test.com", "ROLE_INSTRUCTOR");
+        studentPrincipal    = new MemberPrincipal(MEMBER_ID, "student@test.com", "ROLE_STUDENT");
     }
 
     @Nested
