@@ -39,8 +39,8 @@ jwt:
 
 # PortOne
 portone:
-  api-secret: ${PORTONE_API_SECRET:test-api-secret}
-  webhook-secret: ${PORTONE_WEBHOOK_SECRET:test-webhook-secret}
+  api-secret: ${PORTONE_API_SECRET}
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET}
 
 logging:
   level:
