@@ -1,4 +1,4 @@
-package four_tential.potential.domain.member;
+package four_tential.potential.domain.member.member;
 
 public enum MemberStatus {
     ACTIVE,
