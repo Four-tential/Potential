@@ -48,7 +48,7 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawal_at")
     private LocalDateTime withdrawalAt;
 
-    public static Member register(String email, String password, String phone, String name, MemberRole role, MemberStatus status) {
+    public static Member register(String email, String password, String phone, String name) {
         Member member = new Member();
         member.email = email;
         member.password = password;
