@@ -101,6 +101,7 @@ class OrderControllerTest {
     @DisplayName("주문 상세 조회 성공 시 200 OK와 주문 정보를 반환한다")
     void getOrderDetails_success() {
         // given
+        LocalDateTime now = LocalDateTime.now();
         OrderDetailResponse expectedResponse = new OrderDetailResponse(
                 ORDER_ID,
                 COURSE_ID,
@@ -109,9 +110,9 @@ class OrderControllerTest {
                 BigInteger.valueOf(10000),
                 BigInteger.valueOf(10000),
                 OrderStatus.PENDING,
-                LocalDateTime.now(),
-                LocalDateTime.now(),
-                LocalDateTime.now().plusMinutes(10)
+                now,
+                now,
+                now.plusMinutes(10)
         );
         given(orderFacade.getOrderDetails(ORDER_ID, MEMBER_ID)).willReturn(expectedResponse);
 
@@ -121,6 +122,18 @@ class OrderControllerTest {
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().data()).isEqualTo(expectedResponse);
+
+        OrderDetailResponse actualResponse = response.getBody().data();
+        assertThat(actualResponse).isNotNull();
+        assertThat(actualResponse.orderId()).isEqualTo(ORDER_ID);
+        assertThat(actualResponse.courseId()).isEqualTo(COURSE_ID);
+        assertThat(actualResponse.titleSnap()).isEqualTo("테스트 강의");
+        assertThat(actualResponse.orderCount()).isEqualTo(1);
+        assertThat(actualResponse.priceSnap()).isEqualTo(BigInteger.valueOf(10000));
+        assertThat(actualResponse.totalPriceSnap()).isEqualTo(BigInteger.valueOf(10000));
+        assertThat(actualResponse.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(actualResponse.createdAt()).isEqualTo(now);
+        assertThat(actualResponse.updatedAt()).isEqualTo(now);
+        assertThat(actualResponse.expireAt()).isEqualTo(now.plusMinutes(10));
     }
 }
