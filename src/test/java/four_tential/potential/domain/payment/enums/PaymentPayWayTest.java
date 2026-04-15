@@ -22,9 +22,14 @@ class PaymentPayWayTest {
     }
 
     @Test
-    @DisplayName("from 호출 시 알 수 없는 값은 예외를 던진다")
-    void from_unknown_throws() {
-        assertThatThrownBy(() -> PaymentPayWay.from("unknown"))
-                .isInstanceOf(IllegalArgumentException.class);
+    @DisplayName("from 호출 시 알 수 없는 값은 CARD 로 기본 처리된다")
+    void from_unknown_defaults_to_card() {
+        assertThat(PaymentPayWay.from("unknown")).isEqualTo(PaymentPayWay.CARD);
+    }
+
+    @Test
+    @DisplayName("from 호출 시 null 은 CARD 로 기본 처리된다")
+    void from_null_defaults_to_card() {
+        assertThat(PaymentPayWay.from(null)).isEqualTo(PaymentPayWay.CARD);
     }
 }
