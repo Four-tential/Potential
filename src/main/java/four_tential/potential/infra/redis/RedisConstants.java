@@ -13,4 +13,9 @@ public class RedisConstants {
     public static final String WAITING_LIST_PREFIX = "WaitingList:";
     public static final String USER_COURSE_OCCUPANCY_PREFIX = "User:Occupancy:";
     public static final String ORDER_LOCK_PREFIX = "lock:order:";
+
+    // QR 출석
+    public static final String QR_ATTENDANCE_PREFIX = "qr:attendance:"; // courseId 기준 중복 생성 방지
+    public static final String QR_TOKEN_PREFIX = "qr:token:"; // token 기준 역조회
+    public static final long   QR_TTL_SECONDS = 600L;
 }

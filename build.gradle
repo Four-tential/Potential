@@ -94,10 +94,16 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // Testcontainers
-    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers:2.0.3'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
 
     // PortOne
     implementation 'io.portone:server-sdk:0.23.0'
+
+    // QR code
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.google.zxing:javase:3.5.3'
 }
 
 tasks.named('test') {
@@ -135,6 +141,36 @@ sonar {
         if (sonarOrganization) {
             property 'sonar.organization', sonarOrganization
         }
+
+        property 'sonar.coverage.exclusions', [
+            // Enum
+            '**/domain/**/enums/**',
+            '**/*Status.java',
+            '**/*Role.java',
+            '**/*Reason.java',
+            '**/*PayWay.java',
+            // Exception Enum & 공통 예외
+            '**/exception/domain/**',
+            '**/exception/ServiceErrorCode.java',
+            '**/exception/ServiceErrorException.java',
+            // 설정 클래스
+            '**/*Config.java',
+            // 어노테이션
+            '**/annotation/**',
+            // DTO / Record
+            '**/dto/**',
+            '**/model/request/**',
+            '**/model/response/**',
+            '**/port/PaymentGatewayRequest.java',
+            '**/port/PaymentGatewayResponse.java',
+            '**/principal/**',
+            // Repository 인터페이스
+            '**/*Repository.java',
+            // 상수 / 베이스 엔티티 / 진입점
+            '**/*Constants.java',
+            '**/entity/BaseTime*.java',
+            '**/PotentialApplication.java',
+        ].join(',')
     }
 }
 
