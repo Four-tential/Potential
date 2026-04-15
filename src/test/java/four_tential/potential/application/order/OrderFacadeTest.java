@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -68,5 +69,44 @@ class OrderFacadeTest {
         // then
         assertThat(result).isInstanceOf(OrderWaitingResponse.class);
         verify(waitingListService).addToWaitingList(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("주문 DB 저장 실패 시 점유된 잔여석을 롤백한다")
+    void placeOrder_rollback_when_db_fails() {
+        // given
+        given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
+        given(orderService.createOrder(memberId, request))
+                .willThrow(new RuntimeException("DB 저장 오류"));
+
+        // when & then
+        assertThatThrownBy(() -> orderFacade.placeOrder(memberId, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("DB 저장 오류");
+
+        // 보상 트랜잭션 검증: rollbackOccupiedSeat이 호출되어야 함
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("보상 트랜잭션 중 발생한 예외는 원래 예외에 suppressed 된다")
+    void placeOrder_rollback_suppress_exception() {
+        // given
+        given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
+        given(orderService.createOrder(memberId, request))
+                .willThrow(new RuntimeException("DB 저장 오류"));
+        
+        // 롤백 중에도 예외 발생
+        doThrow(new RuntimeException("롤백 실패 오류"))
+                .when(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+
+        // when & then
+        assertThatThrownBy(() -> orderFacade.placeOrder(memberId, request))
+                .isInstanceOf(RuntimeException.class)
+                .satisfies(e -> {
+                    assertThat(e.getMessage()).isEqualTo("DB 저장 오류");
+                    assertThat(e.getSuppressed()).hasSize(1);
+                    assertThat(e.getSuppressed()[0].getMessage()).isEqualTo("롤백 실패 오류");
+                });
     }
 }
