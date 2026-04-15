@@ -6,7 +6,9 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 public enum MemberExceptionEnum implements ServiceErrorCode {
-    ERR_UNAUTHORIZED(HttpStatus.NOT_FOUND, "존재하지 않는 회원입니다"),
+    ERR_NOT_FOUND_MEMBER(HttpStatus.NOT_FOUND, "존재하지 않는 회원입니다"),
+    ERR_WRONG_LOGIN(HttpStatus.NOT_FOUND, "아이디와 비밀번호를 확인하시기 바랍니다"),
+    ERR_SUSPENDED(HttpStatus.FORBIDDEN, "정지된 회원입니다, 관리자에게 문의 바랍니다"),
     ERR_INVALID_MEMBER(HttpStatus.BAD_REQUEST, "회원을 입력해주세요"),
     ERR_INVALID_ONBOARD_GOAL(HttpStatus.BAD_REQUEST, "목표를 입력해주세요"),
     ERR_INVALID_CATEGORY(HttpStatus.BAD_REQUEST, "카테고리를 입력해주세요"),

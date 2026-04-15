@@ -30,7 +30,7 @@ import java.util.UUID;
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
-    private final TokenRepository tokenRepository;
+    private final JwtRepository tokenRepository;
 
     private static final PathPatternParser patternParser = new PathPatternParser();
 

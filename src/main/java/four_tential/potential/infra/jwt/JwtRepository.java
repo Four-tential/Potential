@@ -11,7 +11,7 @@ import static four_tential.potential.infra.redis.RedisConstants.REFRESH_TOKEN_PR
 
 @Service
 @RequiredArgsConstructor
-public class TokenRepository {
+public class JwtRepository {
     private final RedisTemplate<String, Object> redisTemplate;
 
     //region 토큰 관련
