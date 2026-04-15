@@ -58,6 +58,10 @@ public class AuthService {
     public LoginResult login(LoginRequest request) {
         Member member = memberRepository.findByEmail(request.email()).orElseThrow(() -> new ServiceErrorException(ERR_WRONG_LOGIN));
 
+        if (!passwordEncoder.matches(request.password(), member.getPassword())) {
+            throw new ServiceErrorException(ERR_WRONG_LOGIN);
+        }
+
         if(member.getStatus() == MemberStatus.WITHDRAWAL) {
             throw new ServiceErrorException(ERR_WRONG_LOGIN);
         }
@@ -77,7 +81,7 @@ public class AuthService {
     }
 
     public RefreshResult refresh(String refreshToken) {
-        if(jwtUtil.validateToken(refreshToken)) {
+        if(!jwtUtil.validateToken(refreshToken)) {
             log.error("Refresh Token Refresh ERR : {}", "토큰 유효성 검사 실패");
             throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
         }
@@ -85,10 +89,10 @@ public class AuthService {
         String email = jwtUtil.extractSubject(refreshToken);
         String savedToken = jwtRepository.getRefreshToken(email);
 
-        if(!savedToken.equals(refreshToken)) {
+        if(savedToken == null || !savedToken.equals(refreshToken)) {
             log.error("Refresh Token Refresh ERR : {}", "보유한 토큰과 불일치");
             jwtRepository.deleteRefreshToken(email);
-            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE); // 로그인 된 회원의 리프레쉬 토큰이 저장된 리프레쉬 토큰과 같지 않다는 것은 의심
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE); // 로그인 된 회원의 리프레쉬 토큰이 저장된 리프레쉬 토큰과 같지 않다는 것은 의심 대상
         }
 
         Member member = memberRepository.findByEmail(email).orElseThrow(() -> {

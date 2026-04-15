@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 
 public interface MemberOnBoardRepository extends JpaRepository<MemberOnBoard, UUID> {
+    boolean existsByMemberId(UUID memberId);
 }
