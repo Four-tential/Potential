@@ -191,14 +191,26 @@ public class Course extends BaseTimeWithDelEntity {
     }
 
     public void open() {
+        if (this.status != CourseStatus.PREPARATION) {
+            throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_OPEN);
+        }
+
         this.status = CourseStatus.OPEN;
     }
 
     public void close() {
+        if (this.status != CourseStatus.OPEN) {
+            throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_CLOSE);
+        }
+
         this.status = CourseStatus.CLOSED;
     }
 
     public void cancel() {
+        if (this.status != CourseStatus.OPEN) {
+            throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_CANCEL);
+        }
+
         this.status = CourseStatus.CANCELLED;
     }
 

@@ -222,6 +222,7 @@ class CourseTest {
     @DisplayName("CLOSED 상태에서 updateInfo() 호출 시 CANNOT_MODIFY_COURSE 예외 발생")
     void updateInfo_inClosed() {
         Course course = CourseFixture.defaultCourse();
+        course.confirm();
         course.close();
 
         assertThatThrownBy(() -> course.updateInfo("제목", "설명", UUID.randomUUID()))
@@ -233,6 +234,7 @@ class CourseTest {
     @DisplayName("CANCELLED 상태에서 updateInfo() 호출 시 CANNOT_MODIFY_COURSE 예외 발생")
     void updateInfo_inCancelled() {
         Course course = CourseFixture.defaultCourse();
+        course.confirm();
         course.cancel();
 
         assertThatThrownBy(() -> course.updateInfo("제목", "설명", UUID.randomUUID()))
@@ -296,14 +298,77 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("PREPARATION 이 아닌 상태에서 confirm() 호출 시 INVALID_STATUS_TRANSITION_TO_CONFIRM 예외 발생")
+    @DisplayName("PREPARATION 이 아닌 상태에서 confirm() 호출 시 ERR_INVALID_STATUS_TRANSITION_TO_CONFIRM 예외 발생")
     void confirm_notInPreparation() {
         Course course = CourseFixture.defaultCourse();
         course.confirm();
 
         assertThatThrownBy(course::confirm)
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("준비 상태의 코스만 개설 확정할 수 있습니다");
+                .hasMessage("PREPARATION 상태의 코스만 개설 확정할 수 있습니다");
+    }
+
+    @Test
+    @DisplayName("open() 호출 시 PREPARATION 상태에서 OPEN으로 전이됨")
+    void open_success() {
+        Course course = CourseFixture.defaultCourse();
+
+        course.open();
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("PREPARATION 이 아닌 상태에서 open() 호출 시 ERR_INVALID_STATUS_TRANSITION_TO_OPEN 예외 발생")
+    void open_notInPreparation() {
+        Course course = CourseFixture.defaultCourse();
+        course.confirm();
+
+        assertThatThrownBy(course::open)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("PREPARATION 상태의 코스만 OPEN 할 수 있습니다");
+    }
+
+    @Test
+    @DisplayName("close() 호출 시 OPEN 상태에서 CLOSED로 전이됨")
+    void close_success() {
+        Course course = CourseFixture.defaultCourse();
+        course.confirm();
+
+        course.close();
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("OPEN 이 아닌 상태에서 close() 호출 시 ERR_INVALID_STATUS_TRANSITION_TO_CLOSE 예외 발생")
+    void close_notInOpen() {
+        Course course = CourseFixture.defaultCourse();
+
+        assertThatThrownBy(course::close)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("OPEN 상태의 코스만 CLOSE 할 수 있습니다");
+    }
+
+    @Test
+    @DisplayName("cancel() 호출 시 OPEN 상태에서 CANCELLED로 전이됨")
+    void cancel_success() {
+        Course course = CourseFixture.defaultCourse();
+        course.confirm();
+
+        course.cancel();
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("OPEN 이 아닌 상태에서 cancel() 호출 시 ERR_INVALID_STATUS_TRANSITION_TO_CANCEL 예외 발생")
+    void cancel_notInOpen() {
+        Course course = CourseFixture.defaultCourse();
+
+        assertThatThrownBy(course::cancel)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("OPEN 상태의 코스만 취소할 수 있습니다");
     }
 
     @Test
