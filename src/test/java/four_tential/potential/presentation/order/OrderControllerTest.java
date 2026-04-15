@@ -2,11 +2,9 @@ package four_tential.potential.presentation.order;
 
 import four_tential.potential.application.order.OrderFacade;
 import four_tential.potential.common.dto.BaseResponse;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
-import four_tential.potential.presentation.order.dto.OrderCreateRequest;
-import four_tential.potential.presentation.order.dto.OrderCreateResponse;
-import four_tential.potential.presentation.order.dto.OrderPlaceResult;
-import four_tential.potential.presentation.order.dto.OrderWaitingResponse;
+import four_tential.potential.presentation.order.dto.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -97,5 +95,45 @@ class OrderControllerTest {
         OrderWaitingResponse actualResponse = (OrderWaitingResponse) response.getBody().data();
         assertThat(actualResponse.courseId()).isEqualTo(COURSE_ID);
         assertThat(actualResponse.message()).isEqualTo(expectedResponse.message());
+    }
+
+    @Test
+    @DisplayName("주문 상세 조회 성공 시 200 OK와 주문 정보를 반환한다")
+    void getOrderDetails_success() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        OrderDetailResponse expectedResponse = new OrderDetailResponse(
+                ORDER_ID,
+                COURSE_ID,
+                "테스트 강의",
+                1,
+                BigInteger.valueOf(10000),
+                BigInteger.valueOf(10000),
+                OrderStatus.PENDING,
+                now,
+                now,
+                now.plusMinutes(10)
+        );
+        given(orderFacade.getOrderDetails(ORDER_ID, MEMBER_ID)).willReturn(expectedResponse);
+
+        // when
+        ResponseEntity<BaseResponse<OrderDetailResponse>> response = orderController.getOrderDetails(studentPrincipal, ORDER_ID);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+
+        OrderDetailResponse actualResponse = response.getBody().data();
+        assertThat(actualResponse).isNotNull();
+        assertThat(actualResponse.orderId()).isEqualTo(ORDER_ID);
+        assertThat(actualResponse.courseId()).isEqualTo(COURSE_ID);
+        assertThat(actualResponse.titleSnap()).isEqualTo("테스트 강의");
+        assertThat(actualResponse.orderCount()).isEqualTo(1);
+        assertThat(actualResponse.priceSnap()).isEqualTo(BigInteger.valueOf(10000));
+        assertThat(actualResponse.totalPriceSnap()).isEqualTo(BigInteger.valueOf(10000));
+        assertThat(actualResponse.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(actualResponse.createdAt()).isEqualTo(now);
+        assertThat(actualResponse.updatedAt()).isEqualTo(now);
+        assertThat(actualResponse.expireAt()).isEqualTo(now.plusMinutes(10));
     }
 }

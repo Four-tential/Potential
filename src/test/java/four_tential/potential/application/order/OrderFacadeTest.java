@@ -2,10 +2,7 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
-import four_tential.potential.presentation.order.dto.OrderCreateRequest;
-import four_tential.potential.presentation.order.dto.OrderCreateResponse;
-import four_tential.potential.presentation.order.dto.OrderPlaceResult;
-import four_tential.potential.presentation.order.dto.OrderWaitingResponse;
+import four_tential.potential.presentation.order.dto.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -108,5 +105,33 @@ class OrderFacadeTest {
                     assertThat(e.getSuppressed()).hasSize(1);
                     assertThat(e.getSuppressed()[0].getMessage()).isEqualTo("롤백 실패 오류");
                 });
+    }
+
+    @Test
+    @DisplayName("주문 상세 조회를 성공적으로 수행한다")
+    void getOrderDetails_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = mock(Order.class);
+        given(order.getId()).willReturn(orderId);
+        given(order.getCourseId()).willReturn(courseId);
+        given(order.getTitleSnap()).willReturn("테스트 강의");
+        given(order.getOrderCount()).willReturn(2);
+        given(order.getPriceSnap()).willReturn(BigInteger.valueOf(50000));
+        given(order.getTotalPriceSnap()).willReturn(BigInteger.valueOf(100000));
+        given(order.getStatus()).willReturn(OrderStatus.PENDING);
+        given(order.getCreatedAt()).willReturn(LocalDateTime.now());
+        given(order.getUpdatedAt()).willReturn(LocalDateTime.now());
+        given(order.getExpireAt()).willReturn(LocalDateTime.now().plusMinutes(10));
+
+        given(orderService.getOrderDetails(orderId, memberId)).willReturn(order);
+
+        // when
+        OrderDetailResponse result = orderFacade.getOrderDetails(orderId, memberId);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.orderId()).isEqualTo(orderId);
+        verify(orderService).getOrderDetails(orderId, memberId);
     }
 }
