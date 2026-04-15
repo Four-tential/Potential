@@ -13,6 +13,6 @@ public class InstructorMemberFixture {
     public static final String DEFAULT_REJECT_REASON = "자격 요건이 충족되지 않습니다";
 
     public static InstructorMember defaultInstructorMember() {
-        return InstructorMember.apply(DEFAULT_MEMBER_ID, DEFAULT_CATEGORY_CODE, DEFAULT_CONTENT, DEFAULT_IMAGE_URL);
+        return InstructorMember.register(DEFAULT_MEMBER_ID, DEFAULT_CATEGORY_CODE, DEFAULT_CONTENT, DEFAULT_IMAGE_URL);
     }
 }

@@ -94,4 +94,24 @@ class InstructorMemberTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("PENDING 상태의 신청 건만 거절 할 수 있습니다");
     }
+
+    @Test
+    @DisplayName("reject() 호출 시 rejectReason이 null이면 ERR_BLANK_REJECT_REASON 예외 발생")
+    void reject_nullRejectReason() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+
+        assertThatThrownBy(() -> instructorMember.reject(null))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("거절 사유를 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("reject() 호출 시 rejectReason이 빈 문자열이면 ERR_BLANK_REJECT_REASON 예외 발생")
+    void reject_blankRejectReason() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+
+        assertThatThrownBy(() -> instructorMember.reject("   "))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("거절 사유를 입력해주세요");
+    }
 }

@@ -10,8 +10,7 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_STATUS_TRANSITION_TO_APPROVE;
-import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_STATUS_TRANSITION_TO_REJECT;
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 
 @Getter
 @Entity
@@ -48,8 +47,12 @@ public class InstructorMember extends BaseTimeEntity {
     @Column(name = "responsed_at")
     private LocalDateTime responsedAt;
 
-    public static InstructorMember apply(UUID memberId, String categoryCode,
-                                         String content, String imageUrl) {
+    public static InstructorMember register(
+            UUID memberId,
+            String categoryCode,
+            String content,
+            String imageUrl
+    ) {
         InstructorMember instructorMember = new InstructorMember();
         instructorMember.memberId = memberId;
         instructorMember.categoryCode = categoryCode;
@@ -60,21 +63,30 @@ public class InstructorMember extends BaseTimeEntity {
     }
 
     public void approve() {
+        LocalDateTime now = LocalDateTime.now();
+
         if (this.status != InstructorMemberStatus.PENDING) {
             throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_APPROVE);
         }
         this.status = InstructorMemberStatus.APPROVED;
-        this.approvedAt = LocalDateTime.now();
-        this.responsedAt = LocalDateTime.now();
+        this.approvedAt = now;
+        this.responsedAt = now;
     }
 
     public void reject(String rejectReason) {
+        LocalDateTime now = LocalDateTime.now();
+
         if (this.status != InstructorMemberStatus.PENDING) {
             throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_REJECT);
         }
+
+        if (rejectReason == null || rejectReason.isBlank()) {
+            throw new ServiceErrorException(ERR_BLANK_REJECT_REASON);
+        }
+
         this.status = InstructorMemberStatus.REJECTED;
         this.rejectReason = rejectReason;
-        this.responsedAt = LocalDateTime.now();
+        this.responsedAt = now;
     }
 
 
