@@ -1,5 +1,6 @@
 package four_tential.potential.domain.order;
 
+import four_tential.potential.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,7 +17,7 @@ import java.util.UUID;
         @UniqueConstraint(name = "uk_orders_id", columnNames = {"id"})
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Order {
+public class Order extends BaseTimeEntity {
 
     public static final int ORDER_EXPIRATION_MINUTES = 10; // 주문 만료 시간
 
@@ -47,9 +48,6 @@ public class Order {
     @Column(nullable = false, length = 30)
     private OrderStatus status;
 
-    @Column(name = "order_at", nullable = false)
-    private LocalDateTime orderAt;
-
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
@@ -66,8 +64,8 @@ public class Order {
         order.totalPriceSnap = priceSnap.multiply(BigInteger.valueOf(orderCount));
         order.titleSnap = titleSnap;
         order.status = OrderStatus.PENDING;
-        order.orderAt = LocalDateTime.now();
-        order.expireAt = order.orderAt.plusMinutes(ORDER_EXPIRATION_MINUTES);
+        // 객체 생성 시점에 만료 시간을 결정하기 위해 현재 시각을 기준으로 계산
+        order.expireAt = LocalDateTime.now().plusMinutes(ORDER_EXPIRATION_MINUTES);
         return order;
     }
 }

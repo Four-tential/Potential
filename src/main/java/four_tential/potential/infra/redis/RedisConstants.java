@@ -8,7 +8,12 @@ public class RedisConstants {
     public static final String REFRESH_TOKEN_PREFIX = "Refresh-Token:";
     public static final String BLACK_LIST_PREFIX = "BlackList:";
 
-    // QR 출석 관련
+    // Order
+    public static final String COURSE_CAPACITY_PREFIX = "Course:Capacity:";
+    public static final String WAITING_LIST_PREFIX = "WaitingList:";
+    public static final String USER_COURSE_OCCUPANCY_PREFIX = "User:Occupancy:";
+
+    // QR 출석
     public static final String QR_ATTENDANCE_PREFIX = "qr:attendance:"; // courseId 기준 중복 생성 방지
     public static final String QR_TOKEN_PREFIX = "qr:token:"; // token 기준 역조회
     public static final long   QR_TTL_SECONDS = 600L;
