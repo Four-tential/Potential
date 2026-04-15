@@ -87,4 +87,26 @@ class WebhookServiceTest {
         assertThat(webhook.getCompletedAt()).isNotNull();
         verify(webhookRepository).save(webhook);
     }
+
+    @Test
+    @DisplayName("receive 호출 시 recWebhookId 가 올바르게 저장된다")
+    void receive_saves_recWebhookId() {
+        Webhook webhook = createWebhook();
+        given(webhookRepository.save(any(Webhook.class))).willReturn(webhook);
+
+        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+
+        assertThat(result.getRecWebhookId()).isEqualTo("rec_id_123");
+    }
+
+    @Test
+    @DisplayName("receive 호출 시 receivedAt 이 null 이 아니다")
+    void receive_receivedAt_not_null() {
+        Webhook webhook = createWebhook();
+        given(webhookRepository.save(any(Webhook.class))).willReturn(webhook);
+
+        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+
+        assertThat(result.getReceivedAt()).isNotNull();
+    }
 }
