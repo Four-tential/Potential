@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class OrderControllerTest {
@@ -166,11 +167,12 @@ class OrderControllerTest {
                 10,
                 true
         );
-        given(orderFacade.getMyOrders(eq(MEMBER_ID), any(Pageable.class))).willReturn(expectedPageResponse);
+        Pageable pageable = PageRequest.of(0, 10);
+        given(orderFacade.getMyOrders(eq(MEMBER_ID), eq(pageable))).willReturn(expectedPageResponse);
 
         // when
-        ResponseEntity<BaseResponse<PageResponse<OrderMyListResponse>>> response = 
-                orderController.getMyOrders(studentPrincipal, PageRequest.of(0, 10));
+        ResponseEntity<BaseResponse<PageResponse<OrderMyListResponse>>> response =
+                orderController.getMyOrders(studentPrincipal, pageable);
 
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -181,5 +183,7 @@ class OrderControllerTest {
         assertThat(actualResponse.content().get(0).orderId()).isEqualTo(ORDER_ID);
         assertThat(actualResponse.totalElements()).isEqualTo(1);
         assertThat(actualResponse.isLast()).isTrue();
+
+        verify(orderFacade).getMyOrders(MEMBER_ID, pageable);
     }
 }

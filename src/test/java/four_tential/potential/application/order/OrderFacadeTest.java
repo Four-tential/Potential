@@ -165,6 +165,10 @@ class OrderFacadeTest {
         assertThat(result).isNotNull();
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).titleSnap()).isEqualTo("테스트 강의");
+        assertThat(result.currentPage()).isEqualTo(0);
+        assertThat(result.totalPages()).isEqualTo(1);
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.isLast()).isTrue();
         verify(orderService).getMyOrders(memberId, pageRequest);
     }
 }

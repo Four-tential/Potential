@@ -1,7 +1,6 @@
 package four_tential.potential.presentation.order.dto;
 
 import four_tential.potential.domain.order.Order;
-import four_tential.potential.domain.order.OrderStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
