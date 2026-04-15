@@ -9,6 +9,7 @@ import four_tential.potential.domain.attendance.dto.AttendanceEventResponse;
 import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
+import four_tential.potential.infra.sse.SseAttendanceEventPublisher;
 import four_tential.potential.infra.sse.SseEmitterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class AttendanceService {
     private final QrCodeGenerator      qrCodeGenerator;
     private final SseEmitterRepository sseEmitterRepository;
     private final AttendanceQueryService attendanceQueryService;
+    private final SseAttendanceEventPublisher sseAttendanceEventPublisher;
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
 
@@ -69,12 +71,12 @@ public class AttendanceService {
 
         attendance.attend(qrToken);
 
-        // DB 커밋 성공 후에만 SSE 이벤트 전송 - 커밋 전 전송 시 DB 롤백과 화면 불일치 방지
+        // DB 커밋 성공 후에만 SSE 이벤트 전송
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        pushAttendanceEvent(courseId, attendance);
+                        sseAttendanceEventPublisher.publish(courseId, attendance); // 변경
                     }
                 }
         );
@@ -95,6 +97,7 @@ public class AttendanceService {
 
     // SSE 스트림 연결 (강사 전용)
     // 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
+    //TODO: UUID instructorId 파라미터 사용 강사 본인 코스인지 검증
     public SseEmitter stream(UUID courseId, UUID instructorId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
@@ -132,27 +135,5 @@ public class AttendanceService {
         }
 
         return emitter;
-    }
-
-    // SSE 이벤트 푸시
-    private void pushAttendanceEvent(UUID courseId, Attendance attendance) {
-        sseEmitterRepository.findByCourseId(courseId).ifPresent(emitter -> {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("attendance")
-                        .data(AttendanceEventResponse.from(attendance)));
-
-            } catch (IOException e) {
-                // 클라이언트 연결 끊김
-                log.warn("SSE 클라이언트 연결 끊김 courseId={} memberId={}",
-                        courseId, attendance.getMemberId());
-                sseEmitterRepository.delete(courseId);
-                emitter.complete();
-            } catch (Exception e) {
-                log.error("SSE 이벤트 전송 실패 courseId={}", courseId, e);
-                sseEmitterRepository.delete(courseId);
-                emitter.completeWithError(e);
-            }
-        });
     }
 }

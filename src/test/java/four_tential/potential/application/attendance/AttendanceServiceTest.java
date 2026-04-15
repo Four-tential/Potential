@@ -8,6 +8,7 @@ import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
+import four_tential.potential.infra.sse.SseAttendanceEventPublisher;
 import four_tential.potential.infra.sse.SseEmitterRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,6 +46,9 @@ class AttendanceServiceTest {
 
     @Mock
     private AttendanceQueryService attendanceQueryService;
+
+    @Mock
+    private SseAttendanceEventPublisher sseAttendanceEventPublisher;
 
     @InjectMocks
     private AttendanceService attendanceService;
