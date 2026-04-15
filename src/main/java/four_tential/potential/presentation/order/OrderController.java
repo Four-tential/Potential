@@ -25,7 +25,7 @@ public class OrderController {
      * 주문 생성
      */
     @PostMapping
-    @PreAuthorize("hasRole('ROLE_STUDENT')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<BaseResponse<OrderPlaceResult>> createOrder(
             @AuthenticationPrincipal MemberPrincipal principal,
             @Valid @RequestBody OrderCreateRequest request
@@ -49,7 +49,7 @@ public class OrderController {
      * 주문 상세 조회
      */
     @GetMapping("/{orderId}")
-    @PreAuthorize("hasRole('ROLE_STUDENT')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<BaseResponse<OrderDetailResponse>> getOrderDetails(
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID orderId
