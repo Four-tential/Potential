@@ -1,5 +1,6 @@
 package four_tential.potential.infra.redis.qr;
 
+import four_tential.potential.infra.qr.QrTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

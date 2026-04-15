@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.UUID;
@@ -221,6 +222,92 @@ class AttendanceControllerTest {
             // then
             verify(attendanceService, times(1)).findAllByCourse(COURSE_ID);
             verify(attendanceService, times(1)).findMyAttendance(MEMBER_ID, COURSE_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("stream() - SSE 스트림 연결")
+    class StreamTest {
+
+        @Test
+        @DisplayName("강사 연결 성공 시 200과 SseEmitter 를 반환한다")
+        void stream_instructor_success() {
+            // given
+            SseEmitter emitter = new SseEmitter();
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID)).thenReturn(emitter);
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).isEqualTo(emitter);
+            verify(attendanceService).stream(COURSE_ID, MEMBER_ID);
+        }
+
+        @Test
+        @DisplayName("principal 이 null 이면 401 을 반환한다")
+        void stream_nullPrincipal_returns401() {
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, null);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            verify(attendanceService, never()).stream(any(), any());
+        }
+
+        @Test
+        @DisplayName("수강생이 연결 시도하면 403 을 반환한다")
+        void stream_student_returns403() {
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, studentPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            verify(attendanceService, never()).stream(any(), any());
+        }
+
+        @Test
+        @DisplayName("서비스 예외 발생 시 해당 상태코드를 반환한다")
+        void stream_serviceException_returnsErrorStatus() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_ATTENDANCE_FORBIDDEN));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode())
+                    .isEqualTo(AttendanceExceptionEnum.ERR_ATTENDANCE_FORBIDDEN.getHttpStatus());
+        }
+
+        @Test
+        @DisplayName("알 수 없는 예외 발생 시 500 을 반환한다")
+        void stream_unknownException_returns500() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new RuntimeException("알 수 없는 에러"));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        @Test
+        @DisplayName("스냅샷 조회 실패 시 500 을 반환한다")
+        void stream_snapshotFailed_returns500() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new RuntimeException("스냅샷 조회 실패"));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

@@ -5,8 +5,11 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
-import four_tential.potential.infra.redis.qr.QrTokenRepository;
+import four_tential.potential.infra.qr.QrTokenRepository;
+import four_tential.potential.infra.sse.SseAttendanceEventPublisher;
+import four_tential.potential.infra.sse.SseEmitterRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +40,15 @@ class AttendanceServiceTest {
 
     @Mock
     private QrCodeGenerator qrCodeGenerator;
+
+    @Mock
+    private SseEmitterRepository sseEmitterRepository;
+
+    @Mock
+    private AttendanceQueryService attendanceQueryService;
+
+    @Mock
+    private SseAttendanceEventPublisher sseAttendanceEventPublisher;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -110,13 +124,21 @@ class AttendanceServiceTest {
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
 
-            // when
-            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+            // 단위 테스트에서 TransactionSynchronizationManager 활성화
+            TransactionSynchronizationManager.initSynchronization();
 
-            // then
-            assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
-            assertThat(attendance.getQrCode()).isEqualTo(QR_TOKEN);
-            assertThat(attendance.getAttendanceAt()).isNotNull();
+            try {
+                // when
+                attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+                // then — DB 상태만 검증 (afterCommit 은 실제 트랜잭션 커밋 후 실행되므로 검증 제외)
+                assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
+                assertThat(attendance.getQrCode()).isEqualTo(QR_TOKEN);
+                assertThat(attendance.getAttendanceAt()).isNotNull();
+            } finally {
+                // 테스트 후 반드시 정리
+                TransactionSynchronizationManager.clearSynchronization();
+            }
         }
 
         @Test
@@ -233,6 +255,89 @@ class AttendanceServiceTest {
             assertThatThrownBy(() -> attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("stream() - SSE 스트림 연결")
+    class StreamTest {
+
+        @Test
+        @DisplayName("SSE 연결 성공 시 SseEmitter 를 반환한다")
+        void stream_success() {
+            // given
+            List<Attendance> attendances = List.of(
+                    Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID)
+            );
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(attendances));
+
+            // when
+            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+
+            // then
+            assertThat(emitter).isNotNull();
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+            verify(attendanceQueryService).getAttendanceSnapshot(COURSE_ID);
+        }
+
+        @Test
+        @DisplayName("SSE 연결 시 수강생이 없어도 빈 스냅샷을 전송한다")
+        void stream_emptySnapshot() {
+            // given
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
+
+            // when
+            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+
+            // then
+            assertThat(emitter).isNotNull();
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+        }
+
+        @Test
+        @DisplayName("스냅샷 조회 중 Exception 발생 시 예외를 던진다")
+        void stream_snapshotException_throwsException() {
+            // given
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
+                    .thenThrow(new RuntimeException("DB 오류"));
+
+            // when & then
+            assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .isInstanceOf(RuntimeException.class);
+
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+            verify(sseEmitterRepository).deleteIfSame(eq(COURSE_ID), any(SseEmitter.class));
+        }
+    }
+
+    @Test
+    @DisplayName("scan() 성공 시 afterCommit 콜백이 등록된다")
+    void scan_registersAfterCommitCallback() {
+        // given
+        Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+        when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                .thenReturn(Optional.of(COURSE_ID));
+        when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+        when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                .thenReturn(Optional.of(attendance));
+
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            // when
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // afterCommit 콜백 직접 실행
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(sync -> sync.afterCommit());
+
+            // then
+            verify(sseAttendanceEventPublisher).publish(eq(COURSE_ID), any(Attendance.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
         }
     }
 }

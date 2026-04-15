@@ -17,4 +17,7 @@ public class RedisConstants {
     public static final String QR_ATTENDANCE_PREFIX = "qr:attendance:"; // courseId 기준 중복 생성 방지
     public static final String QR_TOKEN_PREFIX = "qr:token:"; // token 기준 역조회
     public static final long   QR_TTL_SECONDS = 600L;
+
+    // SSE 관련
+    public static final String SSE_ATTENDANCE_PREFIX = "sse:attendance:";
 }
