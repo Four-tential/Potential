@@ -25,18 +25,18 @@ class InstructorMemberTest {
     }
 
     @Test
-    @DisplayName("생성된 강사 신청은 id, rejectReason, approvedAt, responsedAt이 null")
+    @DisplayName("생성된 강사 신청은 id, rejectReason, approvedAt, respondedAt이 null")
     void applyInitialState() {
         InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
 
         assertThat(instructorMember.getId()).isNull();
         assertThat(instructorMember.getRejectReason()).isNull();
         assertThat(instructorMember.getApprovedAt()).isNull();
-        assertThat(instructorMember.getResponsedAt()).isNull();
+        assertThat(instructorMember.getRespondedAt()).isNull();
     }
 
     @Test
-    @DisplayName("approve() 호출 시 status가 APPROVED, approvedAt과 responsedAt이 설정됨")
+    @DisplayName("approve() 호출 시 status가 APPROVED, approvedAt과 respondedAt이 설정됨")
     void approve() {
         InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
         LocalDateTime before = LocalDateTime.now();
@@ -46,7 +46,7 @@ class InstructorMemberTest {
         LocalDateTime after = LocalDateTime.now();
         assertThat(instructorMember.getStatus()).isEqualTo(InstructorMemberStatus.APPROVED);
         assertThat(instructorMember.getApprovedAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
-        assertThat(instructorMember.getResponsedAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+        assertThat(instructorMember.getRespondedAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
     }
 
     @Test
@@ -55,13 +55,13 @@ class InstructorMemberTest {
         InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
         instructorMember.approve();
 
-        assertThatThrownBy(instructorMember::approve)
+        assertThatThrownBy(() -> instructorMember.approve())
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("PENDING 상태의 신청 건만 승인 할 수 있습니다");
     }
 
     @Test
-    @DisplayName("reject() 호출 시 status가 REJECTED, rejectReason과 responsedAt이 설정됨")
+    @DisplayName("reject() 호출 시 status가 REJECTED, rejectReason과 respondedAt이 설정됨")
     void reject() {
         InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
         LocalDateTime before = LocalDateTime.now();
@@ -71,7 +71,7 @@ class InstructorMemberTest {
         LocalDateTime after = LocalDateTime.now();
         assertThat(instructorMember.getStatus()).isEqualTo(InstructorMemberStatus.REJECTED);
         assertThat(instructorMember.getRejectReason()).isEqualTo(InstructorMemberFixture.DEFAULT_REJECT_REASON);
-        assertThat(instructorMember.getResponsedAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+        assertThat(instructorMember.getRespondedAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
     }
 
     @Test

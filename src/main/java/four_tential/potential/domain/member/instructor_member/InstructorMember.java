@@ -44,8 +44,8 @@ public class InstructorMember extends BaseTimeEntity {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
-    @Column(name = "responsed_at")
-    private LocalDateTime responsedAt;
+    @Column(name = "responded_at")
+    private LocalDateTime respondedAt;
 
     public static InstructorMember register(
             UUID memberId,
@@ -70,7 +70,7 @@ public class InstructorMember extends BaseTimeEntity {
         }
         this.status = InstructorMemberStatus.APPROVED;
         this.approvedAt = now;
-        this.responsedAt = now;
+        this.respondedAt = now;
     }
 
     public void reject(String rejectReason) {
@@ -86,7 +86,7 @@ public class InstructorMember extends BaseTimeEntity {
 
         this.status = InstructorMemberStatus.REJECTED;
         this.rejectReason = rejectReason;
-        this.responsedAt = now;
+        this.respondedAt = now;
     }
 
 
