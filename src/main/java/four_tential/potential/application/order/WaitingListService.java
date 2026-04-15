@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.*;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -44,7 +45,7 @@ public class WaitingListService {
         long currentCapacity = capacity.get();
         if (currentCapacity >= orderCount) {
             capacity.addAndGet(-orderCount);
-            occupancy.set(String.valueOf(orderCount), 600, TimeUnit.SECONDS);
+            occupancy.set(String.valueOf(orderCount), Duration.ofSeconds(600));
             return true;
         }
         return false;

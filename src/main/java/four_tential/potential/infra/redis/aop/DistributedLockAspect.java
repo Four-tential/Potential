@@ -95,12 +95,8 @@ public class DistributedLockAspect {
         try {
             return aopInTransaction.proceed(joinPoint);
         } finally {
-            try {
-                if (rLock.isHeldByCurrentThread()) {
-                    rLock.unlock();
-                }
-            } catch (IllegalMonitorStateException e) {
-                // ignore
+            if (rLock.isHeldByCurrentThread()) {
+                rLock.unlock();
             }
         }
     }

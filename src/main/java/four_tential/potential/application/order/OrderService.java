@@ -50,9 +50,6 @@ public class OrderService {
         // 1. 요청한 courseId의 시작/종료 시간을 조회
         // 2. 해당 회원의 기존 PAID, PENDING 주문들 중 시간대가 겹치는 코스가 있는지 DB 조회
         // 3. 존재한다면 OrderExceptionEnum.ERR_ALREADY_RESERVED 예외 발생
-        
-        // boolean isDuplicate = orderRepository.existsByMemberIdAndTimeOverlap(memberId, startTime, endTime);
-        // if (isDuplicate) throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
     }
 
 }

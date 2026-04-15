@@ -44,7 +44,11 @@ class DistributedLockAspectTest {
     }
 
     @DistributedLock(key = "'testKey'", waitTime = 5L, leaseTime = 10L, timeUnit = TimeUnit.SECONDS)
-    public void mockMethod() {}
+    public void mockMethod() {
+        // 이 메서드는 테스트에서 리플렉션을 통해 어노테이션 메타데이터를 추출하기 위한 용도로만 사용됩니다.
+        // 실제 실행을 위한 메서드가 아닙니다.
+        throw new UnsupportedOperationException("메타데이터 테스트 전용 메서드입니다.");
+    }
 
     @Test
     @DisplayName("락 획득 성공 시 비즈니스 로직을 실행한다")
@@ -85,5 +89,9 @@ class DistributedLockAspectTest {
     }
 
     @DistributedLock(key = "")
-    private void mockMethodWithNullKey() {}
+    private void mockMethodWithNullKey() {
+        // 이 메서드는 테스트에서 리플렉션을 통해 어노테이션 메타데이터를 추출하기 위한 용도로만 사용됩니다.
+        // 실제 실행을 위한 메서드가 아닙니다.
+        throw new UnsupportedOperationException("메타데이터 테스트 전용 메서드입니다.");
+    }
 }
