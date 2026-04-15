@@ -33,6 +33,7 @@ public class WebhookService {
      * @param recWebhookId PortOne 웹훅 ID
      * @return 중복 여부
      */
+    @Transactional(readOnly = true)
     public boolean isDuplicate(String recWebhookId) {
         return webhookRepository.existsByRecWebhookId(recWebhookId);
     }

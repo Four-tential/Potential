@@ -53,6 +53,14 @@ class WebhookTest {
     }
 
     @Test
+    @DisplayName("complete 호출 시 completedAt 이 저장된다")
+    void complete_completedAt_not_null() {
+        Webhook webhook = Webhook.receive("rec_id_123", "Transaction.Paid");
+        webhook.complete();
+        assertThat(webhook.getCompletedAt()).isNotNull();
+    }
+
+    @Test
     @DisplayName("fail 호출 시 FAILED 상태로 변경된다")
     void fail_status_failed() {
         Webhook webhook = Webhook.receive("rec_id_123", "Transaction.Paid");

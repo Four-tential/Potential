@@ -69,8 +69,6 @@ public class PaymentFacade {
                             processWebhook(verified, webhook);
                         }
                     });
-            // 트랜잭션 2 성공 → REQUIRES_NEW 로 완료 상태 저장
-            webhookService.complete(webhook);
 
         } catch (Exception e) {
             // 트랜잭션 2 실패 → REQUIRES_NEW 로 실패 상태 저장
@@ -78,6 +76,9 @@ public class PaymentFacade {
             log.error("[PORTONE_WEBHOOK] 비즈니스 처리 실패 id={}", webhookId, e);
             throw e;
         }
+
+        // 트랜잭션 2 성공 → REQUIRES_NEW 로 완료 상태 저장
+        webhookService.complete(webhook);
     }
 
     /**

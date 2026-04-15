@@ -11,6 +11,9 @@ public enum PaymentPayWay {
      * @return PaymentPayWay
      */
     public static PaymentPayWay from(String portOnePayMethod) {
+        if (portOnePayMethod == null) {
+            return CARD;
+        }
         return switch (portOnePayMethod) {
             case "card" -> CARD;
             case "easyPay" -> EASY_PAY;
