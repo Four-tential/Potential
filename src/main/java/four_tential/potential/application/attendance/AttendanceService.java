@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -67,8 +69,15 @@ public class AttendanceService {
 
         attendance.attend(qrToken);
 
-        // 출석 처리 완료 후 SSE 이벤트 강사에게 푸시
-        pushAttendanceEvent(courseId, attendance);
+        // DB 커밋 성공 후에만 SSE 이벤트 전송 - 커밋 전 전송 시 DB 롤백과 화면 불일치 방지
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        pushAttendanceEvent(courseId, attendance);
+                    }
+                }
+        );
     }
 
     // 출석 현황 조회 (강사 -> 전체)
