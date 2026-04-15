@@ -1,5 +1,6 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.*;
@@ -9,9 +10,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,5 +138,33 @@ class OrderFacadeTest {
         assertThat(result).isNotNull();
         assertThat(result.orderId()).isEqualTo(orderId);
         verify(orderService).getOrderDetails(orderId, memberId);
+    }
+
+    @Test
+    @DisplayName("나의 주문 목록 조회를 성공적으로 수행한다")
+    void getMyOrders_success() {
+        // given
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        Order order = mock(Order.class);
+        given(order.getId()).willReturn(UUID.randomUUID());
+        given(order.getCourseId()).willReturn(courseId);
+        given(order.getTitleSnap()).willReturn("테스트 강의");
+        given(order.getTotalPriceSnap()).willReturn(BigInteger.valueOf(100000));
+        given(order.getStatus()).willReturn(OrderStatus.PAID);
+        given(order.getCreatedAt()).willReturn(LocalDateTime.now());
+        given(order.getUpdatedAt()).willReturn(LocalDateTime.now());
+        given(order.getExpireAt()).willReturn(LocalDateTime.now().plusMinutes(10));
+
+        Page<Order> orderPage = new PageImpl<>(List.of(order), pageRequest, 1);
+        given(orderService.getMyOrders(memberId, pageRequest)).willReturn(orderPage);
+
+        // when
+        PageResponse<OrderMyListResponse> result = orderFacade.getMyOrders(memberId, pageRequest);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).titleSnap()).isEqualTo("테스트 강의");
+        verify(orderService).getMyOrders(memberId, pageRequest);
     }
 }

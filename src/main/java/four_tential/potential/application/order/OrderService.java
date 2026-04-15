@@ -7,6 +7,8 @@ import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,5 +63,13 @@ public class OrderService {
     public Order getOrderDetails(UUID orderId, UUID memberId) {
         return orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+    }
+
+    /**
+     * 나의 주문 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public Page<Order> getMyOrders(UUID memberId, Pageable pageable) {
+        return orderRepository.findMyOrders(memberId, pageable);
     }
 }
