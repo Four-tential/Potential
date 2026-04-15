@@ -7,6 +7,7 @@ import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
+import four_tential.potential.infra.sse.SseEmitterRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class AttendanceServiceTest {
 
     @Mock
     private QrCodeGenerator qrCodeGenerator;
+
+    @Mock
+    private SseEmitterRepository sseEmitterRepository;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -109,6 +113,8 @@ class AttendanceServiceTest {
                     MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
+            when(sseEmitterRepository.findByCourseId(COURSE_ID))
+                    .thenReturn(Optional.empty()); // SSE 연결 없는 상황 가정
 
             // when
             attendanceService.scan(QR_TOKEN, MEMBER_ID);
