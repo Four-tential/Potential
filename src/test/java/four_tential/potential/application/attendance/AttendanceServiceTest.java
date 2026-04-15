@@ -15,7 +15,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -239,6 +241,157 @@ class AttendanceServiceTest {
             assertThatThrownBy(() -> attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("stream() - SSE 스트림 연결")
+    class StreamTest {
+
+        @Test
+        @DisplayName("SSE 연결 성공 시 SseEmitter 를 반환한다")
+        void stream_success() {
+            // given
+            List<Attendance> attendances = List.of(
+                    Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID)
+            );
+            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(attendances);
+
+            // when
+            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+
+            // then
+            assertThat(emitter).isNotNull();
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+            verify(attendanceRepository).findAllByCourseId(COURSE_ID);
+        }
+
+        @Test
+        @DisplayName("SSE 연결 시 수강생이 없어도 빈 스냅샷을 전송한다")
+        void stream_emptySnapshot() {
+            // given
+            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of());
+
+            // when
+            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+
+            // then
+            assertThat(emitter).isNotNull();
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+        }
+
+        @Test
+        @DisplayName("스냅샷 조회 중 Exception 발생 시 emitter 를 정리한다")
+        void stream_snapshotException_completesWithError() {
+            // given
+            when(attendanceRepository.findAllByCourseId(COURSE_ID))
+                    .thenThrow(new RuntimeException("DB 오류"));
+
+            // when
+            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+
+            // then — completeWithError 호출 후에도 emitter 객체는 반환됨
+            assertThat(emitter).isNotNull();
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+            verify(sseEmitterRepository).delete(COURSE_ID);
+        }
+
+        @Test
+        @DisplayName("scan() 시 SSE 연결이 없으면 이벤트를 전송하지 않는다")
+        void scan_noSseConnection_doesNotPushEvent() {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                    .thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(sseEmitterRepository.findByCourseId(COURSE_ID))
+                    .thenReturn(Optional.empty());
+
+            // when
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // then
+            assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
+            verify(sseEmitterRepository).findByCourseId(COURSE_ID);
+        }
+
+        @Test
+        @DisplayName("scan() 시 SSE 연결이 있으면 attendance 이벤트를 푸시한다")
+        void scan_withSseConnection_pushesEvent() {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            SseEmitter mockEmitter = mock(SseEmitter.class);
+
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                    .thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(sseEmitterRepository.findByCourseId(COURSE_ID))
+                    .thenReturn(Optional.of(mockEmitter));
+
+            // when
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // then
+            assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
+            verify(sseEmitterRepository).findByCourseId(COURSE_ID);
+        }
+
+        @Test
+        @DisplayName("SSE 이벤트 전송 중 IOException 발생 시 emitter 를 정리한다")
+        void pushAttendanceEvent_IOException_cleansUpEmitter() throws Exception {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            SseEmitter mockEmitter = mock(SseEmitter.class);
+
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                    .thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(sseEmitterRepository.findByCourseId(COURSE_ID))
+                    .thenReturn(Optional.of(mockEmitter));
+            doThrow(new IOException("연결 끊김"))
+                    .when(mockEmitter).send(any(SseEmitter.SseEventBuilder.class));
+
+            // when
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // then
+            verify(sseEmitterRepository).delete(COURSE_ID);
+            verify(mockEmitter).complete();
+        }
+
+        @Test
+        @DisplayName("SSE 이벤트 전송 중 Exception 발생 시 emitter 를 에러 종료한다")
+        void pushAttendanceEvent_Exception_completesWithError() throws Exception {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            SseEmitter mockEmitter = mock(SseEmitter.class);
+
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                    .thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(sseEmitterRepository.findByCourseId(COURSE_ID))
+                    .thenReturn(Optional.of(mockEmitter));
+            doThrow(new RuntimeException("알 수 없는 에러"))
+                    .when(mockEmitter).send(any(SseEmitter.SseEventBuilder.class));
+
+            // when
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // then
+            verify(sseEmitterRepository).delete(COURSE_ID);
+            verify(mockEmitter).completeWithError(any(RuntimeException.class));
         }
     }
 }
