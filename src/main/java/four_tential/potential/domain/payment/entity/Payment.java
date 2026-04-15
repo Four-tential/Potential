@@ -74,4 +74,30 @@ public class Payment extends BaseTimeEntity {
         payment.status = PaymentStatus.PENDING;
         return payment;
     }
+
+    /**
+     * 결제 확정 처리
+     * 웹훅 Transaction.Paid 수신 시 호출
+     */
+    public void confirmPaid(String pgKey) {
+        this.pgKey = pgKey;
+        this.status = PaymentStatus.PAID;
+        this.paidAt = LocalDateTime.now();
+    }
+
+    /**
+     * 결제 실패 처리
+     * 웹훅 Transaction.Failed 수신 시 호출
+     */
+    public void fail() {
+        this.status = PaymentStatus.FAILED;
+    }
+
+    public void refund() {
+        this.status = PaymentStatus.REFUNDED;
+    }
+
+    public void partRefund() {
+        this.status = PaymentStatus.PART_REFUNDED;
+    }
 }

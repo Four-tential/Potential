@@ -1,12 +1,12 @@
 package four_tential.potential.infra.portone;
 
+import io.portone.sdk.server.errors.WebhookVerificationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.Mockito;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.*;
 
 class PortOneWebhookHandlerTest {
 
@@ -14,16 +14,24 @@ class PortOneWebhookHandlerTest {
 
     @BeforeEach
     void setUp() {
-        portOneWebhookHandler = new PortOneWebhookHandler();
-        ReflectionTestUtils.setField(portOneWebhookHandler, "webhookSecret", "test-webhook-secret");
+        PortOneProperties properties = Mockito.mock(PortOneProperties.class);
+        Mockito.when(properties.getWebhookSecret())
+                .thenReturn("whsec_dGVzdC13ZWJob29rLXNlY3JldA==");
+
+        portOneWebhookHandler = new PortOneWebhookHandler(properties);
+        portOneWebhookHandler.init();
     }
 
     @Test
-    @DisplayName("verify 호출 시 UnsupportedOperationException 이 발생한다")
-    void verify_throws_unsupported_operation_exception() {
-        assertThatThrownBy(() -> portOneWebhookHandler.verify("payload", "signature"))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("PortOne 웹훅 시크릿 준비 후 구현 예정");
+    @DisplayName("잘못된 서명으로 verify 호출 시 WebhookVerificationException 이 발생한다")
+    void verify_throws_when_invalid_signature() {
+        assertThatThrownBy(() ->
+                portOneWebhookHandler.verify(
+                        "{\"type\":\"Transaction.Paid\"}",
+                        "test-webhook-id",
+                        "v1,invalidsignature",
+                        "1234567890"
+                ))
+                .isInstanceOf(WebhookVerificationException.class);
     }
-
 }

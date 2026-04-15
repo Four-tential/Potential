@@ -20,3 +20,9 @@ jwt:
     key: cG90ZW50aWFsLXRlc3Qtc2VjcmV0LWtleS1mb3Itand0LXNpZ25pbmctMjU2LWJpdHM=
     accessExpire: 1800000
     refreshExpire: 60480000
+
+portone:
+  api-secret: dGVzdC1hcGktc2VjcmV0
+  webhook-secret: dGVzdC13ZWJob29rLXNlY3JldA==
+  store-id: test-store-id
+  channel-key: test-channel-key

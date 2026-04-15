@@ -71,10 +71,7 @@ class PaymentTest {
     @Test
     @DisplayName("결제 생성 시 totalPrice 가 올바르게 저장된다")
     void create_totalPrice() {
-        Payment payment = Payment.create(
-                UUID.randomUUID(), UUID.randomUUID(), null,
-                100000L, 0L, 100000L, PaymentPayWay.CARD);
-        assertThat(payment.getTotalPrice()).isEqualTo(100000L);
+        assertThat(createPayment().getTotalPrice()).isEqualTo(100000L);
     }
 
     @Test
@@ -98,14 +95,60 @@ class PaymentTest {
     @Test
     @DisplayName("결제 생성 시 payWay 가 올바르게 저장된다")
     void create_payWay() {
-        Payment payment = createPayment();
-        assertThat(payment.getPayWay()).isEqualTo(PaymentPayWay.CARD);
+        assertThat(createPayment().getPayWay()).isEqualTo(PaymentPayWay.CARD);
     }
 
     @Test
     @DisplayName("결제 생성 시 paidAt 이 null 이다")
     void create_paidAt_null() {
+        assertThat(createPayment().getPaidAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("confirmPaid 호출 시 PAID 상태로 변경된다")
+    void confirmPaid_status_paid() {
         Payment payment = createPayment();
-        assertThat(payment.getPaidAt()).isNull();
+        payment.confirmPaid("portone_key_123");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("confirmPaid 호출 시 pgKey 가 저장된다")
+    void confirmPaid_pgKey() {
+        Payment payment = createPayment();
+        payment.confirmPaid("portone_key_123");
+        assertThat(payment.getPgKey()).isEqualTo("portone_key_123");
+    }
+
+    @Test
+    @DisplayName("confirmPaid 호출 시 paidAt 이 저장된다")
+    void confirmPaid_paidAt_not_null() {
+        Payment payment = createPayment();
+        payment.confirmPaid("portone_key_123");
+        assertThat(payment.getPaidAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("fail 호출 시 FAILED 상태로 변경된다")
+    void fail_status_failed() {
+        Payment payment = createPayment();
+        payment.fail();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("refund 호출 시 REFUNDED 상태로 변경된다")
+    void refund_status_refunded() {
+        Payment payment = createPayment();
+        payment.refund();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    @DisplayName("partRefund 호출 시 PART_REFUNDED 상태로 변경된다")
+    void partRefund_status_part_refunded() {
+        Payment payment = createPayment();
+        payment.partRefund();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PART_REFUNDED);
     }
 }

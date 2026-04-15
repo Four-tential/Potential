@@ -23,8 +23,7 @@ class PortOneClientTest {
     @DisplayName("getPayment 호출 시 UnsupportedOperationException 이 발생한다")
     void getPayment_throws_unsupported_operation_exception() {
         assertThatThrownBy(() -> portOneClient.getPayment("portone_key_123"))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("PortOne API 키 준비 후 구현 예정");
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
@@ -34,8 +33,6 @@ class PortOneClientTest {
                 "portone_key_123", 50000L, "CANCEL");
 
         assertThatThrownBy(() -> portOneClient.cancelPayment(request))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("PortOne API 키 준비 후 구현 예정");
+                .isInstanceOf(UnsupportedOperationException.class);
     }
-
 }

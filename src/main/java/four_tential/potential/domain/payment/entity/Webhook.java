@@ -45,4 +45,30 @@ public class Webhook {
         webhook.receivedAt = LocalDateTime.now();
         return webhook;
     }
+
+    /**
+     * 웹훅 이벤트 상태 업데이트
+     * SDK 검증 후 실제 이벤트 타입으로 업데이트
+     *
+     * @param eventStatus 실제 이벤트 타입
+     */
+    public void updateEventStatus(String eventStatus) {
+        this.eventStatus = eventStatus;
+    }
+
+    /**
+     * 웹훅 처리 완료
+     */
+    public void complete() {
+        this.status = WebhookStatus.COMPLETED;
+        this.completedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 웹훅 처리 실패
+     */
+    public void fail() {
+        this.status = WebhookStatus.FAILED;
+        this.completedAt = LocalDateTime.now();
+    }
 }
