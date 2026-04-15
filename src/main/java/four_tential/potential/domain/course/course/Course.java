@@ -97,17 +97,17 @@ public class Course extends BaseTimeWithDelEntity {
     ) {
         // 정원 1명 이상이여야 함
         if (capacity < 1) {
-            throw new ServiceErrorException(INVALID_CAPACITY);
+            throw new ServiceErrorException(ERR_INVALID_CAPACITY);
         }
 
         // 코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
-            throw new ServiceErrorException(INVALID_ORDER_CLOSE_TIME);
+            throw new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME);
         }
 
         // 코스 시작일시는 종료일시 후여야 함
         if (!endAt.isAfter(startAt)) {
-            throw new ServiceErrorException(INVALID_SCHEDULE);
+            throw new ServiceErrorException(ERR_INVALID_SCHEDULE);
         }
 
         Course course = new Course();
@@ -136,7 +136,7 @@ public class Course extends BaseTimeWithDelEntity {
             UUID courseCategoryId
     ) {
         if (this.status == CourseStatus.CLOSED || this.status == CourseStatus.CANCELLED) {
-            throw new ServiceErrorException(CANNOT_MODIFY_COURSE);
+            throw new ServiceErrorException(ERR_CANNOT_MODIFY_COURSE);
         }
         this.title = title;
         this.description = description;
@@ -155,16 +155,21 @@ public class Course extends BaseTimeWithDelEntity {
             LocalDateTime endAt
     ) {
         if (this.status != CourseStatus.PREPARATION) {
-            throw new ServiceErrorException(IMMUTABLE_FIELD_IN_OPEN);
+            throw new ServiceErrorException(ERR_IMMUTABLE_FIELD_IN_OPEN);
         }
 
         if (capacity < 1) {
-            throw new ServiceErrorException(INVALID_CAPACITY);
+            throw new ServiceErrorException(ERR_INVALID_CAPACITY);
         }
 
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
-            throw new ServiceErrorException(INVALID_ORDER_CLOSE_TIME);
+            throw new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME);
         }
+
+        if (!endAt.isAfter(startAt)) {
+            throw new ServiceErrorException(ERR_INVALID_SCHEDULE);
+        }
+
         this.price = price;
         this.capacity = capacity;
         this.addressMain = addressMain;
@@ -178,7 +183,7 @@ public class Course extends BaseTimeWithDelEntity {
     public void confirm() {
         // 코스의 준비 상태 일때만 개설 확정 후 오픈 할 수 있다
         if (this.status != CourseStatus.PREPARATION) {
-            throw new ServiceErrorException(INVALID_STATUS_TRANSITION_TO_CONFIRM);
+            throw new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_CONFIRM);
         }
 
         this.status = CourseStatus.OPEN;
@@ -198,7 +203,11 @@ public class Course extends BaseTimeWithDelEntity {
     }
 
     public void increaseConfirmCount() {
-        this.confirmCount++;
+        if (!this.isFull()) {
+            this.confirmCount++;
+        } else {
+            throw new ServiceErrorException(ERR_IS_FULL_CAPACITY);
+        }
     }
 
     public void decreaseConfirmCount() {

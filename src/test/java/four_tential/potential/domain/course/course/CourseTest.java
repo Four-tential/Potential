@@ -40,7 +40,7 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("정원이 0 이하이면 INVALID_CAPACITY 예외 발생")
+    @DisplayName("정원이 0 이하이면 ERR_INVALID_CAPACITY 예외 발생")
     void register_invalidCapacity() {
         assertThatThrownBy(() -> Course.register(
                 CourseFixture.DEFAULT_COURSE_CATEGORY_ID,
@@ -62,7 +62,7 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("주문 마감 시간이 주문 오픈 시간 이전이면 INVALID_ORDER_CLOSE_TIME 예외 발생")
+    @DisplayName("주문 마감 시간이 주문 오픈 시간 이전이면 ERR_INVALID_ORDER_CLOSE_TIME 예외 발생")
     void register_invalidOrderCloseTime_notAfterOpen() {
         LocalDateTime orderCloseAtBeforeOpen = CourseFixture.DEFAULT_ORDER_OPEN_AT.minusDays(1);
 
@@ -86,7 +86,7 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("주문 마감 시간이 코스 시작 2시간 전 이후이면 INVALID_ORDER_CLOSE_TIME 예외 발생")
+    @DisplayName("주문 마감 시간이 코스 시작 2시간 전 이후이면 ERR_INVALID_ORDER_CLOSE_TIME 예외 발생")
     void register_invalidOrderCloseTime_notBeforeStartMinus2h() {
         LocalDateTime orderCloseAtTooLate = CourseFixture.DEFAULT_START_AT.minusHours(1);
 
@@ -110,7 +110,55 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("코스 종료 일시가 시작 일시 이전이면 INVALID_SCHEDULE 예외 발생")
+    @DisplayName("주문 마감 시간이 주문 오픈 시간과 같으면 ERR_INVALID_ORDER_CLOSE_TIME 예외 발생 - 경계값")
+    void register_invalidOrderCloseTime_equalsOrderOpenAt() {
+        LocalDateTime sameAsOpen = CourseFixture.DEFAULT_ORDER_OPEN_AT;
+
+        assertThatThrownBy(() -> Course.register(
+                CourseFixture.DEFAULT_COURSE_CATEGORY_ID,
+                CourseFixture.DEFAULT_MEMBER_INSTRUCTOR_ID,
+                CourseFixture.DEFAULT_TITLE,
+                CourseFixture.DEFAULT_DESCRIPTION,
+                CourseFixture.DEFAULT_ADDRESS_MAIN,
+                CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                CourseFixture.DEFAULT_CAPACITY,
+                CourseFixture.DEFAULT_PRICE,
+                CourseFixture.DEFAULT_LEVEL,
+                CourseFixture.DEFAULT_ORDER_OPEN_AT,
+                sameAsOpen,
+                CourseFixture.DEFAULT_START_AT,
+                CourseFixture.DEFAULT_END_AT
+        ))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능합니다");
+    }
+
+    @Test
+    @DisplayName("주문 마감 시간이 코스 시작 정확히 2시간 전이면 ERR_INVALID_ORDER_CLOSE_TIME 예외 발생 - 경계값")
+    void register_invalidOrderCloseTime_equalsStartMinus2h() {
+        LocalDateTime exactBoundary = CourseFixture.DEFAULT_START_AT.minusHours(2);
+
+        assertThatThrownBy(() -> Course.register(
+                CourseFixture.DEFAULT_COURSE_CATEGORY_ID,
+                CourseFixture.DEFAULT_MEMBER_INSTRUCTOR_ID,
+                CourseFixture.DEFAULT_TITLE,
+                CourseFixture.DEFAULT_DESCRIPTION,
+                CourseFixture.DEFAULT_ADDRESS_MAIN,
+                CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                CourseFixture.DEFAULT_CAPACITY,
+                CourseFixture.DEFAULT_PRICE,
+                CourseFixture.DEFAULT_LEVEL,
+                CourseFixture.DEFAULT_ORDER_OPEN_AT,
+                exactBoundary,
+                CourseFixture.DEFAULT_START_AT,
+                CourseFixture.DEFAULT_END_AT
+        ))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능합니다");
+    }
+
+    @Test
+    @DisplayName("코스 종료 일시가 시작 일시 이전이면 ERR_INVALID_SCHEDULE 예외 발생")
     void register_invalidSchedule() {
         LocalDateTime endAtBeforeStart = CourseFixture.DEFAULT_START_AT.minusHours(1);
 
@@ -128,6 +176,30 @@ class CourseTest {
                 CourseFixture.DEFAULT_ORDER_CLOSE_AT,
                 CourseFixture.DEFAULT_START_AT,
                 endAtBeforeStart
+        ))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 종료 일시는 코스의 시작 일시보다 이후여야 합니다");
+    }
+
+    @Test
+    @DisplayName("코스 종료 일시가 시작 일시와 같으면 ERR_INVALID_SCHEDULE 예외 발생 - 경계값")
+    void register_invalidSchedule_equalsStartAt() {
+        LocalDateTime endAtSameAsStart = CourseFixture.DEFAULT_START_AT;
+
+        assertThatThrownBy(() -> Course.register(
+                CourseFixture.DEFAULT_COURSE_CATEGORY_ID,
+                CourseFixture.DEFAULT_MEMBER_INSTRUCTOR_ID,
+                CourseFixture.DEFAULT_TITLE,
+                CourseFixture.DEFAULT_DESCRIPTION,
+                CourseFixture.DEFAULT_ADDRESS_MAIN,
+                CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                CourseFixture.DEFAULT_CAPACITY,
+                CourseFixture.DEFAULT_PRICE,
+                CourseFixture.DEFAULT_LEVEL,
+                CourseFixture.DEFAULT_ORDER_OPEN_AT,
+                CourseFixture.DEFAULT_ORDER_CLOSE_AT,
+                CourseFixture.DEFAULT_START_AT,
+                endAtSameAsStart
         ))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("코스의 종료 일시는 코스의 시작 일시보다 이후여야 합니다");
@@ -191,7 +263,7 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("OPEN 상태에서 updateInfoInPreparation() 호출 시 IMMUTABLE_FIELD_IN_OPEN 예외 발생")
+    @DisplayName("OPEN 상태에서 updateInfoInPreparation() 호출 시 ERR_IMMUTABLE_FIELD_IN_OPEN 예외 발생")
     void updateInfoInPreparation_inOpen() {
         Course course = CourseFixture.defaultCourse();
         course.confirm();
@@ -240,6 +312,31 @@ class CourseTest {
         Course course = CourseFixture.defaultCourse();
 
         course.increaseConfirmCount();
+
+        assertThat(course.getConfirmCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("정원이 가득 찬 상태에서 increaseConfirmCount() 호출 시 ERR_IS_FULL_CAPACITY 예외 발생")
+    void increaseConfirmCount_whenFull() {
+        Course course = CourseFixture.defaultCourse();
+        for (int i = 0; i < CourseFixture.DEFAULT_CAPACITY; i++) {
+            course.increaseConfirmCount();
+        }
+
+        assertThatThrownBy(() -> course.increaseConfirmCount())
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 정원이 가득차 추가할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("confirmCount가 양수일 때 decreaseConfirmCount() 호출 시 1 감소")
+    void decreaseConfirmCount_whenPositive() {
+        Course course = CourseFixture.defaultCourse();
+        course.increaseConfirmCount();
+        course.increaseConfirmCount();
+
+        course.decreaseConfirmCount();
 
         assertThat(course.getConfirmCount()).isEqualTo(1);
     }
