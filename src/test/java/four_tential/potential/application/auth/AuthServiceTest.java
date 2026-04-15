@@ -54,10 +54,6 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "refreshTokenExpire", 1_209_600_000L); // 14일(ms)
     }
 
-    // ============================================================
-    // signUp
-    // ============================================================
-
     @Test
     @DisplayName("회원가입 성공 - 응답 값 및 저장 검증")
     void signUp() {
@@ -86,9 +82,6 @@ class AuthServiceTest {
         verify(memberRepository, never()).save(any(Member.class));
     }
 
-    // ============================================================
-    // login
-    // ============================================================
 
     @Test
     @DisplayName("로그인 성공 - 온보딩 완료 회원은 hasOnboarding true 반환")
@@ -223,7 +216,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Redis 저장 토큰과 불일치 (탈취 의심) - Redis 삭제 후 ServiceErrorException 발생")
+    @DisplayName("Redis 저장 토큰과 불일치 (의심 대상) - Redis 삭제 후 ServiceErrorException 발생")
     void refresh_tokenMismatch() {
         String stolenToken = "stolenToken";
         given(jwtUtil.validateToken(stolenToken)).willReturn(true);
