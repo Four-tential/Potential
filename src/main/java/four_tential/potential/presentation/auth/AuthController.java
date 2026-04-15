@@ -45,6 +45,7 @@ public class AuthController {
     ) {
         LoginResult result = authService.login(request);
 
+        // Refresh Token 은 쿠키에 담기
         response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.refreshToken()).toString());
 
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "로그인 성공", new LoginResponse(result.accessToken(), result.hasOnboarding())));

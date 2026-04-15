@@ -80,6 +80,7 @@ public class AuthService {
         return new LoginResult(accessToken, refreshToken, member.isHasOnboarding());
     }
 
+    @Transactional(readOnly = true)
     public RefreshResult refresh(String refreshToken) {
         if(!jwtUtil.validateToken(refreshToken)) {
             log.error("Refresh Token Refresh ERR : {}", "토큰 유효성 검사 실패");
