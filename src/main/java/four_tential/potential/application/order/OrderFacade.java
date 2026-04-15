@@ -2,10 +2,7 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.WaitingStatus;
-import four_tential.potential.presentation.order.dto.OrderCreateRequest;
-import four_tential.potential.presentation.order.dto.OrderCreateResponse;
-import four_tential.potential.presentation.order.dto.OrderPlaceResult;
-import four_tential.potential.presentation.order.dto.OrderWaitingResponse;
+import four_tential.potential.presentation.order.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -48,5 +45,13 @@ public class OrderFacade {
                 WaitingStatus.WAITING.name(),
                 OrderConstants.MESSAGE_WAITING_COMPLETED
         );
+    }
+
+    /**
+     * 주문 상세 조회
+     */
+    public OrderDetailResponse getOrderDetails(UUID orderId, UUID memberId) {
+        Order order = orderService.getOrderDetails(orderId, memberId);
+        return OrderDetailResponse.from(order);
     }
 }

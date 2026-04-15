@@ -1,5 +1,7 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
@@ -52,4 +54,12 @@ public class OrderService {
         // 3. 존재한다면 OrderExceptionEnum.ERR_ALREADY_RESERVED 예외 발생
     }
 
+    /**
+     * 주문 상세 조회
+     */
+    @Transactional(readOnly = true)
+    public Order getOrderDetails(UUID orderId, UUID memberId) {
+        return orderRepository.findOrderDetailsById(orderId, memberId)
+                .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+    }
 }

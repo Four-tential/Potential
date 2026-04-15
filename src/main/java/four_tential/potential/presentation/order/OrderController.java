@@ -3,20 +3,16 @@ package four_tential.potential.presentation.order;
 import four_tential.potential.application.order.OrderFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
-import four_tential.potential.presentation.order.dto.OrderCreateRequest;
-import four_tential.potential.presentation.order.dto.OrderCreateResponse;
-import four_tential.potential.presentation.order.dto.OrderPlaceResult;
-import four_tential.potential.presentation.order.dto.OrderWaitingResponse;
+import four_tential.potential.presentation.order.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/orders")
@@ -47,6 +43,19 @@ public class OrderController {
         }
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
+    /**
+     * 주문 상세 조회
+     */
+    @GetMapping("/{orderId}")
+    @PreAuthorize("hasRole('ROLE_STUDENT')")
+    public ResponseEntity<BaseResponse<OrderDetailResponse>> getOrderDetails(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID orderId
+    ) {
+        OrderDetailResponse response = orderFacade.getOrderDetails(orderId, principal.memberId());
+        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "주문 상세 조회 성공", response));
     }
 
 }
