@@ -24,7 +24,7 @@ public class Course extends BaseTimeWithDelEntity {
     @Id
     @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
     @Column(nullable = false, updatable = false, columnDefinition = "BINARY(16)")
-    private String id;
+    private UUID id;
 
     @Column(name = "course_category_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID courseCategoryId;
