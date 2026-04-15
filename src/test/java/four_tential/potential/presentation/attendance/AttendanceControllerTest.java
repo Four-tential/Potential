@@ -295,5 +295,19 @@ class AttendanceControllerTest {
             // then
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         }
+
+        @Test
+        @DisplayName("스냅샷 조회 실패 시 500 을 반환한다")
+        void stream_snapshotFailed_returns500() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new RuntimeException("스냅샷 조회 실패"));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 }

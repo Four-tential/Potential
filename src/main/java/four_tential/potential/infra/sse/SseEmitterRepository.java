@@ -25,4 +25,9 @@ public class SseEmitterRepository {
     public void delete(UUID courseId) {
         emitters.remove(courseId);
     }
+
+    // 동일한 emitter 인스턴스일 때만 삭제 (중복 접속 시 새 연결 보호)
+    public void deleteIfSame(UUID courseId, SseEmitter emitter) {
+        emitters.remove(courseId, emitter);
+    }
 }

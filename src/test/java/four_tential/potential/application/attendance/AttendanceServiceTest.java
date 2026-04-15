@@ -297,19 +297,47 @@ class AttendanceServiceTest {
         }
 
         @Test
-        @DisplayName("스냅샷 조회 중 Exception 발생 시 emitter 를 정리한다")
-        void stream_snapshotException_completesWithError() {
+        @DisplayName("스냅샷 조회 중 Exception 발생 시 예외를 던진다")
+        void stream_snapshotException_throwsException() {
             // given
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenThrow(new RuntimeException("DB 오류"));
 
+            // when & then
+            assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .isInstanceOf(RuntimeException.class);
+
+            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
+            verify(sseEmitterRepository).deleteIfSame(eq(COURSE_ID), any(SseEmitter.class));
+        }
+    }
+
+    @Test
+    @DisplayName("scan() 성공 시 afterCommit 콜백이 등록된다")
+    void scan_registersAfterCommitCallback() {
+        // given
+        Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+        when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
+                .thenReturn(Optional.of(COURSE_ID));
+        when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
+                MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+        when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                .thenReturn(Optional.of(attendance));
+
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
             // when
-            SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
+            attendanceService.scan(QR_TOKEN, MEMBER_ID);
+
+            // afterCommit 콜백 직접 실행
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(sync -> sync.afterCommit());
 
             // then
-            assertThat(emitter).isNotNull();
-            verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
-            verify(sseEmitterRepository).delete(COURSE_ID);
+            verify(sseAttendanceEventPublisher).publish(eq(COURSE_ID), any(Attendance.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
         }
     }
 }

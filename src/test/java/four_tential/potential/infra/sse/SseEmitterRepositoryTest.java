@@ -102,4 +102,39 @@ class SseEmitterRepositoryTest {
             assertThat(sseEmitterRepository.findByCourseId(COURSE_ID)).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("deleteIfSame() - 동일 인스턴스일 때만 삭제")
+    class DeleteIfSameTest {
+
+        @Test
+        @DisplayName("동일한 emitter 인스턴스이면 삭제한다")
+        void deleteIfSame_sameInstance() {
+            // given
+            SseEmitter emitter = new SseEmitter();
+            sseEmitterRepository.save(COURSE_ID, emitter);
+
+            // when
+            sseEmitterRepository.deleteIfSame(COURSE_ID, emitter);
+
+            // then
+            assertThat(sseEmitterRepository.findByCourseId(COURSE_ID)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("다른 emitter 인스턴스이면 삭제하지 않는다")
+        void deleteIfSame_differentInstance() {
+            // given
+            SseEmitter current = new SseEmitter();  // 새 연결
+            SseEmitter old     = new SseEmitter();  // 이전 연결
+            sseEmitterRepository.save(COURSE_ID, current);
+
+            // when — 이전 emitter 로 삭제 시도
+            sseEmitterRepository.deleteIfSame(COURSE_ID, old);
+
+            // then — 새 연결은 유지됨
+            assertThat(sseEmitterRepository.findByCourseId(COURSE_ID)).isPresent();
+            assertThat(sseEmitterRepository.findByCourseId(COURSE_ID).get()).isEqualTo(current);
+        }
+    }
 }

@@ -5,7 +5,6 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
-import four_tential.potential.domain.attendance.dto.AttendanceEventResponse;
 import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
@@ -96,42 +95,44 @@ public class AttendanceService {
     }
 
     // SSE 스트림 연결 (강사 전용)
-    // 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
-    //TODO: UUID instructorId 파라미터 사용 강사 본인 코스인지 검증
+// 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
+//TODO: UUID instructorId 파라미터 사용 강사 본인 코스인지 검증
     public SseEmitter stream(UUID courseId, UUID instructorId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
+        // 동일한 emitter 인스턴스일 때만 삭제하여 새 연결이 지워지는 것을 방지
         emitter.onCompletion(() -> {
             log.info("SSE 연결 종료 courseId={}", courseId);
-            sseEmitterRepository.delete(courseId);
+            sseEmitterRepository.deleteIfSame(courseId, emitter);
         });
         emitter.onTimeout(() -> {
             log.warn("SSE 연결 타임아웃 courseId={}", courseId);
-            sseEmitterRepository.delete(courseId);
+            sseEmitterRepository.deleteIfSame(courseId, emitter);
             emitter.complete();
         });
         emitter.onError(e -> {
             log.error("SSE 연결 에러 courseId={}", courseId, e);
-            sseEmitterRepository.delete(courseId);
+            sseEmitterRepository.deleteIfSame(courseId, emitter);
         });
 
         sseEmitterRepository.save(courseId, emitter);
 
+        // 스냅샷 실패 시 예외를 던져서 컨트롤러가 JSON 오류 응답을 내려줄 수 있도록
         try {
             AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(courseId);
-
             emitter.send(SseEmitter.event()
                     .name("snapshot")
                     .data(snapshot));
-
         } catch (IOException e) {
             log.error("SSE 스냅샷 전송 실패 courseId={}", courseId, e);
-            sseEmitterRepository.delete(courseId);
+            sseEmitterRepository.deleteIfSame(courseId, emitter);
             emitter.completeWithError(e);
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE);
         } catch (Exception e) {
             log.error("SSE 스냅샷 조회 실패 courseId={}", courseId, e);
-            sseEmitterRepository.delete(courseId);
+            sseEmitterRepository.deleteIfSame(courseId, emitter);
             emitter.completeWithError(e);
+            throw e;
         }
 
         return emitter;
