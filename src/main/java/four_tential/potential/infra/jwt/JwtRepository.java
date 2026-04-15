@@ -29,6 +29,10 @@ public class JwtRepository {
         return redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + email);
     }
 
+    public String getAndDeleteRefreshToken(String email) {
+        return redisTemplate.opsForValue().getAndDelete(REFRESH_TOKEN_PREFIX + email);
+    }
+
     public void deleteRefreshToken(String email) {
         redisTemplate.delete(REFRESH_TOKEN_PREFIX + email);
     }

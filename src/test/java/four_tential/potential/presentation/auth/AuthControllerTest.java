@@ -64,10 +64,6 @@ class AuthControllerTest {
         assertThat(response.getBody().data().role()).isEqualTo("ROLE_STUDENT");
     }
 
-    // ============================================================
-    // login
-    // ============================================================
-
     @Test
     @DisplayName("로그인 성공 - 200 OK, accessToken Body 반환")
     void login_success() {
@@ -122,7 +118,7 @@ class AuthControllerTest {
     void refresh_success() {
         given(authService.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
 
-        ResponseEntity<BaseResponse<RefreshResponse>> response = authController.login("oldRefreshToken", httpServletResponse);
+        ResponseEntity<BaseResponse<RefreshResponse>> response = authController.refresh("oldRefreshToken", httpServletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -135,7 +131,7 @@ class AuthControllerTest {
     void refresh_setsNewCookie() {
         given(authService.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
 
-        authController.login("oldRefreshToken", httpServletResponse);
+        authController.refresh("oldRefreshToken", httpServletResponse);
 
         verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("refreshToken=newRefreshToken"));
     }
@@ -143,7 +139,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("쿠키 없이 재발급 요청 - ServiceErrorException 발생")
     void refresh_noToken() {
-        assertThatThrownBy(() -> authController.login((String) null, httpServletResponse))
+        assertThatThrownBy(() -> authController.refresh(null, httpServletResponse))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }

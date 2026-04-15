@@ -87,12 +87,11 @@ public class AuthService {
         }
 
         String email = jwtUtil.extractSubject(refreshToken);
-        String savedToken = jwtRepository.getRefreshToken(email);
+        String savedToken = jwtRepository.getAndDeleteRefreshToken(email); // 조회와 삭제를 원자적으로 처리
 
         if(savedToken == null || !savedToken.equals(refreshToken)) {
-            log.error("Refresh Token Refresh ERR : {}", "보유한 토큰과 불일치");
-            jwtRepository.deleteRefreshToken(email);
-            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE); // 로그인 된 회원의 리프레쉬 토큰이 저장된 리프레쉬 토큰과 같지 않다는 것은 의심 대상
+            log.error("Refresh Token Refresh ERR : {}", "보유한 토큰과 불일치 또는 이미 사용된 토큰");
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
         }
 
         Member member = memberRepository.findByEmail(email).orElseThrow(() -> {

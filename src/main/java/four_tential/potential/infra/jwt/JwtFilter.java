@@ -30,7 +30,7 @@ import java.util.UUID;
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
-    private final JwtRepository tokenRepository;
+    private final JwtRepository jwtRepository;
 
     private static final PathPatternParser patternParser = new PathPatternParser();
 
@@ -62,7 +62,7 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (jwtUtil.validateToken(token) && !tokenRepository.isBlacklist(token)) {
+        if (jwtUtil.validateToken(token) && !jwtRepository.isBlacklist(token)) {
             String email = jwtUtil.extractSubject(token);
             String role = jwtUtil.extractRoleByToken(token);
             UUID memberId = UUID.fromString(jwtUtil.extractMemberIdByToken(token));

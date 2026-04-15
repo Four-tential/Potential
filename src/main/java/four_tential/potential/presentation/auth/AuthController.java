@@ -45,22 +45,13 @@ public class AuthController {
     ) {
         LoginResult result = authService.login(request);
 
-        // Refresh Token 은 쿠키에 담기
-        ResponseCookie responseCookie = ResponseCookie.from("refreshToken", result.refreshToken())
-                .httpOnly(true)
-                //.secure(true) // 우선 개발 환경에 맞추어 https 전송은 주석처리
-                .sameSite("Strict")
-                .path("/v1/auth") // RTR/logout 에서만
-                .maxAge(Duration.ofMillis(refreshTokenExpire))
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, responseCookie.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.refreshToken()).toString());
 
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "로그인 성공", new LoginResponse(result.accessToken(), result.hasOnboarding())));
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<BaseResponse<RefreshResponse>> login(
+    public ResponseEntity<BaseResponse<RefreshResponse>> refresh(
             @CookieValue(name = "refreshToken", required = false) String refreshToken,
             HttpServletResponse response
     ) {
@@ -71,17 +62,19 @@ public class AuthController {
         RefreshResult result = authService.refresh(refreshToken);
 
         // Refresh Token 은 쿠키에 담기
-        ResponseCookie responseCookie = ResponseCookie.from("refreshToken", result.newRefreshToken())
+        response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.newRefreshToken()).toString());
+
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "토큰 재발급 성공", new RefreshResponse(result.newAccessToken())));
+    }
+
+    private ResponseCookie createRefreshTokenCookie(String refreshToken) {
+        return ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
                 //.secure(true) // 우선 개발 환경에 맞추어 https 전송은 주석처리
                 .sameSite("Strict")
                 .path("/v1/auth") // RTR/logout 에서만
                 .maxAge(Duration.ofMillis(refreshTokenExpire))
                 .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, responseCookie.toString());
-
-        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "토큰 재발급 성공", new RefreshResponse(result.newAccessToken())));
     }
 
 }

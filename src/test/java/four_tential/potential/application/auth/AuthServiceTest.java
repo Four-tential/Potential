@@ -168,10 +168,6 @@ class AuthServiceTest {
                 .hasMessage("정지된 회원입니다, 관리자에게 문의 바랍니다");
     }
 
-    // ============================================================
-    // refresh
-    // ============================================================
-
     @Test
     @DisplayName("토큰 재발급 성공 - 새 토큰 반환 및 Redis 갱신")
     void refresh() {
@@ -179,7 +175,7 @@ class AuthServiceTest {
         Member member = MemberFixture.defaultMember();
         given(jwtUtil.validateToken(oldRefreshToken)).willReturn(true);
         given(jwtUtil.extractSubject(oldRefreshToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
-        given(jwtRepository.getRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(oldRefreshToken);
+        given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(oldRefreshToken);
         given(memberRepository.findByEmail(MemberFixture.DEFAULT_EMAIL)).willReturn(Optional.of(member));
         given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("newAccessToken");
         given(jwtUtil.createRefreshToken(any())).willReturn("newRefreshToken");
@@ -208,7 +204,7 @@ class AuthServiceTest {
         String refreshToken = "someToken";
         given(jwtUtil.validateToken(refreshToken)).willReturn(true);
         given(jwtUtil.extractSubject(refreshToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
-        given(jwtRepository.getRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(null);
+        given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(null);
 
         assertThatThrownBy(() -> authService.refresh(refreshToken))
                 .isInstanceOf(ServiceErrorException.class)
@@ -221,12 +217,14 @@ class AuthServiceTest {
         String stolenToken = "stolenToken";
         given(jwtUtil.validateToken(stolenToken)).willReturn(true);
         given(jwtUtil.extractSubject(stolenToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
-        given(jwtRepository.getRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn("differentToken");
+        given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn("differentToken");
 
         assertThatThrownBy(() -> authService.refresh(stolenToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
-        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+
+        // GETDEL로 이미 원자적 삭제되므로 deleteRefreshToken은 별도 호출하지 않음
+        verify(jwtRepository, never()).deleteRefreshToken(any());
     }
 
     @Test
@@ -237,7 +235,7 @@ class AuthServiceTest {
         member.suspend();
         given(jwtUtil.validateToken(refreshToken)).willReturn(true);
         given(jwtUtil.extractSubject(refreshToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
-        given(jwtRepository.getRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(refreshToken);
+        given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(refreshToken);
         given(memberRepository.findByEmail(MemberFixture.DEFAULT_EMAIL)).willReturn(Optional.of(member));
 
         assertThatThrownBy(() -> authService.refresh(refreshToken))
