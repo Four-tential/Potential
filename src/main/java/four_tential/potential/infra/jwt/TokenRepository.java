@@ -1,4 +1,4 @@
-package four_tential.potential.infra.redis;
+package four_tential.potential.infra.jwt;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -11,7 +11,7 @@ import static four_tential.potential.infra.redis.RedisConstants.REFRESH_TOKEN_PR
 
 @Service
 @RequiredArgsConstructor
-public class RedisTokenRepository {
+public class TokenRepository {
     private final RedisTemplate<String, Object> redisTemplate;
 
     //region 토큰 관련
