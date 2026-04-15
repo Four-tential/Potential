@@ -41,7 +41,12 @@ public class JwtFilter extends OncePerRequestFilter {
             patternParser.parse("/v1/auth/login"),
             patternParser.parse("/swagger-ui/**"),
             patternParser.parse("/swagger-ui.html"),
-            patternParser.parse("/v3/api-docs/**")
+            patternParser.parse("/v3/api-docs/**"),
+
+            // 결제 테스트 관련 추가
+            patternParser.parse("/payment-test.html"),
+            patternParser.parse("/api/v1/payments/portone-config"),
+            patternParser.parse("/api/v1/webhooks/portone")
     );
 
     @Override

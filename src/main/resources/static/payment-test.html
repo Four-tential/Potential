@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>결제 테스트</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; }
+        div { margin: 10px 0; }
+        label { display: block; margin-bottom: 4px; font-size: 14px; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #4CAF50;
+            color: white; border: none; cursor: pointer; font-size: 16px; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+<h2>PortOne 결제 테스트</h2>
+
+<div>
+    <label>주문 ID</label>
+    <input type="text" id="orderId" value="test-order-001" />
+</div>
+<div>
+    <label>결제 금액 (원)</label>
+    <input type="number" id="amount" value="1000" />
+</div>
+<div>
+    <label>상품명</label>
+    <input type="text" id="productName" value="테스트 코스" />
+</div>
+<div>
+    <label>회원 ID</label>
+    <input type="text" id="memberId" value="test-member-001" />
+</div>
+<div>
+    <label>구매자 이름</label>
+    <input type="text" id="buyerName" value="테스트 유저" />
+</div>
+<div>
+    <label>구매자 이메일 (필수)</label>
+    <input type="email" id="buyerEmail" value="test@test.com" />
+</div>
+<div>
+    <label>구매자 전화번호</label>
+    <input type="text" id="buyerPhone" value="010-1234-5678" />
+</div>
+
+<button onclick="requestPayment()">결제하기</button>
+<div id="result"></div>
+
+<script src="https://cdn.portone.io/v2/browser-sdk.js"></script>
+
+<script>
+    let storeId = '';
+    let channelKey = '';
+
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/v1/payments/portone-config');
+            const data = await res.json();
+            storeId = data.data.storeId;
+            channelKey = data.data.channelKey;
+            console.log('PortOne 설정값 로드 완료', { storeId, channelKey });
+        } catch (e) {
+            console.error('설정값 로드 실패', e);
+            showResult('설정값 로드 실패: 서버가 실행 중인지 확인하세요', 'red');
+        }
+    }
+
+    loadConfig();
+
+    async function requestPayment() {
+        const orderId = document.getElementById('orderId').value;
+        const amount = parseInt(document.getElementById('amount').value);
+        const productName = document.getElementById('productName').value;
+        const memberId = document.getElementById('memberId').value;
+        const buyerName = document.getElementById('buyerName').value;
+        const buyerEmail = document.getElementById('buyerEmail').value;
+        const buyerPhone = document.getElementById('buyerPhone').value;
+
+        if (!buyerEmail) {
+            showResult('구매자 이메일을 입력해주세요', 'red');
+            return;
+        }
+
+        showResult('결제 요청 중...', 'black');
+
+        try {
+            const response = await PortOne.requestPayment({
+                storeId: storeId,
+                channelKey: channelKey,
+                paymentId: orderId,
+                orderName: productName,
+                totalAmount: amount,
+                currency: "KRW",
+                payMethod: "CARD",
+                customer: {
+                    customerId: memberId,
+                    fullName: buyerName,
+                    email: buyerEmail,
+                    phoneNumber: buyerPhone
+                }
+            });
+
+            if (response.code !== undefined) {
+                showResult(`결제 실패: ${response.message}`, 'red');
+                return;
+            }
+
+            showResult('결제 완료! 서버 검증 중...', 'blue');
+
+            const serverResponse = await fetch('/api/v1/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: orderId,
+                    pgKey: response.paymentId,
+                    payWay: "CARD"
+                })
+            });
+
+            const result = await serverResponse.json();
+            showResult(
+                `서버 검증 완료!\n${JSON.stringify(result, null, 2)}`,
+                'green'
+            );
+
+        } catch (error) {
+            showResult(`오류 발생: ${error.message}`, 'red');
+        }
+    }
+
+    function showResult(message, color) {
+        document.getElementById('result').innerHTML =
+            `<pre style="color:${color}">${message}</pre>`;
+    }
+</script>
+</body>
+</html>
