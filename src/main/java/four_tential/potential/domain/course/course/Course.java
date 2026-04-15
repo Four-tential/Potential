@@ -2,6 +2,7 @@ package four_tential.potential.domain.course.course;
 
 import four_tential.potential.common.entity.BaseTimeWithDelEntity;
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.course.course_image.CourseImage;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,6 +10,8 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.*;
@@ -72,6 +75,9 @@ public class Course extends BaseTimeWithDelEntity {
 
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
+
+    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CourseImage> images = new ArrayList<>();
 
     // 관리자 승인일시와 코스의 주문 가능, 마감 시간의 연관을 확실히 정해봐야할 듯
     public static Course register(
@@ -204,5 +210,10 @@ public class Course extends BaseTimeWithDelEntity {
     // 정원 측정 판별
     public boolean isFull() {
         return this.confirmCount >= this.capacity;
+    }
+
+    // 코스 이미지 전체 삭제
+    public void clearImages() {
+        this.images.clear();
     }
 }

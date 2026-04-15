@@ -21,7 +21,7 @@ public class CourseCategory extends BaseTimeEntity {
     @Column(nullable = false, updatable = false, columnDefinition = "BINARY(16)")
     private UUID id;
 
-    @Column(nullable = false, length = 20, unique = true)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @Column(nullable = false, length = 50)

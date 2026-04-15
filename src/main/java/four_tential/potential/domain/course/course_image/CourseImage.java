@@ -1,10 +1,8 @@
 package four_tential.potential.domain.course.course_image;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import four_tential.potential.domain.course.course.Course;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UuidGenerator;
@@ -13,7 +11,7 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "course_image")
+@Table(name = "course_images")
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class CourseImage extends BaseTimeEntity {
     @Id
@@ -21,15 +19,16 @@ public class CourseImage extends BaseTimeEntity {
     @Column(nullable = false, updatable = false, columnDefinition = "BINARY(16)")
     private UUID id;
 
-    @Column(name = "course_id", nullable = false, columnDefinition = "BINARY(16)")
-    private UUID courseId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id", nullable = false)
+    private Course course;
 
     @Column(name = "image_url", nullable = false, length = 300)
     private String imageUrl;
 
-    public static CourseImage register(UUID courseId, String imageUrl) {
+    public static CourseImage register(Course course, String imageUrl) {
         CourseImage image = new CourseImage();
-        image.courseId = courseId;
+        image.course = course;
         image.imageUrl = imageUrl;
         return image;
     }

@@ -1,7 +1,9 @@
 package four_tential.potential.domain.course.course;
 
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.course.course_image.CourseImage;
 import four_tential.potential.domain.course.fixture.CourseFixture;
+import four_tential.potential.domain.course.fixture.CourseImageFixture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -269,5 +271,16 @@ class CourseTest {
         Course course = CourseFixture.defaultCourse();
 
         assertThat(course.isFull()).isFalse();
+    }
+
+    @Test
+    @DisplayName("clearImages() 호출 시 images 목록이 비워짐")
+    void clearImages() {
+        Course course = CourseFixture.defaultCourse();
+        course.getImages().add(CourseImage.register(course, CourseImageFixture.DEFAULT_IMAGE_URL));
+
+        course.clearImages();
+
+        assertThat(course.getImages()).isEmpty();
     }
 }

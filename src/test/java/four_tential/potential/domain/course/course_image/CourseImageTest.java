@@ -1,5 +1,6 @@
 package four_tential.potential.domain.course.course_image;
 
+import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.course.fixture.CourseImageFixture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,11 +10,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CourseImageTest {
 
     @Test
-    @DisplayName("register() 성공 시 courseId와 imageUrl이 설정됨")
+    @DisplayName("register() 성공 시 course와 imageUrl이 설정됨")
     void register() {
         CourseImage image = CourseImageFixture.defaultCourseImage();
 
-        assertThat(image.getCourseId()).isEqualTo(CourseImageFixture.DEFAULT_COURSE_ID);
+        assertThat(image.getCourse()).isNotNull();
+        assertThat(image.getCourse().getTitle()).isEqualTo(CourseFixture.DEFAULT_TITLE);
         assertThat(image.getImageUrl()).isEqualTo(CourseImageFixture.DEFAULT_IMAGE_URL);
     }
 
