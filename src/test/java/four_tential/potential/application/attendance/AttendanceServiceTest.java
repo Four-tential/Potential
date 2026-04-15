@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.domain.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
 import four_tential.potential.infra.sse.SseEmitterRepository;
@@ -41,6 +42,9 @@ class AttendanceServiceTest {
 
     @Mock
     private SseEmitterRepository sseEmitterRepository;
+
+    @Mock
+    private AttendanceQueryService attendanceQueryService; // 추가
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -116,7 +120,7 @@ class AttendanceServiceTest {
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
             when(sseEmitterRepository.findByCourseId(COURSE_ID))
-                    .thenReturn(Optional.empty()); // SSE 연결 없는 상황 가정
+                    .thenReturn(Optional.empty());
 
             // when
             attendanceService.scan(QR_TOKEN, MEMBER_ID);
@@ -255,7 +259,8 @@ class AttendanceServiceTest {
             List<Attendance> attendances = List.of(
                     Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID)
             );
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(attendances);
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(attendances));
 
             // when
             SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
@@ -263,14 +268,15 @@ class AttendanceServiceTest {
             // then
             assertThat(emitter).isNotNull();
             verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
-            verify(attendanceRepository).findAllByCourseId(COURSE_ID);
+            verify(attendanceQueryService).getAttendanceSnapshot(COURSE_ID);
         }
 
         @Test
         @DisplayName("SSE 연결 시 수강생이 없어도 빈 스냅샷을 전송한다")
         void stream_emptySnapshot() {
             // given
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of());
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
             // when
             SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
@@ -284,13 +290,13 @@ class AttendanceServiceTest {
         @DisplayName("스냅샷 조회 중 Exception 발생 시 emitter 를 정리한다")
         void stream_snapshotException_completesWithError() {
             // given
-            when(attendanceRepository.findAllByCourseId(COURSE_ID))
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenThrow(new RuntimeException("DB 오류"));
 
             // when
             SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
 
-            // then — completeWithError 호출 후에도 emitter 객체는 반환됨
+            // then
             assertThat(emitter).isNotNull();
             verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
             verify(sseEmitterRepository).delete(COURSE_ID);

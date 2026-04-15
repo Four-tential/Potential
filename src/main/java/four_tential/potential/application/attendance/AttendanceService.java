@@ -29,6 +29,7 @@ public class AttendanceService {
     private final QrTokenRepository    qrTokenRepository;
     private final QrCodeGenerator      qrCodeGenerator;
     private final SseEmitterRepository sseEmitterRepository;
+    private final AttendanceQueryService attendanceQueryService;
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
 
@@ -104,9 +105,8 @@ public class AttendanceService {
 
         sseEmitterRepository.save(courseId, emitter);
 
-        // 연결 직후 스냅샷 전송
         try {
-            AttendanceListResponse snapshot = getAttendanceSnapshot(courseId);
+            AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(courseId);
 
             emitter.send(SseEmitter.event()
                     .name("snapshot")
@@ -123,13 +123,6 @@ public class AttendanceService {
         }
 
         return emitter;
-    }
-
-    // 스냅샷 조회(트랜잭션 분리)
-    @Transactional(readOnly = true)
-    public AttendanceListResponse getAttendanceSnapshot(UUID courseId) {
-        List<Attendance> attendances = attendanceRepository.findAllByCourseId(courseId);
-        return AttendanceListResponse.ofInstructor(attendances);
     }
 
     // SSE 이벤트 푸시
