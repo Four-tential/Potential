@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InstructorMemberTest {
 
     @Test
-    @DisplayName("apply() 성공 시 필수 필드가 설정되고 status는 PENDING")
-    void apply() {
+    @DisplayName("register() 성공 시 필수 필드가 설정되고 status는 PENDING")
+    void register() {
         InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
 
         assertThat(instructorMember.getMemberId()).isEqualTo(InstructorMemberFixture.DEFAULT_MEMBER_ID);
