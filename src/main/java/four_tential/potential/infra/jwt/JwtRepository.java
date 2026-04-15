@@ -1,7 +1,7 @@
 package four_tential.potential.infra.jwt;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -12,7 +12,8 @@ import static four_tential.potential.infra.redis.RedisConstants.REFRESH_TOKEN_PR
 @Service
 @RequiredArgsConstructor
 public class JwtRepository {
-    private final RedisTemplate<String, Object> redisTemplate;
+    // " 가 역직렬화시 RedisTemplate<String, Object> 구조에서 붙어서 변경
+    private final StringRedisTemplate redisTemplate;
 
     //region 토큰 관련
     public void saveRefreshToken(String email, String refreshToken, long expireTime) {
@@ -25,8 +26,7 @@ public class JwtRepository {
     }
 
     public String getRefreshToken(String email) {
-        Object value = redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + email);
-        return value != null ? value.toString() : null;
+        return redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + email);
     }
 
     public void deleteRefreshToken(String email) {

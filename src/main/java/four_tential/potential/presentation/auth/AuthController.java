@@ -61,7 +61,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<BaseResponse<RefreshResponse>> login(
-            @CookieValue("refreshToken") String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
             HttpServletResponse response
     ) {
         if (refreshToken == null) {
