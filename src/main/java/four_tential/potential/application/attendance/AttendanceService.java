@@ -85,7 +85,6 @@ public class AttendanceService {
 
     // SSE 스트림 연결 (강사 전용)
     // 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
-    @Transactional(readOnly = true)
     public SseEmitter stream(UUID courseId, UUID instructorId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
@@ -107,8 +106,7 @@ public class AttendanceService {
 
         // 연결 직후 스냅샷 전송
         try {
-            List<Attendance> attendances = attendanceRepository.findAllByCourseId(courseId);
-            AttendanceListResponse snapshot = AttendanceListResponse.ofInstructor(attendances);
+            AttendanceListResponse snapshot = getAttendanceSnapshot(courseId);
 
             emitter.send(SseEmitter.event()
                     .name("snapshot")
@@ -125,6 +123,13 @@ public class AttendanceService {
         }
 
         return emitter;
+    }
+
+    // 스냅샷 조회(트랜잭션 분리)
+    @Transactional(readOnly = true)
+    public AttendanceListResponse getAttendanceSnapshot(UUID courseId) {
+        List<Attendance> attendances = attendanceRepository.findAllByCourseId(courseId);
+        return AttendanceListResponse.ofInstructor(attendances);
     }
 
     // SSE 이벤트 푸시
