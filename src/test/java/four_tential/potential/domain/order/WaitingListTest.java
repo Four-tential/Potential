@@ -26,7 +26,7 @@ class WaitingListTest {
         assertThat(waitingList.getMemberId()).isEqualTo(memberId);
         assertThat(waitingList.getCourseId()).isEqualTo(courseId);
         assertThat(waitingList.getWaitNumber()).isEqualTo(waitNumber);
-        assertThat(waitingList.getStatus()).isEqualTo(WaitingStatus.PENDING);
+        assertThat(waitingList.getStatus()).isEqualTo(WaitingStatus.WAITING);
         assertThat(waitingList.getWaitedAt()).isBeforeOrEqualTo(LocalDateTime.now());
         assertThat(waitingList.getExpiredAt()).isEqualTo(waitingList.getWaitedAt().plusMinutes(WaitingList.WAITING_LIST_EXPIRATION_MINUTES));
     }
