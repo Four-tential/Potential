@@ -32,7 +32,6 @@ class DistributedLockAspectTest {
     @Mock private ProceedingJoinPoint joinPoint;
     @Mock private MethodSignature methodSignature;
     @Mock private RLock rLock;
-    @Mock private DistributedLock distributedLock;
 
     @InjectMocks private DistributedLockAspect distributedLockAspect;
 
@@ -41,21 +40,18 @@ class DistributedLockAspectTest {
         Method method = this.getClass().getDeclaredMethod("mockMethod");
         given(joinPoint.getSignature()).willReturn(methodSignature);
         given(methodSignature.getMethod()).willReturn(method);
-        
-        given(distributedLock.key()).willReturn("'testKey'");
-        given(distributedLock.waitTime()).willReturn(5L);
-        given(distributedLock.leaseTime()).willReturn(10L);
-        given(distributedLock.timeUnit()).willReturn(TimeUnit.SECONDS);
+        given(joinPoint.getArgs()).willReturn(new Object[]{});
     }
 
-    @DistributedLock(key = "'testKey'")
-    private void mockMethod() {}
+    @DistributedLock(key = "'testKey'", waitTime = 5L, leaseTime = 10L, timeUnit = TimeUnit.SECONDS)
+    public void mockMethod() {}
 
     @Test
     @DisplayName("락 획득 성공 시 비즈니스 로직을 실행한다")
     void lock_success() throws Throwable {
         given(redissonClient.getLock(anyString())).willReturn(rLock);
         given(rLock.tryLock(anyLong(), anyLong(), any())).willReturn(true);
+        given(rLock.isHeldByCurrentThread()).willReturn(true);
         given(aopInTransaction.proceed(joinPoint)).willReturn("Success");
 
         Object result = distributedLockAspect.lock(joinPoint);
