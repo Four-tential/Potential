@@ -1,4 +1,4 @@
-package four_tential.potential.infra.redis.qr;
+package four_tential.potential.infra.qr;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;

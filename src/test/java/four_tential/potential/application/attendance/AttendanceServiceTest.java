@@ -6,7 +6,7 @@ import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.infra.qr.QrCodeGenerator;
-import four_tential.potential.infra.redis.qr.QrTokenRepository;
+import four_tential.potential.infra.qr.QrTokenRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
