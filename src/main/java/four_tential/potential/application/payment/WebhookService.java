@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class WebhookService {
@@ -52,6 +54,17 @@ public class WebhookService {
     @Transactional(readOnly = true)
     public boolean isCompleted(String recWebhookId) {
         return webhookRepository.existsCompletedByRecWebhookId(recWebhookId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Webhook> findProcessablePaidWebhook(String pgKey) {
+        return webhookRepository.findLatestProcessableByPgKeyAndEventStatus(pgKey, "WebhookTransactionPaid");
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Webhook retry(Webhook webhook, String eventStatus) {
+        webhook.retry(eventStatus);
+        return webhookRepository.save(webhook);
     }
 
     /**

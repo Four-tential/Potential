@@ -11,4 +11,6 @@ public interface WebhookCustomRepository {
     boolean existsCompletedByRecWebhookId(String recWebhookId);
 
     Optional<Webhook> findByRecWebhookId(String recWebhookId);
+
+    Optional<Webhook> findLatestProcessableByPgKeyAndEventStatus(String pgKey, String eventStatus);
 }

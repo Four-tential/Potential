@@ -51,9 +51,10 @@ public class PaymentFacade {
         // PortOne 조회는 외부 API 호출이므로 분산락 밖에서 먼저 수행
         PaymentGatewayResponse gatewayResponse = paymentGateway.getPayment(request.pgKey());
 
+        Payment payment;
         try {
             // 같은 주문으로 결제 생성 요청이 동시에 들어오는 것을 방지
-            return paymentLockExecutor.executeWithOrderLock(
+            payment = paymentLockExecutor.executeWithOrderLock(
                     request.orderId(),
                     () -> createPaymentInOrderLock(memberId, request, gatewayResponse)
             );
@@ -62,6 +63,10 @@ public class PaymentFacade {
             cancelGatewayPaymentSafely(request.pgKey(), gatewayResponse.totalAmount(), "PAYMENT_CREATE_REJECTED");
             throw e;
         }
+
+        // 결제 생성 API보다 Paid 웹훅이 먼저 도착해 PENDING으로 대기 중이면 즉시 확정 처리
+        completeAlreadyReceivedPaidWebhook(payment.getPgKey());
+        return PaymentCreateResponse.from(payment);
     }
 
     public void handleWebhook(
@@ -113,10 +118,12 @@ public class PaymentFacade {
             }
         }
 
-        webhookService.complete(webhook);
+        if (result == null || result.webhookCompletionRequired()) {
+            webhookService.complete(webhook);
+        }
     }
 
-    private PaymentCreateResponse createPaymentInOrderLock(
+    private Payment createPaymentInOrderLock(
             UUID memberId,
             PaymentCreateRequest request,
             PaymentGatewayResponse gatewayResponse
@@ -158,8 +165,7 @@ public class PaymentFacade {
         paymentService.validateGatewayPayment(preparation, request.pgKey(), request.payWay(), gatewayResponse);
 
         // 웹훅 전에는 결제를 확정하지 않고 PENDING으로만 저장
-        Payment payment = paymentService.createPendingPayment(preparation, request.pgKey(), request.payWay());
-        return PaymentCreateResponse.from(payment);
+        return paymentService.createPendingPayment(preparation, request.pgKey(), request.payWay());
     }
 
     private PaymentCancelDecision processVerifiedWebhook(
@@ -179,9 +185,14 @@ public class PaymentFacade {
         webhook.updatePgKey(event.pgKey());
 
         if ("WebhookTransactionPaid".equals(event.eventType())) {
+            Optional<Payment> payment = waitForPayment(event.pgKey());
+            if (payment.isEmpty()) {
+                log.info("[PORTONE_WEBHOOK] payment is not saved yet. webhook deferred. pgKey={}", event.pgKey());
+                return PaymentCancelDecision.defer();
+            }
+
+            UUID courseId = findCourseIdByPayment(payment.get());
             return paymentLockExecutor.executeWithPgKeyLock(event.pgKey(), () -> {
-                Payment payment = waitForPayment(event.pgKey());
-                UUID courseId = findCourseIdByPayment(payment);
                 return paymentLockExecutor.executeWithCourseLock(
                         courseId,
                         () -> transactionTemplate.execute(status -> processTransactionWebhook(event, webhook))
@@ -255,16 +266,52 @@ public class PaymentFacade {
         return PaymentCancelDecision.none();
     }
 
+    private void completeAlreadyReceivedPaidWebhook(String pgKey) {
+        Optional<Webhook> paidWebhook = webhookService.findProcessablePaidWebhook(pgKey);
+        if (paidWebhook.isEmpty()) {
+            return;
+        }
+
+        Webhook webhook = webhookService.retry(paidWebhook.get(), "WebhookTransactionPaid");
+        log.info("[PORTONE_WEBHOOK] deferred paid webhook resumed. webhookId={} pgKey={}",
+                webhook.getRecWebhookId(), pgKey);
+
+        Payment payment = paymentService.getByPgKey(pgKey);
+        UUID courseId = findCourseIdByPayment(payment);
+        PaymentCancelDecision result = paymentLockExecutor.executeWithPgKeyLock(pgKey, () ->
+                paymentLockExecutor.executeWithCourseLock(
+                        courseId,
+                        () -> transactionTemplate.execute(status -> processTransactionWebhook(
+                                new PortOneWebhookEvent(true, "WebhookTransactionPaid", pgKey),
+                                webhook
+                        ))
+                )
+        );
+
+        if (result != null && result.cancelRequired()) {
+            try {
+                cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
+            } catch (RuntimeException e) {
+                webhookService.fail(webhook);
+                throw e;
+            }
+        }
+
+        if (result == null || result.webhookCompletionRequired()) {
+            webhookService.complete(webhook);
+        }
+    }
+
     private UUID findCourseIdByPayment(Payment payment) {
         Order order = getOrder(payment.getOrderId());
         return order.getCourseId();
     }
 
-    private Payment waitForPayment(String pgKey) {
+    private Optional<Payment> waitForPayment(String pgKey) {
         for (int attempt = 1; attempt <= WEBHOOK_PAYMENT_LOOKUP_RETRY_COUNT; attempt++) {
-            Optional<Payment> payment = paymentService.findByPgKey(pgKey);
+            Optional<Payment> payment = paymentService.findByPgKeyInNewTransaction(pgKey);
             if (payment.isPresent()) {
-                return payment.get();
+                return payment;
             }
 
             if (attempt < WEBHOOK_PAYMENT_LOOKUP_RETRY_COUNT) {
@@ -272,7 +319,7 @@ public class PaymentFacade {
             }
         }
 
-        throw new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT);
+        return Optional.empty();
     }
 
     private void sleepBeforePaymentRetry(String pgKey, int attempt) {

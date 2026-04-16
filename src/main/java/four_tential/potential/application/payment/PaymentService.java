@@ -8,6 +8,7 @@ import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -29,6 +30,11 @@ public class PaymentService {
     }
 
     public Optional<Payment> findByPgKey(String pgKey) {
+        return paymentRepository.findByPgKey(pgKey);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<Payment> findByPgKeyInNewTransaction(String pgKey) {
         return paymentRepository.findByPgKey(pgKey);
     }
 

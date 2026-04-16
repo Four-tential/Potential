@@ -45,4 +45,18 @@ public class WebhookCustomRepositoryImpl implements WebhookCustomRepository {
                         .fetchOne()
         );
     }
+
+    @Override
+    public Optional<Webhook> findLatestProcessableByPgKeyAndEventStatus(String pgKey, String eventStatus) {
+        return Optional.ofNullable(
+                queryFactory.selectFrom(webhook)
+                        .where(
+                                webhook.pgKey.eq(pgKey),
+                                webhook.eventStatus.eq(eventStatus),
+                                webhook.status.ne(WebhookStatus.COMPLETED)
+                        )
+                        .orderBy(webhook.receivedAt.desc())
+                        .fetchFirst()
+        );
+    }
 }
