@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import org.springframework.dao.DataIntegrityViolationException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.List;
@@ -184,12 +185,17 @@ public class ReviewService {
             throw new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN);
         }
 
-        // 이미 좋아요 → 해제 / 없으면 → 등록
+        // 이미 좋아요 -> 해제 / 없으면 -> 등록
         Optional<ReviewLike> existing = reviewLikeRepository.findByReviewIdAndMemberId(reviewId, memberId);
         if (existing.isPresent()) {
             reviewLikeRepository.delete(existing.get());
         } else {
-            reviewLikeRepository.save(ReviewLike.register(reviewId, memberId));
+            try {
+                // saveAndFlush: 즉시 DB 반영으로 UNIQUE 위반을 트랜잭션 내에서 바로 감지
+                reviewLikeRepository.saveAndFlush(ReviewLike.register(reviewId, memberId));
+            } catch (DataIntegrityViolationException e) {
+                // 동시 요청으로 중복 INSERT 발생 -> 이미 좋아요된 상태이므로 무시
+            }
         }
 
         long likeCount = reviewLikeRepository.countByReviewId(reviewId);
