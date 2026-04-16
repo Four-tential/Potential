@@ -113,4 +113,14 @@ public class AuthService {
         return new RefreshResult(newAccessToken, newRefreshToken);
     }
 
+    public void logOut(String accessToken) {
+        if(!jwtUtil.validateToken(accessToken)) {
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
+        }
+
+        String email = jwtUtil.extractSubject(accessToken);
+        jwtRepository.deleteRefreshToken(email);
+        jwtRepository.addBlacklist(accessToken, jwtUtil.getRemainingTime(accessToken));
+    }
+
 }

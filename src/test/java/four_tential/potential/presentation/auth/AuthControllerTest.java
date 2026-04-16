@@ -141,6 +141,30 @@ class AuthControllerTest {
     void refresh_noToken() {
         assertThatThrownBy(() -> authController.refresh(null, httpServletResponse))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+                .hasMessage("인증 정보가 비어있습니다");
+    }
+
+    @Test
+    @DisplayName("로그아웃 성공 - 200 OK 반환")
+    void logOut_success() {
+        ResponseEntity<BaseResponse<Void>> response = authController.logOut("Bearer validAccessToken", httpServletResponse);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(authService).logOut("validAccessToken");
+    }
+
+    @Test
+    @DisplayName("로그아웃 성공 - refreshToken 쿠키 만료 헤더 반환")
+    void logOut_clearsRefreshTokenCookie() {
+        authController.logOut("Bearer validAccessToken", httpServletResponse);
+
+        verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("refreshToken=;"));
+    }
+
+    @Test
+    @DisplayName("잘못된 Authorization 헤더로 로그아웃 - ServiceErrorException 발생")
+    void logOut_invalidHeader() {
+        assertThatThrownBy(() -> authController.logOut("InvalidHeader", httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class);
     }
 }
