@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import static four_tential.potential.common.exception.domain.ReviewExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.OrderExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,12 +42,12 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ReviewServiceTest {
 
-    @Mock private ReviewRepository      reviewRepository;
+    @Mock private ReviewRepository reviewRepository;
     @Mock private ReviewImageRepository reviewImageRepository;
-    @Mock private ReviewLikeRepository  reviewLikeRepository;
-    @Mock private CourseRepository      courseRepository;
-    @Mock private OrderRepository       orderRepository;
-    @Mock private AttendanceRepository  attendanceRepository;
+    @Mock private ReviewLikeRepository reviewLikeRepository;
+    @Mock private CourseRepository courseRepository;
+    @Mock private OrderRepository orderRepository;
+    @Mock private AttendanceRepository attendanceRepository;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -553,7 +554,7 @@ class ReviewServiceTest {
             // then
             assertThat(result.getLikeCount()).isEqualTo(1L);
             assertThat(result.isLiked()).isTrue();
-            verify(reviewLikeRepository).save(any(ReviewLike.class));
+            verify(reviewLikeRepository).saveAndFlush(any(ReviewLike.class));
         }
 
         @Test
@@ -588,7 +589,7 @@ class ReviewServiceTest {
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_REVIEW_NOT_FOUND.getMessage());
 
-            verify(reviewLikeRepository, never()).save(any());
+            verify(reviewLikeRepository, never()).saveAndFlush(any());
             verify(reviewLikeRepository, never()).delete(any());
         }
 
@@ -606,12 +607,12 @@ class ReviewServiceTest {
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_SELF_LIKE_FORBIDDEN.getMessage());
 
-            verify(reviewLikeRepository, never()).save(any());
+            verify(reviewLikeRepository, never()).saveAndFlush(any());
             verify(reviewLikeRepository, never()).delete(any());
         }
 
         @Test
-        @DisplayName("좋아요 등록 시 save 가 1번만 호출된다")
+        @DisplayName("좋아요 등록 시 saveAndFlush 가 1번만 호출된다")
         void toggleLike_register_savesOnce() {
             Review review = ReviewFixture.defaultReview();
 
@@ -624,7 +625,7 @@ class ReviewServiceTest {
 
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            verify(reviewLikeRepository, times(1)).save(any(ReviewLike.class));
+            verify(reviewLikeRepository, times(1)).saveAndFlush(any(ReviewLike.class));
             verify(reviewLikeRepository, never()).delete(any());
         }
 
@@ -644,7 +645,29 @@ class ReviewServiceTest {
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
             verify(reviewLikeRepository, times(1)).delete(existing);
-            verify(reviewLikeRepository, never()).save(any());
+            verify(reviewLikeRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("동시 요청으로 중복 INSERT 발생 시 예외를 무시하고 정상 응답한다")
+        void toggleLike_concurrentDuplicate_ignoresException() {
+            Review review = ReviewFixture.defaultReview();
+
+            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
+            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
+                    .thenReturn(Optional.empty());
+            // 동시 요청으로 UNIQUE 제약 위반 시뮬레이션
+            when(reviewLikeRepository.saveAndFlush(any()))
+                    .thenThrow(new DataIntegrityViolationException("uk_review_likes_review_member"));
+            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(1L);
+            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
+                    .thenReturn(true);
+
+            // 예외가 전파되지 않고 정상 응답해야 한다
+            ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
+
+            assertThat(result.isLiked()).isTrue();
+            assertThat(result.getLikeCount()).isEqualTo(1L);
         }
 
         @Test
