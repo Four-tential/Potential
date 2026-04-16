@@ -85,7 +85,7 @@ public class PaymentFacade {
         // 수신 기록은 비즈니스 처리보다 먼저 남김
         Webhook webhook = webhookService.receive(webhookId, "UNKNOWN");
 
-        if (webhook != null && webhook.isCompleted()) {
+        if (webhook.isCompleted()) {
             log.info("[PORTONE_WEBHOOK] completed webhook ignored after receive. id={}", webhookId);
             return;
         }
