@@ -4,7 +4,7 @@ import four_tential.potential.application.attendance.AttendanceService;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
-import four_tential.potential.domain.attendance.dto.AttendanceScanRequest;
+import four_tential.potential.presentation.attendance.dto.AttendanceScanRequest;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

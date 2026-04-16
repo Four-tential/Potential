@@ -1,7 +1,7 @@
 package four_tential.potential.infra.sse;
 
 import four_tential.potential.domain.attendance.Attendance;
-import four_tential.potential.domain.attendance.dto.AttendanceEventResponse;
+import four_tential.potential.presentation.attendance.dto.AttendanceEventResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
