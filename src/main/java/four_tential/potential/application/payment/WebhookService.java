@@ -69,6 +69,16 @@ public class WebhookService {
     }
 
     /**
+     * 웹훅의 실제 이벤트 타입을 저장한다.
+     * 결제 트랜잭션 이벤트가 아닌 웹훅도 UNKNOWN이 아닌 실제 타입으로 기록하기 위해 사용한다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Webhook updateEventStatus(Webhook webhook, String eventStatus) {
+        webhook.updateEventStatus(eventStatus);
+        return webhookRepository.save(webhook);
+    }
+
+    /**
      * 실패 또는 보류 상태의 웹훅을 다시 처리 가능한 PENDING 상태로 되돌린다.
      * 기존 웹훅 row를 재사용하므로 webhook-id 멱등성을 유지한 채 재처리할 수 있다.
      */

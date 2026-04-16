@@ -13,6 +13,7 @@ public enum PaymentExceptionEnum implements ServiceErrorCode {
     ERR_PAYMENT_ALREADY_REQUESTED(HttpStatus.BAD_REQUEST, "이미 결제가 생성된 주문입니다"),
     ERR_PAYMENT_DEADLINE_EXCEEDED(HttpStatus.BAD_REQUEST, "결제 가능 시간이 초과되었습니다"),
     ERR_PAYMENT_NOT_PAID(HttpStatus.BAD_REQUEST, "PortOne 결제가 완료되지 않았습니다"),
+    ERR_PAYMENT_KEY_MISMATCH(HttpStatus.BAD_REQUEST, "결제 식별자가 일치하지 않습니다"),
     ERR_PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 일치하지 않습니다"),
     ERR_PAYMENT_METHOD_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "카드 결제만 가능합니다"),
     ERR_PAYMENT_FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),

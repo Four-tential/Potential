@@ -8,6 +8,7 @@ import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -70,7 +71,7 @@ public class PaymentService {
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
         }
         if (!pgKey.equals(gatewayResponse.pgKey())) {
-            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH);
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH);
         }
         if (!"PAID".equals(gatewayResponse.status())) {
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_NOT_PAID);
@@ -115,7 +116,9 @@ public class PaymentService {
     /**
      * Payment 엔티티를 PAID 상태로 변경한다.
      * 상태 전이 가능 여부는 Payment 엔티티 내부의 도메인 규칙이 판단한다.
+     * getByPgKeyForUpdate()로 조회한 managed entity를 기존 트랜잭션 안에서 넘겨야 한다.
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     public void confirmPaid(Payment payment) {
         payment.confirmPaid();
     }
@@ -123,7 +126,9 @@ public class PaymentService {
     /**
      * Payment 엔티티를 FAILED 상태로 변경한다.
      * PortOne 실패/취소 웹훅 또는 서버 검증 실패 후 결제 실패로 확정해야 할 때 사용한다.
+     * getByPgKeyForUpdate()로 조회한 managed entity를 기존 트랜잭션 안에서 넘겨야 한다.
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     public void fail(Payment payment) {
         payment.fail();
     }

@@ -189,10 +189,8 @@ public class PaymentFacade {
         PortOneWebhookEvent event = PortOneWebhookEvent.from(verified);
 
         if (!event.transaction()) {
-            return transactionTemplate.execute(status -> {
-                webhook.updateEventStatus(event.eventType());
-                return PaymentCancelDecision.none();
-            });
+            webhookService.updateEventStatus(webhook, event.eventType());
+            return PaymentCancelDecision.none();
         }
 
         webhook.updateEventStatus(event.eventType());
