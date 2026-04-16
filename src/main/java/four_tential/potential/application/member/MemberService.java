@@ -6,10 +6,11 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoard;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardRepository;
-import four_tential.potential.domain.member.onboard_category.OnBoardCategory;
+import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
+import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -18,8 +19,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
@@ -80,8 +84,8 @@ public class MemberService {
         memberOnBoardRepository.save(onBoard);
 
         // 카테고리 등록
-        List<OnBoardCategory> categories = categoryCodes.stream()
-                .map(code -> OnBoardCategory.register(member, code))
+        List<MemberOnBoardCategory> categories = categoryCodes.stream()
+                .map(code -> MemberOnBoardCategory.register(member, code))
                 .toList();
         onBoardCategoryRepository.saveAll(categories);
 
@@ -89,6 +93,68 @@ public class MemberService {
         member.completeOnboarding();
 
         return OnBoardResponse.register(onBoard, categoryCodes);
+    }
+
+    @Transactional
+    public OnBoardResponse updateOnBoarding(UUID memberId, UpdateOnBoardRequest request) {
+        if (request.goal() == null && (request.categoryCodes() == null || request.categoryCodes().isEmpty())) {
+            throw new ServiceErrorException(ERR_NO_UPDATE_FIELD);
+        }
+
+        MemberOnBoard onBoard = memberOnBoardRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_ONBOARDING));
+
+        // 목표 수정 (null이면 기존 값 유지)
+        if (request.goal() != null) {
+            onBoard.updateGoal(request.goal());
+        }
+
+        // 기존 카테고리 코드 조회
+        List<String> existingCodes = onBoardCategoryRepository.findByMemberId(memberId).stream()
+                .map(onBoardCategory -> onBoardCategory.getCategoryCode()).toList();
+
+        // 카테고리 수정 (null이면 기존 카테고리 유지)
+        List<String> resultCategoryCodes;
+        if (request.categoryCodes() != null && !request.categoryCodes().isEmpty()) {
+            Set<String> newCodes = new HashSet<>(request.categoryCodes());
+
+            // 카테고리 코드 유효성 검증 (추가 대상만)
+            newCodes.forEach(code -> {
+                if (!courseCategoryRepository.existsByCode(code)) {
+                    throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+                }
+            });
+
+            // 기존에 있고 새 요청에 없는 것
+            Set<String> deleteExistCode = existingCodes.stream()
+                    .filter(code -> !newCodes.contains(code))
+                    .collect(Collectors.toSet());
+
+            // 새 요청에 있고 기존에 없는 것
+            Set<String> addNewCode = newCodes.stream()
+                    .filter(code -> !existingCodes.contains(code))
+                    .collect(Collectors.toSet());
+
+            if (!deleteExistCode.isEmpty()) {
+                onBoardCategoryRepository.deleteByMemberIdAndCategoryCodeIn(memberId, deleteExistCode);
+            }
+
+            if (!addNewCode.isEmpty()) {
+                Member member = memberRepository.findById(memberId)
+                        .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
+
+                List<MemberOnBoardCategory> categories = addNewCode.stream()
+                        .map(code -> MemberOnBoardCategory.register(member, code))
+                        .toList();
+                onBoardCategoryRepository.saveAll(categories);
+            }
+
+            resultCategoryCodes = List.copyOf(newCodes);
+        } else {
+            resultCategoryCodes = List.copyOf(existingCodes);
+        }
+
+        return OnBoardResponse.register(onBoard, resultCategoryCodes);
     }
 
     private String getProfileImageUrlOrDefault(Member member) {

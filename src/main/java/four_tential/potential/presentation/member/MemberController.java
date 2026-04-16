@@ -5,6 +5,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
+import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -61,6 +62,19 @@ public class MemberController {
                         HttpStatus.CREATED.name(),
                         "온보딩 등록 성공",
                         memberService.createOnBoarding(principal.memberId(), request)
+                ));
+    }
+
+    @PatchMapping("/me/onboarding")
+    public ResponseEntity<BaseResponse<OnBoardResponse>> updateOnBoarding(
+            @RequestBody UpdateOnBoardRequest request,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "온보딩 등록 변경 성공",
+                        memberService.updateOnBoarding(principal.memberId(), request)
                 ));
     }
 }
