@@ -78,11 +78,10 @@ public class MemberService {
         }
 
         // 카테고리 코드 유효성 검증
-        categoryCodes.forEach(code -> {
-            if (!courseCategoryRepository.existsByCode(code)) {
-                throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
-            }
-        });
+        Set<String> existingCodes = courseCategoryRepository.findExistingCodes(categoryCodes);
+        if (existingCodes.size() != categoryCodes.size()) {
+            throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+        }
 
         // 온보딩 등록
         MemberOnBoard onBoard = MemberOnBoard.register(member, request.goal());
@@ -125,14 +124,14 @@ public class MemberService {
             if (requestedCodes.size() != new HashSet<>(requestedCodes).size()) {
                 throw new ServiceErrorException(ERR_DUPLICATED_CATEGORY_IN_REQUEST);
             }
+
             Set<String> newCodes = new HashSet<>(requestedCodes);
 
-            // 카테고리 코드 유효성 검증 (추가 대상만)
-            newCodes.forEach(code -> {
-                if (!courseCategoryRepository.existsByCode(code)) {
-                    throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
-                }
-            });
+            // 카테고리 코드 유효성 검증
+            Set<String> validCodes = courseCategoryRepository.findExistingCodes(newCodes);
+            if (validCodes.size() != newCodes.size()) {
+                throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+            }
 
             // 기존에 있고 새 요청에 없는 것
             Set<String> deleteExistCode = existingCodes.stream()

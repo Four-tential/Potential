@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -176,8 +177,7 @@ class MemberServiceTest {
 
         given(memberOnBoardRepository.existsByMemberId(member.getId())).willReturn(false);
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
-        given(courseCategoryRepository.existsByCode("FITNESS")).willReturn(true);
-        given(courseCategoryRepository.existsByCode("ART")).willReturn(true);
+        given(courseCategoryRepository.findExistingCodes(any())).willReturn(Set.of("FITNESS", "ART"));
         given(memberOnBoardRepository.save(any())).willReturn(onBoard);
 
         OnBoardRequest request = new OnBoardRequest(MemberOnBoardGoal.HOBBY, categoryCodes);
@@ -222,8 +222,7 @@ class MemberServiceTest {
         Member member = MemberFixture.defaultMember();
         given(memberOnBoardRepository.existsByMemberId(member.getId())).willReturn(false);
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
-        given(courseCategoryRepository.existsByCode("FITNESS")).willReturn(true);
-        given(courseCategoryRepository.existsByCode("INVALID")).willReturn(false);
+        given(courseCategoryRepository.findExistingCodes(any())).willReturn(Set.of("FITNESS")); // INVALID 미포함
 
         OnBoardRequest request = new OnBoardRequest(MemberOnBoardGoal.HOBBY, List.of("FITNESS", "INVALID"));
 
@@ -258,7 +257,7 @@ class MemberServiceTest {
         MemberOnBoardCategory existingCategory = MemberOnBoardCategory.register(member, "FITNESS");
         given(memberOnBoardRepository.findByMemberId(member.getId())).willReturn(Optional.of(onBoard));
         given(onBoardCategoryRepository.findByMemberId(member.getId())).willReturn(List.of(existingCategory));
-        given(courseCategoryRepository.existsByCode("COOK")).willReturn(true);
+        given(courseCategoryRepository.findExistingCodes(any())).willReturn(Set.of("COOK"));
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
 
         UpdateOnBoardRequest request = new UpdateOnBoardRequest(MemberOnBoardGoal.STRESS_OUT, List.of("COOK"));
@@ -280,8 +279,7 @@ class MemberServiceTest {
         MemberOnBoardCategory existingCategory = MemberOnBoardCategory.register(member, "FITNESS");
         given(memberOnBoardRepository.findByMemberId(member.getId())).willReturn(Optional.of(onBoard));
         given(onBoardCategoryRepository.findByMemberId(member.getId())).willReturn(List.of(existingCategory));
-        given(courseCategoryRepository.existsByCode("FITNESS")).willReturn(true);
-        given(courseCategoryRepository.existsByCode("COOK")).willReturn(true);
+        given(courseCategoryRepository.findExistingCodes(any())).willReturn(Set.of("FITNESS", "COOK"));
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
 
         UpdateOnBoardRequest request = new UpdateOnBoardRequest(null, List.of("FITNESS", "COOK"));
@@ -358,7 +356,7 @@ class MemberServiceTest {
 
         given(memberOnBoardRepository.findByMemberId(member.getId())).willReturn(Optional.of(onBoard));
         given(onBoardCategoryRepository.findByMemberId(member.getId())).willReturn(List.of());
-        given(courseCategoryRepository.existsByCode("INVALID")).willReturn(false);
+        given(courseCategoryRepository.findExistingCodes(any())).willReturn(Set.of()); // INVALID 미포함
 
         UpdateOnBoardRequest request = new UpdateOnBoardRequest(MemberOnBoardGoal.STRESS_OUT, List.of("INVALID"));
 
