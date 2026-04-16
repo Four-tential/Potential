@@ -1,4 +1,4 @@
-package four_tential.potential.domain.attendance.dto;
+package four_tential.potential.presentation.attendance.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;

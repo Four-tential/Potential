@@ -2,6 +2,7 @@ package four_tential.potential.domain.attendance.dto;
 
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.presentation.attendance.dto.AttendanceEventResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
