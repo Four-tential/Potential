@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 
-import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_REFRESH_TOKEN_NULL;
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_TOKEN_NULL;
 
 @RestController
 @RequestMapping("/v1/auth")
@@ -57,7 +57,7 @@ public class AuthController {
             HttpServletResponse response
     ) {
         if (refreshToken == null) {
-            throw new ServiceErrorException(ERR_REFRESH_TOKEN_NULL);
+            throw new ServiceErrorException(ERR_TOKEN_NULL);
         }
 
         RefreshResult result = authService.refresh(refreshToken);
@@ -68,6 +68,24 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "토큰 재발급 성공", new RefreshResponse(result.newAccessToken())));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<BaseResponse<Void>> logOut(
+            @RequestHeader("Authorization") String authorization,
+            HttpServletResponse response
+    ) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw new ServiceErrorException(ERR_TOKEN_NULL);
+        }
+
+        String accessToken = authorization.substring("Bearer ".length());
+        authService.logOut(accessToken);
+
+        // refreshToken 쿠키 만료
+        response.addHeader(HttpHeaders.SET_COOKIE, expireRefreshTokenCookie().toString());
+
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "로그아웃 성공", null));
+    }
+
     private ResponseCookie createRefreshTokenCookie(String refreshToken) {
         return ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
@@ -75,6 +93,15 @@ public class AuthController {
                 .sameSite("Strict")
                 .path("/v1/auth") // RTR/logout 에서만
                 .maxAge(Duration.ofMillis(refreshTokenExpire))
+                .build();
+    }
+
+    private ResponseCookie expireRefreshTokenCookie() {
+        return ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .sameSite("Strict")
+                .path("/v1/auth")
+                .maxAge(Duration.ZERO) // 즉시 만료
                 .build();
     }
 

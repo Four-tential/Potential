@@ -242,4 +242,47 @@ class AuthServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }
+
+    @Test
+    @DisplayName("로그아웃 성공 - 유효한 토큰: refreshToken 삭제 및 accessToken 블랙리스트 등록")
+    void logOut() {
+        String accessToken = "validAccessToken";
+        given(jwtUtil.validateToken(accessToken)).willReturn(true);
+        given(jwtUtil.extractSubjectAllowExpired(accessToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
+        given(jwtUtil.getRemainingTime(accessToken)).willReturn(3600000L);
+
+        authService.logOut(accessToken);
+
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository).addBlacklist(accessToken, 3600000L);
+    }
+
+    @Test
+    @DisplayName("로그아웃 성공 - 만료된 토큰: refreshToken만 삭제하고 블랙리스트 미등록")
+    void logOut_expiredToken() {
+        String expiredToken = "expiredAccessToken";
+        given(jwtUtil.validateToken(expiredToken)).willReturn(false);
+        given(jwtUtil.isExpiredToken(expiredToken)).willReturn(true);
+        given(jwtUtil.extractSubjectAllowExpired(expiredToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
+
+        authService.logOut(expiredToken);
+
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("위변조된 토큰으로 로그아웃 - ServiceErrorException 발생")
+    void logOut_invalidToken() {
+        String invalidToken = "tamperedAccessToken";
+        given(jwtUtil.validateToken(invalidToken)).willReturn(false);
+        given(jwtUtil.isExpiredToken(invalidToken)).willReturn(false);
+
+        assertThatThrownBy(() -> authService.logOut(invalidToken))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
 }

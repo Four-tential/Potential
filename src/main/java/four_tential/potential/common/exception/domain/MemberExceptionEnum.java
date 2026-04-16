@@ -11,7 +11,7 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_SUSPENDED(HttpStatus.FORBIDDEN, "정지된 회원입니다, 관리자에게 문의 바랍니다"),
     ERR_INVALID_MEMBER(HttpStatus.BAD_REQUEST, "회원을 입력해주세요"),
     ERR_INVALID_AUTHORIZE(HttpStatus.UNAUTHORIZED, "잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다"),
-    ERR_REFRESH_TOKEN_NULL(HttpStatus.UNAUTHORIZED, "잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다"),
+    ERR_TOKEN_NULL(HttpStatus.UNAUTHORIZED, "인증 정보가 비어있습니다"),
     ERR_INVALID_ONBOARD_GOAL(HttpStatus.BAD_REQUEST, "목표를 입력해주세요"),
     ERR_INVALID_CATEGORY(HttpStatus.BAD_REQUEST, "카테고리를 입력해주세요"),
     ERR_DUPLICATED_EMAIL(HttpStatus.CONFLICT, "이미 사용 중인 이메일 입니다"),
