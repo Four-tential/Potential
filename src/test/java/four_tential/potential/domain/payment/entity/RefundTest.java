@@ -14,10 +14,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class RefundTest {
 
     private Payment createPayment() {
-        return Payment.create(
+        return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 null,
+                "portone_key_123",
                 100000L,
                 0L,
                 100000L,

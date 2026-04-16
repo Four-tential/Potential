@@ -1,5 +1,7 @@
 package four_tential.potential.domain.payment.entity;
 
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.enums.WebhookStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -24,6 +26,9 @@ public class Webhook {
     @Column(name = "rec_webhook_id", nullable = false, unique = true, length = 500)
     private String recWebhookId;
 
+    @Column(name = "pg_key", length = 300)
+    private String pgKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private WebhookStatus status;
@@ -37,6 +42,7 @@ public class Webhook {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    // 웹훅 수신 기록 생성
     public static Webhook receive(String recWebhookId, String eventStatus) {
         Webhook webhook = new Webhook();
         webhook.recWebhookId = recWebhookId;
@@ -46,29 +52,47 @@ public class Webhook {
         return webhook;
     }
 
-    /**
-     * 웹훅 이벤트 상태 업데이트
-     * SDK 검증 후 실제 이벤트 타입으로 업데이트
-     *
-     * @param eventStatus 실제 이벤트 타입
-     */
     public void updateEventStatus(String eventStatus) {
         this.eventStatus = eventStatus;
     }
 
-    /**
-     * 웹훅 처리 완료
-     */
-    public void complete() {
-        this.status = WebhookStatus.COMPLETED;
-        this.completedAt = LocalDateTime.now();
+    public void updatePgKey(String pgKey) {
+        this.pgKey = pgKey;
     }
 
-    /**
-     * 웹훅 처리 실패
-     */
+    public boolean isCompleted() {
+        return this.status == WebhookStatus.COMPLETED;
+    }
+
+    // 실패했던 웹훅을 다시 처리하기 위해 PENDING 상태로 만든다
+    public void retry(String eventStatus) {
+        transitTo(WebhookStatus.PENDING);
+        this.eventStatus = eventStatus;
+        this.completedAt = null;
+        this.receivedAt = LocalDateTime.now();
+    }
+
+    public void complete() {
+        if (transitTo(WebhookStatus.COMPLETED)) {
+            this.completedAt = LocalDateTime.now();
+        }
+    }
+
     public void fail() {
-        this.status = WebhookStatus.FAILED;
-        this.completedAt = LocalDateTime.now();
+        if (transitTo(WebhookStatus.FAILED)) {
+            this.completedAt = LocalDateTime.now();
+        }
+    }
+
+    private boolean transitTo(WebhookStatus target) {
+        if (this.status == target) {
+            return false;
+        }
+        if (!this.status.canTransitTo(target)) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_INVALID_WEBHOOK_STATUS_TRANSITION);
+        }
+
+        this.status = target;
+        return true;
     }
 }
