@@ -12,14 +12,14 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class OnBoardCategoryTest {
+class MemberOnBoardCategoryTest {
 
     @Test
     @DisplayName("register()로 생성하면 member와 categoryCode가 설정")
     void register() {
         Member member = MemberFixture.defaultMember();
 
-        OnBoardCategory category = OnBoardCategory.register(member, "COOK");
+        MemberOnBoardCategory category = MemberOnBoardCategory.register(member, "COOK");
 
         assertThat(category.getMember()).isEqualTo(member);
         assertThat(category.getCategoryCode()).isEqualTo("COOK");
@@ -28,7 +28,7 @@ class OnBoardCategoryTest {
     @Test
     @DisplayName("생성된 카테고리는 id가 null")
     void registerInitialState() {
-        OnBoardCategory category = OnBoardCategoryFixture.defaultOnBoardCategory();
+        MemberOnBoardCategory category = OnBoardCategoryFixture.defaultOnBoardCategory();
 
         assertThat(category.getId()).isNull();
     }
@@ -39,8 +39,8 @@ class OnBoardCategoryTest {
         Member member = MemberFixture.defaultMember();
         List<String> categoryCodes = List.of("ART", "BOOK", "COOK");
 
-        List<OnBoardCategory> categories = categoryCodes.stream()
-                .map(code -> OnBoardCategory.register(member, code))
+        List<MemberOnBoardCategory> categories = categoryCodes.stream()
+                .map(code -> MemberOnBoardCategory.register(member, code))
                 .toList();
 
         assertThat(categories).hasSize(3);
@@ -55,7 +55,7 @@ class OnBoardCategoryTest {
     @Test
     @DisplayName("register() 시 member가 null이면 ServiceErrorException이 발생")
     void registerWithNullMember() {
-        assertThatThrownBy(() -> OnBoardCategory.register(null, "COOK"))
+        assertThatThrownBy(() -> MemberOnBoardCategory.register(null, "COOK"))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("회원을 입력해주세요");
     }
@@ -65,7 +65,7 @@ class OnBoardCategoryTest {
     void registerWithNullCategoryCode() {
         Member member = MemberFixture.defaultMember();
 
-        assertThatThrownBy(() -> OnBoardCategory.register(member, null))
+        assertThatThrownBy(() -> MemberOnBoardCategory.register(member, null))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("카테고리를 입력해주세요");
     }
@@ -75,7 +75,7 @@ class OnBoardCategoryTest {
     void registerWithBlankCategoryCode() {
         Member member = MemberFixture.defaultMember();
 
-        assertThatThrownBy(() -> OnBoardCategory.register(member, ""))
+        assertThatThrownBy(() -> MemberOnBoardCategory.register(member, ""))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("카테고리를 입력해주세요");
     }

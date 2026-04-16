@@ -13,14 +13,14 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "onboard_categories", uniqueConstraints = {
+@Table(name = "member_onboard_categories", uniqueConstraints = {
         @UniqueConstraint(
-                name = "uk_onboard_categories_member_category",
+                name = "uk_member_onboard_categories_member_category",
                 columnNames = {"member_id", "category_code"}
         )
 })
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
-public class OnBoardCategory extends BaseTimeEntity {
+public class MemberOnBoardCategory extends BaseTimeEntity {
     @Id
     @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
     @Column(nullable = false, updatable = false, columnDefinition = "BINARY(16)")
@@ -33,7 +33,7 @@ public class OnBoardCategory extends BaseTimeEntity {
     @Column(name = "category_code", nullable = false, length = 30)
     private String categoryCode;
 
-    public static OnBoardCategory register(Member member, String categoryCode) {
+    public static MemberOnBoardCategory register(Member member, String categoryCode) {
         if (member == null) {
             throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_MEMBER);
         }
@@ -42,9 +42,9 @@ public class OnBoardCategory extends BaseTimeEntity {
             throw new ServiceErrorException(MemberExceptionEnum.ERR_INVALID_CATEGORY);
         }
 
-        OnBoardCategory onBoardCategory = new OnBoardCategory();
-        onBoardCategory.member = member;
-        onBoardCategory.categoryCode = categoryCode;
-        return onBoardCategory;
+        MemberOnBoardCategory memberOnBoardCategory = new MemberOnBoardCategory();
+        memberOnBoardCategory.member = member;
+        memberOnBoardCategory.categoryCode = categoryCode;
+        return memberOnBoardCategory;
     }
 }
