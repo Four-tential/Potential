@@ -57,7 +57,7 @@ class MemberControllerTest {
         ResponseEntity<BaseResponse<MyPageResponse>> response = memberController.getMyPageInfo(PRINCIPAL);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assert response.getBody() != null;
+        assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().email()).isEqualTo(MemberFixture.DEFAULT_EMAIL);
         assertThat(response.getBody().data().profileImageUrl()).isEqualTo(MemberFixture.DEFAULT_PROFILE_IMAGE_URL);
     }
@@ -90,7 +90,7 @@ class MemberControllerTest {
         ResponseEntity<BaseResponse<UpdateMyPageResponse>> response = memberController.updateMyPageInfo(request, PRINCIPAL);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assert response.getBody() != null;
+        assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().phone()).isEqualTo("010-9999-9999");
     }
 

@@ -46,7 +46,7 @@ portone:
 
 # Member
 member:
-  default-profile-image-url: https://bucketurl/default-profile-image.png
+  default-profile-image-url: ${DEFAULT_PROFILE_IMAGE_URL:https://bucketurl/default-profile-image.png}
 
 # SpringDocs With Swagger
 springdoc:

@@ -29,7 +29,7 @@ public class MemberService {
     public MyPageResponse getMyPageInfo(UUID memberId) {
         Member member = memberRepository.findById(memberId).orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
 
-        return MyPageResponse.register(member, setProfileImageUrl(member));
+        return MyPageResponse.register(member, getProfileImageUrlOrDefault(member));
     }
 
     @Transactional
@@ -42,10 +42,10 @@ public class MemberService {
 
         member.updateInfo(request.phone(), request.profileImageUrl());
 
-        return UpdateMyPageResponse.register(member, setProfileImageUrl(member));
+        return UpdateMyPageResponse.register(member, getProfileImageUrlOrDefault(member));
     }
 
-    private String setProfileImageUrl(Member member) {
+    private String getProfileImageUrlOrDefault(Member member) {
         return member.getProfileImageUrl() != null ? member.getProfileImageUrl() : defaultProfileImageUrl;
     }
 }
