@@ -19,7 +19,5 @@ public class    ReviewCreateRequest {
     @NotBlank(message = "후기 내용은 필수입니다")
     private String content;
 
-    @NotBlank(message = "이미지 URL은 빈 값일 수 없습니다")
-    @Size(max = 300, message = "이미지 URL은 300자 이하여야 합니다")
     private List<String> imageUrls;
 }

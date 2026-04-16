@@ -14,13 +14,18 @@ import four_tential.potential.domain.review.review.Review;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.review.review_image.ReviewImage;
 import four_tential.potential.domain.review.review_image.ReviewImageRepository;
+import four_tential.potential.domain.review.review_like.ReviewLike;
+import four_tential.potential.domain.review.review_like.ReviewLikeRepository;
+import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import org.springframework.dao.DataIntegrityViolationException;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +45,7 @@ public class ReviewService {
     private final CourseRepository courseRepository;
     private final OrderRepository orderRepository;
     private final AttendanceRepository attendanceRepository;
+    private final ReviewLikeRepository reviewLikeRepository;
 
     // 후기 작성
     @Transactional
@@ -164,6 +170,38 @@ public class ReviewService {
 
         reviewImageRepository.deleteAllByReviewId(reviewId);
         reviewRepository.delete(review);
+    }
+
+    // 후기 좋아요 토글 (등록 / 해제)
+    @Transactional
+    public ReviewLikeResponse toggleLike(UUID memberId, UUID reviewId) {
+
+        // 후기 존재 여부 확인
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
+
+        // 자기 자신 후기 좋아요 방지
+        if (review.getMemberId().equals(memberId)) {
+            throw new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN);
+        }
+
+        // 이미 좋아요 -> 해제 / 없으면 -> 등록
+        Optional<ReviewLike> existing = reviewLikeRepository.findByReviewIdAndMemberId(reviewId, memberId);
+        if (existing.isPresent()) {
+            reviewLikeRepository.delete(existing.get());
+        } else {
+            try {
+                // saveAndFlush: 즉시 DB 반영으로 UNIQUE 위반을 트랜잭션 내에서 바로 감지
+                reviewLikeRepository.saveAndFlush(ReviewLike.register(reviewId, memberId));
+            } catch (DataIntegrityViolationException e) {
+                // 동시 요청으로 중복 INSERT 발생 -> 이미 좋아요된 상태이므로 무시
+            }
+        }
+
+        long likeCount = reviewLikeRepository.countByReviewId(reviewId);
+        boolean liked  = reviewLikeRepository.existsByReviewIdAndMemberId(reviewId, memberId);
+
+        return ReviewLikeResponse.of(reviewId, likeCount, liked);
     }
 
     // 이미지 저장 공통 로직
