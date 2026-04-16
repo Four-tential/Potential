@@ -13,7 +13,7 @@ public record OnBoardResponse(
     public static OnBoardResponse register(MemberOnBoard onBoard, List<String> categoryCodes) {
         return new OnBoardResponse(
                 onBoard.getGoal().name(),
-                categoryCodes,
+                categoryCodes == null ? null : List.copyOf(categoryCodes),
                 onBoard.getCreatedAt()
         );
     }

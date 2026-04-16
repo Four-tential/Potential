@@ -21,7 +21,8 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_WITHDRAWAL_MEMBER(HttpStatus.FORBIDDEN, "탈퇴한 회원입니다"),
     ERR_NO_UPDATE_FIELD(HttpStatus.BAD_REQUEST, "수정할 항목을 하나 이상 입력해주세요"),
     ERR_ALREADY_ONBOARDED(HttpStatus.CONFLICT, "이미 온보딩을 완료한 회원입니다"),
-    ERR_NOT_FOUND_ONBOARDING(HttpStatus.NOT_FOUND, "온보딩 정보가 존재하지 않습니다")
+    ERR_NOT_FOUND_ONBOARDING(HttpStatus.NOT_FOUND, "온보딩 정보가 존재하지 않습니다"),
+    ERR_DUPLICATED_CATEGORY_IN_REQUEST(HttpStatus.BAD_REQUEST, "중복된 카테고리 코드가 포함되어 있습니다")
     ;
 
     private final HttpStatus httpStatus;

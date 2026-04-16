@@ -71,8 +71,13 @@ public class MemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
 
-        // 카테고리 코드 유효성 검증
+        // 카테고리 코드 중복 검증
         List<String> categoryCodes = request.categoryCodes();
+        if (categoryCodes.size() != new HashSet<>(categoryCodes).size()) {
+            throw new ServiceErrorException(ERR_DUPLICATED_CATEGORY_IN_REQUEST);
+        }
+
+        // 카테고리 코드 유효성 검증
         categoryCodes.forEach(code -> {
             if (!courseCategoryRepository.existsByCode(code)) {
                 throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
@@ -116,7 +121,11 @@ public class MemberService {
         // 카테고리 수정 (null이면 기존 카테고리 유지)
         List<String> resultCategoryCodes;
         if (request.categoryCodes() != null && !request.categoryCodes().isEmpty()) {
-            Set<String> newCodes = new HashSet<>(request.categoryCodes());
+            List<String> requestedCodes = request.categoryCodes();
+            if (requestedCodes.size() != new HashSet<>(requestedCodes).size()) {
+                throw new ServiceErrorException(ERR_DUPLICATED_CATEGORY_IN_REQUEST);
+            }
+            Set<String> newCodes = new HashSet<>(requestedCodes);
 
             // 카테고리 코드 유효성 검증 (추가 대상만)
             newCodes.forEach(code -> {

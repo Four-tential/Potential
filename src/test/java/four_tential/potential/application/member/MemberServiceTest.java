@@ -203,6 +203,20 @@ class MemberServiceTest {
     }
 
     @Test
+    @DisplayName("온보딩 등록 - 중복 카테고리 코드가 포함되면 ServiceErrorException 발생")
+    void createOnBoarding_duplicatedCategory() {
+        Member member = MemberFixture.defaultMember();
+        given(memberOnBoardRepository.existsByMemberId(member.getId())).willReturn(false);
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        OnBoardRequest request = new OnBoardRequest(MemberOnBoardGoal.HOBBY, List.of("FITNESS", "FITNESS"));
+
+        assertThatThrownBy(() -> memberService.createOnBoarding(member.getId(), request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("중복된 카테고리 코드가 포함되어 있습니다");
+    }
+
+    @Test
     @DisplayName("온보딩 등록 - 존재하지 않는 카테고리 코드가 포함되면 ServiceErrorException 발생")
     void createOnBoarding_invalidCategory() {
         Member member = MemberFixture.defaultMember();
@@ -318,6 +332,22 @@ class MemberServiceTest {
         assertThatThrownBy(() -> memberService.updateOnBoarding(unknownId, request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("온보딩 정보가 존재하지 않습니다");
+    }
+
+    @Test
+    @DisplayName("온보딩 수정 - 중복 카테고리 코드가 포함되면 ServiceErrorException 발생")
+    void updateOnBoarding_duplicatedCategory() {
+        Member member = MemberFixture.memberWithOnboarding();
+        MemberOnBoard onBoard = MemberOnBoardFixture.defaultMemberOnBoard();
+
+        given(memberOnBoardRepository.findByMemberId(member.getId())).willReturn(Optional.of(onBoard));
+        given(onBoardCategoryRepository.findByMemberId(member.getId())).willReturn(List.of());
+
+        UpdateOnBoardRequest request = new UpdateOnBoardRequest(null, List.of("FITNESS", "FITNESS"));
+
+        assertThatThrownBy(() -> memberService.updateOnBoarding(member.getId(), request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("중복된 카테고리 코드가 포함되어 있습니다");
     }
 
     @Test

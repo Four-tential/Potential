@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AuthorizationDeniedException.class)
     public ResponseEntity<BaseResponse<Void>> AuthorizationDeniedExceptionHandler(AuthorizationDeniedException e) {
-        log.error("인증에 따른 접근 거부 : ", e);
+        log.error("인가에 따른 접근 거부 : ", e);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(BaseResponse.fail(HttpStatus.FORBIDDEN.name(), "접근 거부 되었습니다"));
     }
 
