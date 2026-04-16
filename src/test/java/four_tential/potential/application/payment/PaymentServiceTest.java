@@ -65,6 +65,37 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("findByPgKey 호출 시 Optional Payment 를 반환한다")
+    void findByPgKey_returns_optional_payment() {
+        Payment payment = createPayment();
+        given(paymentRepository.findByPgKey("portone_key_123")).willReturn(Optional.of(payment));
+
+        Optional<Payment> result = paymentService.findByPgKey("portone_key_123");
+
+        assertThat(result).contains(payment);
+    }
+
+    @Test
+    @DisplayName("getByPgKeyForUpdate 호출 시 Payment 를 반환한다")
+    void getByPgKeyForUpdate_returns_payment() {
+        Payment payment = createPayment();
+        given(paymentRepository.findByPgKeyForUpdate("portone_key_123")).willReturn(Optional.of(payment));
+
+        Payment result = paymentService.getByPgKeyForUpdate("portone_key_123");
+
+        assertThat(result).isEqualTo(payment);
+    }
+
+    @Test
+    @DisplayName("getByPgKeyForUpdate 호출 시 Payment 가 없으면 예외가 발생한다")
+    void getByPgKeyForUpdate_throws_when_not_found() {
+        given(paymentRepository.findByPgKeyForUpdate("missing")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentService.getByPgKeyForUpdate("missing"))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
     @DisplayName("validateNoPayment 는 같은 주문의 결제가 이미 있으면 예외가 발생한다")
     void validateNoPayment_throws_when_payment_exists() {
         UUID orderId = UUID.randomUUID();
@@ -72,6 +103,15 @@ class PaymentServiceTest {
 
         assertThatThrownBy(() -> paymentService.validateNoPayment(orderId))
                 .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("validateNoPayment 는 같은 주문의 결제가 없으면 통과한다")
+    void validateNoPayment_passes_when_payment_not_exists() {
+        UUID orderId = UUID.randomUUID();
+        given(paymentRepository.existsByOrderId(orderId)).willReturn(false);
+
+        paymentService.validateNoPayment(orderId);
     }
 
     @Test
@@ -116,6 +156,111 @@ class PaymentServiceTest {
         assertThatThrownBy(() ->
                 paymentService.validateGatewayPayment(preparation, "pg-key-1", PaymentPayWay.CARD, gatewayResponse))
                 .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("validateGatewayPayment 는 요청 pgKey 와 PortOne pgKey 가 다르면 식별자 불일치 예외가 발생한다")
+    void validateGatewayPayment_throws_when_pgKey_mismatch() {
+        PaymentCreateCommand preparation = new PaymentCreateCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                100000L,
+                0L,
+                100000L
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-from-portone",
+                "PAID",
+                100000L,
+                "card"
+        );
+
+        assertThatThrownBy(() ->
+                paymentService.validateGatewayPayment(preparation, "pg-key-from-request", PaymentPayWay.CARD, gatewayResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("결제 식별자가 일치하지 않습니다");
+    }
+
+    @Test
+    @DisplayName("validateGatewayPayment 는 요청 결제 수단이 카드가 아니면 예외가 발생한다")
+    void validateGatewayPayment_throws_when_request_payWay_not_card() {
+        PaymentCreateCommand preparation = new PaymentCreateCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                100000L,
+                0L,
+                100000L
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-1",
+                "PAID",
+                100000L,
+                "card"
+        );
+
+        assertThatThrownBy(() ->
+                paymentService.validateGatewayPayment(preparation, "pg-key-1", PaymentPayWay.EASY_PAY, gatewayResponse))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("validateGatewayPayment 는 PortOne 결제가 완료 상태가 아니면 예외가 발생한다")
+    void validateGatewayPayment_throws_when_gateway_status_not_paid() {
+        PaymentCreateCommand preparation = new PaymentCreateCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                100000L,
+                0L,
+                100000L
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-1",
+                "READY",
+                100000L,
+                "card"
+        );
+
+        assertThatThrownBy(() ->
+                paymentService.validateGatewayPayment(preparation, "pg-key-1", PaymentPayWay.CARD, gatewayResponse))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("validateGatewayPayment 는 PortOne 결제 수단이 카드가 아니면 예외가 발생한다")
+    void validateGatewayPayment_throws_when_gateway_payMethod_not_card() {
+        PaymentCreateCommand preparation = new PaymentCreateCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                100000L,
+                0L,
+                100000L
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-1",
+                "PAID",
+                100000L,
+                "easyPay"
+        );
+
+        assertThatThrownBy(() ->
+                paymentService.validateGatewayPayment(preparation, "pg-key-1", PaymentPayWay.CARD, gatewayResponse))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("save 호출 시 Payment 를 저장한다")
+    void save_returns_saved_payment() {
+        Payment payment = createPayment();
+        given(paymentRepository.save(payment)).willReturn(payment);
+
+        Payment result = paymentService.save(payment);
+
+        assertThat(result).isEqualTo(payment);
+        verify(paymentRepository).save(payment);
     }
 
     @Test

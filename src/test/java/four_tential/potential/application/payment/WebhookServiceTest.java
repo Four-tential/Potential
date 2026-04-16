@@ -65,6 +65,23 @@ class WebhookServiceTest {
     }
 
     @Test
+    @DisplayName("receive 호출 중 완료된 중복 웹훅이면 상태를 바꾸지 않고 기존 웹훅을 반환한다")
+    void receive_duplicateKey_completed_returns_existing_webhook() {
+        Webhook duplicated = createWebhook();
+        duplicated.complete();
+        given(webhookRepository.saveAndFlush(any(Webhook.class)))
+                .willThrow(new DataIntegrityViolationException("duplicate webhook-id"));
+        given(webhookRepository.findByRecWebhookId("rec_id_123"))
+                .willReturn(Optional.of(duplicated));
+
+        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+
+        assertThat(result.getStatus()).isEqualTo(WebhookStatus.COMPLETED);
+        verify(webhookRepository).saveAndFlush(any(Webhook.class));
+        verify(webhookRepository).findByRecWebhookId("rec_id_123");
+    }
+
+    @Test
     @DisplayName("isDuplicate 호출 시 중복이면 true 를 반환한다")
     void isDuplicate_returns_true_when_duplicate() {
         given(webhookRepository.existsByRecWebhookId(anyString()))
@@ -84,6 +101,79 @@ class WebhookServiceTest {
         boolean result = webhookService.isDuplicate("rec_id_123");
 
         assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("isCompleted 호출 시 완료된 웹훅이면 true 를 반환한다")
+    void isCompleted_returns_true_when_completed() {
+        given(webhookRepository.existsCompletedByRecWebhookId("rec_id_123")).willReturn(true);
+
+        boolean result = webhookService.isCompleted("rec_id_123");
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("isCompleted 호출 시 완료된 웹훅이 아니면 false 를 반환한다")
+    void isCompleted_returns_false_when_not_completed() {
+        given(webhookRepository.existsCompletedByRecWebhookId("rec_id_123")).willReturn(false);
+
+        boolean result = webhookService.isCompleted("rec_id_123");
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("findProcessablePaidWebhook 호출 시 처리 가능한 Paid 웹훅을 반환한다")
+    void findProcessablePaidWebhook_returns_webhook() {
+        Webhook webhook = createWebhook();
+        given(webhookRepository.findLatestProcessableByPgKeyAndEventStatus("pg-key-1", "WebhookTransactionPaid"))
+                .willReturn(Optional.of(webhook));
+
+        Optional<Webhook> result = webhookService.findProcessablePaidWebhook("pg-key-1");
+
+        assertThat(result).contains(webhook);
+    }
+
+    @Test
+    @DisplayName("updateEventStatus 호출 시 실제 웹훅 이벤트 타입을 저장한다")
+    void updateEventStatus_saves_event_status() {
+        Webhook webhook = createWebhook();
+        given(webhookRepository.save(webhook)).willReturn(webhook);
+
+        Webhook result = webhookService.updateEventStatus(webhook, "PlainWebhook");
+
+        assertThat(result.getEventStatus()).isEqualTo("PlainWebhook");
+        verify(webhookRepository).save(webhook);
+    }
+
+    @Test
+    @DisplayName("retry 호출 시 실패 웹훅을 다시 PENDING 상태로 저장한다")
+    void retry_saves_pending_status() {
+        Webhook webhook = createWebhook();
+        webhook.fail();
+        given(webhookRepository.save(webhook)).willReturn(webhook);
+
+        Webhook result = webhookService.retry(webhook, "WebhookTransactionPaid");
+
+        assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
+        assertThat(result.getEventStatus()).isEqualTo("WebhookTransactionPaid");
+        assertThat(result.getCompletedAt()).isNull();
+        verify(webhookRepository).save(webhook);
+    }
+
+    @Test
+    @DisplayName("defer 호출 시 pgKey 와 이벤트 타입을 저장하고 PENDING 상태로 보류한다")
+    void defer_saves_pgKey_and_pending_status() {
+        Webhook webhook = createWebhook();
+        given(webhookRepository.save(webhook)).willReturn(webhook);
+
+        Webhook result = webhookService.defer(webhook, "WebhookTransactionPaid", "pg-key-1");
+
+        assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
+        assertThat(result.getEventStatus()).isEqualTo("WebhookTransactionPaid");
+        assertThat(result.getPgKey()).isEqualTo("pg-key-1");
+        verify(webhookRepository).save(webhook);
     }
 
     @Test
