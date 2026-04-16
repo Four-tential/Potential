@@ -51,9 +51,7 @@ public class WebhookService {
      */
     @Transactional(readOnly = true)
     public boolean isCompleted(String recWebhookId) {
-        return webhookRepository.findByRecWebhookId(recWebhookId)
-                .map(Webhook::isCompleted)
-                .orElse(false);
+        return webhookRepository.existsCompletedByRecWebhookId(recWebhookId);
     }
 
     /**
