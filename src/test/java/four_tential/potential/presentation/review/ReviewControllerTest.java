@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.review.dto.request.ReviewCreateRequest;
 import four_tential.potential.presentation.review.dto.request.ReviewUpdateRequest;
+import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -276,6 +277,87 @@ class ReviewControllerTest {
             reviewController.delete(REVIEW_ID, principal);
 
             verify(reviewService, times(1)).delete(MEMBER_ID, REVIEW_ID);
+        }
+    }
+
+    // ── toggleLike() ─────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("toggleLike() - 후기 좋아요 토글")
+    class ToggleLikeTest {
+
+        private ReviewLikeResponse stubLikeResponse(boolean liked, long count) {
+            return ReviewLikeResponse.of(REVIEW_ID, count, liked);
+        }
+
+        @Test
+        @DisplayName("좋아요 토글 성공 시 200 과 ReviewLikeResponse 를 반환한다")
+        void toggleLike_success() {
+            // given
+            when(reviewService.toggleLike(MEMBER_ID, REVIEW_ID))
+                    .thenReturn(stubLikeResponse(true, 1L));
+
+            // when
+            ResponseEntity<?> response = reviewController.toggleLike(REVIEW_ID, principal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).isNotNull();
+            verify(reviewService).toggleLike(MEMBER_ID, REVIEW_ID);
+        }
+
+        @Test
+        @DisplayName("좋아요 해제 시 liked=false 와 감소된 likeCount 를 반환한다")
+        void toggleLike_cancel_returnsLikedFalse() {
+            // given
+            when(reviewService.toggleLike(MEMBER_ID, REVIEW_ID))
+                    .thenReturn(stubLikeResponse(false, 0L));
+
+            // when
+            ResponseEntity<?> response = reviewController.toggleLike(REVIEW_ID, principal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        @Test
+        @DisplayName("후기가 없으면 ERR_REVIEW_NOT_FOUND 예외가 전파된다")
+        void toggleLike_reviewNotFound_propagatesException() {
+            // given
+            when(reviewService.toggleLike(MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
+
+            // when & then
+            assertThatThrownBy(() -> reviewController.toggleLike(REVIEW_ID, principal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_REVIEW_NOT_FOUND.getMessage());
+        }
+
+        @Test
+        @DisplayName("자기 자신 후기 좋아요 시 ERR_SELF_LIKE_FORBIDDEN 예외가 전파된다")
+        void toggleLike_selfLike_propagatesException() {
+            // given
+            when(reviewService.toggleLike(MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN));
+
+            // when & then
+            assertThatThrownBy(() -> reviewController.toggleLike(REVIEW_ID, principal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_SELF_LIKE_FORBIDDEN.getMessage());
+        }
+
+        @Test
+        @DisplayName("toggleLike 호출 시 서비스가 정확히 1번 호출된다")
+        void toggleLike_callsServiceOnce() {
+            // given
+            when(reviewService.toggleLike(MEMBER_ID, REVIEW_ID))
+                    .thenReturn(stubLikeResponse(true, 1L));
+
+            // when
+            reviewController.toggleLike(REVIEW_ID, principal);
+
+            // then
+            verify(reviewService, times(1)).toggleLike(MEMBER_ID, REVIEW_ID);
         }
     }
 }
