@@ -242,4 +242,32 @@ class AuthServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }
+
+    @Test
+    @DisplayName("로그아웃 성공 - refreshToken 삭제 및 accessToken 블랙리스트 등록")
+    void logOut() {
+        String accessToken = "validAccessToken";
+        given(jwtUtil.validateToken(accessToken)).willReturn(true);
+        given(jwtUtil.extractSubject(accessToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
+        given(jwtUtil.getRemainingTime(accessToken)).willReturn(3600000L);
+
+        authService.logOut(accessToken);
+
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository).addBlacklist(accessToken, 3600000L);
+    }
+
+    @Test
+    @DisplayName("유효하지 않은 토큰으로 로그아웃 - ServiceErrorException 발생")
+    void logOut_invalidToken() {
+        String invalidToken = "invalidAccessToken";
+        given(jwtUtil.validateToken(invalidToken)).willReturn(false);
+
+        assertThatThrownBy(() -> authService.logOut(invalidToken))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
 }
