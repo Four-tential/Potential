@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static four_tential.potential.common.exception.domain.ReviewExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.OrderExceptionEnum.*;
@@ -43,13 +45,18 @@ public class ReviewService {
     @Transactional
     public ReviewResponse create(UUID memberId, UUID courseId, UUID orderId, int rating, String content, List<String> imageUrls) {
 
-        // 주문 조회 및 검증
-        Order order = orderRepository.findById(orderId)
+        // 주문 조회 및 검증 (본인 주문 여부 동시 확인)
+        Order order = orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_ORDER));
 
         // 예약 확정 상태 검증
         if (order.getStatus() != OrderStatus.CONFIRMED) {
             throw new ServiceErrorException(ERR_ORDER_NOT_CONFIRMED);
+        }
+
+        // 주문-코스 정합성 검증
+        if (!order.getCourseId().equals(courseId)) {
+            throw new ServiceErrorException(ERR_NOT_FOUND_ORDER);
         }
 
         // 코스 조회 및 검증
@@ -89,16 +96,29 @@ public class ReviewService {
         return ReviewResponse.of(review, images);
     }
 
-    // 코스별 후기 목록 조회
+    // 코스별 후기 목록 조회 (N+1 방지: 이미지 일괄 조회)
     @Transactional(readOnly = true)
     public List<ReviewResponse> findAllByCourse(UUID courseId) {
         List<Review> reviews = reviewRepository.findAllByCourseId(courseId);
+        if (reviews.isEmpty()) {
+            return List.of();
+        }
+
+        // 리뷰 ID 목록으로 이미지 일괄 조회 (쿼리 1번)
+        List<UUID> reviewIds = reviews.stream()
+                .map(Review::getId)
+                .toList();
+        List<ReviewImage> allImages = reviewImageRepository.findAllByReviewIdIn(reviewIds);
+
+        // reviewId 기준으로 그룹핑
+        Map<UUID, List<ReviewImage>> imagesByReviewId = allImages.stream()
+                .collect(Collectors.groupingBy(image -> image.getReview().getId()));
 
         return reviews.stream()
-                .map(review -> {
-                    List<ReviewImage> images = reviewImageRepository.findAllByReviewId(review.getId());
-                    return ReviewResponse.of(review, images);
-                })
+                .map(review -> ReviewResponse.of(
+                        review,
+                        imagesByReviewId.getOrDefault(review.getId(), List.of())
+                ))
                 .toList();
     }
 

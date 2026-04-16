@@ -115,7 +115,7 @@ class ReviewServiceTest {
             Course course = closedCourse(2);
             Attendance attendance = attendedAttendance();
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
@@ -140,7 +140,7 @@ class ReviewServiceTest {
             Attendance attendance = attendedAttendance();
             List<String> imageUrls = List.of("https://cdn.test/a.jpg", "https://cdn.test/b.jpg");
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
@@ -160,7 +160,7 @@ class ReviewServiceTest {
         @Test
         @DisplayName("주문이 존재하지 않으면 ERR_NOT_FOUND_ORDER 를 던진다")
         void create_orderNotFound_throwsException() {
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
                     .isInstanceOf(ServiceErrorException.class)
@@ -171,7 +171,7 @@ class ReviewServiceTest {
         @DisplayName("주문이 CONFIRMED 가 아니면 ERR_ORDER_NOT_CONFIRMED 를 던진다")
         void create_orderNotConfirmed_throwsException() {
             Order order = Order.register(MEMBER_ID, COURSE_ID, 1, BigInteger.valueOf(50000), "클래스");
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
                     .isInstanceOf(ServiceErrorException.class)
@@ -179,10 +179,35 @@ class ReviewServiceTest {
         }
 
         @Test
+        @DisplayName("주문의 courseId 가 파라미터 courseId 와 다르면 ERR_NOT_FOUND_ORDER 를 던진다")
+        void create_courseIdMismatch_throwsException() {
+            UUID anotherCourseId = UUID.randomUUID();
+            Order order = confirmedOrder(); // COURSE_ID 로 생성된 주문
+
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
+
+            // 다른 courseId 로 요청
+            assertThatThrownBy(() -> reviewService.create(MEMBER_ID, anotherCourseId, ORDER_ID, 5, "내용", List.of()))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_NOT_FOUND_ORDER.getMessage());
+        }
+
+        @Test
+        @DisplayName("타인의 주문 ID 를 넣으면 ERR_NOT_FOUND_ORDER 를 던진다")
+        void create_otherMemberOrder_throwsException() {
+            // findOrderDetailsById 는 memberId 까지 조건에 포함하므로 타인 주문은 조회 자체가 안 됨
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_NOT_FOUND_ORDER.getMessage());
+        }
+
+        @Test
         @DisplayName("코스가 존재하지 않으면 ERR_REVIEW_NOT_FOUND 를 던진다")
         void create_courseNotFound_throwsException() {
             Order order = confirmedOrder();
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -204,7 +229,7 @@ class ReviewServiceTest {
                 throw new RuntimeException(e);
             }
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -218,7 +243,7 @@ class ReviewServiceTest {
             Order order = confirmedOrder();
             Course course = closedCourse(8); // 8일 전 종료
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -232,7 +257,7 @@ class ReviewServiceTest {
             Order order = confirmedOrder();
             Course course = closedCourse(2);
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.empty());
@@ -249,7 +274,7 @@ class ReviewServiceTest {
             Course course = closedCourse(2);
             Attendance absent = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID); // ABSENT
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(absent));
@@ -266,7 +291,7 @@ class ReviewServiceTest {
             Course course = closedCourse(2);
             Attendance attendance = attendedAttendance();
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
@@ -284,7 +309,7 @@ class ReviewServiceTest {
             Course course = closedCourse(2);
             Attendance attendance = attendedAttendance();
 
-            when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
@@ -306,7 +331,7 @@ class ReviewServiceTest {
         void findAllByCourse_success() {
             Review review = ReviewFixture.defaultReview();
             when(reviewRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of(review));
-            when(reviewImageRepository.findAllByReviewId(any())).thenReturn(List.of());
+            when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
 
             List<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID);
 
@@ -322,19 +347,21 @@ class ReviewServiceTest {
             List<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID);
 
             assertThat(result).isEmpty();
+            verify(reviewImageRepository, never()).findAllByReviewIdIn(any());
         }
 
         @Test
-        @DisplayName("후기마다 이미지를 각각 조회한다")
-        void findAllByCourse_queriesImagesPerReview() {
+        @DisplayName("이미지를 리뷰 ID 목록으로 한 번에 일괄 조회한다")
+        void findAllByCourse_queriesImagesInBatch() {
             Review r1 = ReviewFixture.defaultReview();
             Review r2 = ReviewFixture.reviewWithRating(3);
             when(reviewRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of(r1, r2));
-            when(reviewImageRepository.findAllByReviewId(any())).thenReturn(List.of());
+            when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
 
             reviewService.findAllByCourse(COURSE_ID);
 
-            verify(reviewImageRepository, times(2)).findAllByReviewId(any());
+            // N+1 해결 검증: 리뷰가 2개여도 이미지 쿼리는 1번만 나가야 한다
+            verify(reviewImageRepository, times(1)).findAllByReviewIdIn(any());
         }
     }
 
