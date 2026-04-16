@@ -12,7 +12,8 @@ import static four_tential.potential.infra.redis.RedisConstants.REFRESH_TOKEN_PR
 @Service
 @RequiredArgsConstructor
 public class JwtRepository {
-    // " 가 역직렬화시 RedisTemplate<String, Object> 구조에서 붙어서 변경
+    // RedisTemplate<String, Object> 사용 시 역직렬화 과정에서 값에 '"' 가 붙어
+    // Refresh Token 불일치가 발생하므로 StringRedisTemplate 으로 변경
     private final StringRedisTemplate redisTemplate;
 
     //region 토큰 관련
@@ -23,10 +24,6 @@ public class JwtRepository {
                 , expireTime
                 , TimeUnit.MILLISECONDS
         );
-    }
-
-    public String getRefreshToken(String email) {
-        return redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + email);
     }
 
     public String getAndDeleteRefreshToken(String email) {
