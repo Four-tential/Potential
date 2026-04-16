@@ -44,6 +44,10 @@ portone:
   store-id: ${PORTONE_STORE_ID}
   channel-key: ${PORTONE_CHANNEL_KEY}
 
+# Member
+member:
+  default-profile-image-url: ${DEFAULT_PROFILE_IMAGE_URL:https://bucketurl/default-profile-image.png}
+
 # SpringDocs With Swagger
 springdoc:
   swagger-ui:

@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -62,7 +61,6 @@ public class Member extends BaseTimeEntity {
         member.hasOnboarding = false;
         member.role = MemberRole.ROLE_STUDENT;
         member.status = MemberStatus.ACTIVE;
-        member.profileImageUrl = null;
         return member;
     }
 
@@ -81,5 +79,15 @@ public class Member extends BaseTimeEntity {
     public void withdraw() {
         this.status = MemberStatus.WITHDRAWAL;
         this.withdrawalAt = LocalDateTime.now();
+    }
+
+    public void updateInfo(String phone, String profileImageUrl) {
+        if (phone != null) {
+            this.phone = phone;
+        }
+
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
     }
 }

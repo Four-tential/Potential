@@ -28,6 +28,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -49,9 +51,12 @@ class AuthServiceTest {
     @InjectMocks
     private AuthService authService;
 
+    private static final String DEFAULT_PROFILE_IMAGE_URL = "https://bucketurl/default-profile-image.png";
+
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(authService, "refreshTokenExpire", 1_209_600_000L); // 14일(ms)
+        ReflectionTestUtils.setField(authService, "defaultProfileImageUrl", DEFAULT_PROFILE_IMAGE_URL);
     }
 
     @Test
@@ -67,7 +72,11 @@ class AuthServiceTest {
         assertThat(response.name()).isEqualTo(request.name());
         assertThat(response.role()).isEqualTo(MemberRole.ROLE_STUDENT.name());
         assertThat(response.status()).isEqualTo(MemberStatus.ACTIVE.name());
-        verify(memberRepository).save(any(Member.class));
+
+        // 저장되는 Member에 기본 프로필 이미지가 실제로 세팅됐는지 검증
+        ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(memberCaptor.capture());
+        assertThat(memberCaptor.getValue().getProfileImageUrl()).isEqualTo(DEFAULT_PROFILE_IMAGE_URL);
     }
 
     @Test

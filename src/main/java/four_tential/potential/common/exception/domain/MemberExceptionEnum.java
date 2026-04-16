@@ -18,7 +18,8 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_INVALID_STATUS_TRANSITION_TO_APPROVE(HttpStatus.BAD_REQUEST, "PENDING 상태의 신청 건만 승인 할 수 있습니다"),
     ERR_INVALID_STATUS_TRANSITION_TO_REJECT(HttpStatus.BAD_REQUEST, "PENDING 상태의 신청 건만 거절 할 수 있습니다"),
     ERR_BLANK_REJECT_REASON(HttpStatus.BAD_REQUEST, "거절 사유를 입력해주세요"),
-    ERR_WITHDRAWAL_MEMBER(HttpStatus.FORBIDDEN, "탈퇴한 회원입니다")
+    ERR_WITHDRAWAL_MEMBER(HttpStatus.FORBIDDEN, "탈퇴한 회원입니다"),
+    ERR_NO_UPDATE_FIELD(HttpStatus.BAD_REQUEST, "수정할 항목을 하나 이상 입력해주세요")
     ;
 
     private final HttpStatus httpStatus;
