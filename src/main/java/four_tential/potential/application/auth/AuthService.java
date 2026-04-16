@@ -114,13 +114,21 @@ public class AuthService {
     }
 
     public void logOut(String accessToken) {
-        if(!jwtUtil.validateToken(accessToken)) {
+        boolean isValid = jwtUtil.validateToken(accessToken);
+        boolean isExpired = !isValid && jwtUtil.isExpiredToken(accessToken);
+
+        if (!isValid && !isExpired) {
+            // 서명 자체가 잘못된 토큰
             throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
         }
 
-        String email = jwtUtil.extractSubject(accessToken);
+        String email = jwtUtil.extractSubjectAllowExpired(accessToken);
         jwtRepository.deleteRefreshToken(email);
-        jwtRepository.addBlacklist(accessToken, jwtUtil.getRemainingTime(accessToken));
+
+        if (isValid) {
+            // 아직 유효한 토큰만 블랙리스트 등록 (만료된 토큰은 이미 자연 소멸)
+            jwtRepository.addBlacklist(accessToken, jwtUtil.getRemainingTime(accessToken));
+        }
     }
 
 }

@@ -1,5 +1,6 @@
 package four_tential.potential.infra.jwt;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
@@ -74,6 +75,27 @@ public class JwtUtil {
         } catch (JwtException e) {
             log.error("JwtException : {}", e.getMessage());
             return false;
+        }
+    }
+
+    // 서명은 유효하지만 만료된 토큰인지 확인
+    public boolean isExpiredToken(String token) {
+        try {
+            parser.parseSignedClaims(token);
+            return false;
+        } catch (ExpiredJwtException e) {
+            return true;
+        } catch (JwtException e) {
+            return false;
+        }
+    }
+
+    // 만료된 토큰에서도 Subject 추출 (로그아웃 등 만료 허용 케이스)
+    public String extractSubjectAllowExpired(String token) {
+        try {
+            return parser.parseSignedClaims(token).getPayload().getSubject();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims().getSubject();
         }
     }
 
