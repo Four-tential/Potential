@@ -43,6 +43,9 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false, length = 60)
     private String name;
 
+    @Column(nullable = false)
+    private boolean hasOnboarding;
+
     @Setter
     @Column(name = "pf_image_url", length = 300)
     private String profileImageUrl;
@@ -56,10 +59,15 @@ public class Member extends BaseTimeEntity {
         member.password = password;
         member.name = name;
         member.phone = phone;
+        member.hasOnboarding = false;
         member.role = MemberRole.ROLE_STUDENT;
         member.status = MemberStatus.ACTIVE;
         member.profileImageUrl = null;
         return member;
+    }
+
+    public void completeOnboarding() {
+        this.hasOnboarding = true;
     }
 
     public void activate() {

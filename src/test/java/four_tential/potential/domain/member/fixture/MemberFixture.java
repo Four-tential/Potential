@@ -13,4 +13,10 @@ public class MemberFixture {
     public static Member defaultMember() {
         return Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_NAME, DEFAULT_PHONE);
     }
+
+    public static Member memberWithOnboarding() {
+        Member member = Member.register(DEFAULT_EMAIL, DEFAULT_PASSWORD, DEFAULT_NAME, DEFAULT_PHONE);
+        member.completeOnboarding();
+        return member;
+    }
 }

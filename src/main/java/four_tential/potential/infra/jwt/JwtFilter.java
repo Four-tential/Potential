@@ -30,7 +30,7 @@ import java.util.UUID;
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
-    private final TokenRepository tokenRepository;
+    private final JwtRepository jwtRepository;
 
     private static final PathPatternParser patternParser = new PathPatternParser();
 
@@ -38,6 +38,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private static final List<PathPattern> EXCLUDE_PATTERNS = List.of(
             patternParser.parse("/v1/auth/signup"),
             patternParser.parse("/v1/auth/login"),
+            patternParser.parse("/v1/auth/refresh"),
             patternParser.parse("/swagger-ui/**"),
             patternParser.parse("/swagger-ui.html"),
             patternParser.parse("/v3/api-docs/**"),
@@ -66,7 +67,7 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (jwtUtil.validateToken(token) && !tokenRepository.isBlacklist(token)) {
+        if (jwtUtil.validateToken(token) && !jwtRepository.isBlacklist(token)) {
             String email = jwtUtil.extractSubject(token);
             String role = jwtUtil.extractRoleByToken(token);
             UUID memberId = UUID.fromString(jwtUtil.extractMemberIdByToken(token));
