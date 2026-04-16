@@ -41,7 +41,7 @@ class CourseCategoryServiceTest {
         CreateCourseCategoryResponse response = courseCategoryService.createCourseCategory(request);
 
         assertThat(response.code()).isEqualTo("DANCE");
-        assertThat(response.name()).isEqualTo(CourseCategoryFixture.DEFAULT_NAME);
+        assertThat(response.name()).isEqualTo("댄스");
         verify(courseCategoryRepository).save(any(CourseCategory.class));
     }
 
