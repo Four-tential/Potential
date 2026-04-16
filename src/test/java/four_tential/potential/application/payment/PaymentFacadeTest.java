@@ -1,6 +1,7 @@
 package four_tential.potential.application.payment;
 
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.CommonExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
@@ -123,6 +124,7 @@ class PaymentFacadeTest {
         stubOrderAndCourse(orderId, memberId, courseId, 1);
         given(paymentService.createPendingPayment(any(PaymentCreateCommand.class), eq("pg-key-1"), eq(PaymentPayWay.CARD)))
                 .willReturn(payment);
+        given(paymentService.getByPgKey("pg-key-1")).willReturn(payment);
 
         PaymentCreateResponse response = paymentFacade.createPayment(memberId, request);
 
@@ -152,7 +154,7 @@ class PaymentFacadeTest {
                 100000L,
                 "card"
         );
-        Payment payment = Payment.createPending(
+        Payment createdPayment = Payment.createPending(
                 orderId,
                 memberId,
                 null,
@@ -162,24 +164,42 @@ class PaymentFacadeTest {
                 100000L,
                 PaymentPayWay.CARD
         );
+        Payment paymentForWebhook = Payment.createPending(
+                orderId,
+                memberId,
+                null,
+                "pg-key-first-webhook",
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+        Payment latestPayment = Payment.createPending(
+                orderId,
+                memberId,
+                null,
+                "pg-key-first-webhook",
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+        latestPayment.confirmPaid();
         Webhook deferredWebhook = Webhook.receive("webhook-first", "WebhookTransactionPaid");
         deferredWebhook.updatePgKey("pg-key-first-webhook");
 
         given(paymentGateway.getPayment("pg-key-first-webhook")).willReturn(gatewayResponse);
         stubOrderAndCourse(orderId, memberId, courseId, 1);
         given(paymentService.createPendingPayment(any(PaymentCreateCommand.class), eq("pg-key-first-webhook"), eq(PaymentPayWay.CARD)))
-                .willReturn(payment);
+                .willReturn(createdPayment);
         given(webhookService.findProcessablePaidWebhook("pg-key-first-webhook"))
                 .willReturn(Optional.of(deferredWebhook));
         given(webhookService.retry(deferredWebhook, "WebhookTransactionPaid"))
                 .willReturn(deferredWebhook);
-        given(paymentService.getByPgKey("pg-key-first-webhook")).willReturn(payment);
-        given(paymentService.getByPgKeyForUpdate("pg-key-first-webhook")).willReturn(payment);
-        doAnswer(invocation -> {
-            Payment target = invocation.getArgument(0);
-            target.confirmPaid();
-            return null;
-        }).when(paymentService).confirmPaid(payment);
+        given(paymentService.getByPgKey("pg-key-first-webhook"))
+                .willReturn(createdPayment)
+                .willReturn(latestPayment);
+        given(paymentService.getByPgKeyForUpdate("pg-key-first-webhook")).willReturn(paymentForWebhook);
         given(transactionTemplate.execute(any(TransactionCallback.class)))
                 .willAnswer(invocation -> {
                     TransactionCallback<?> callback = invocation.getArgument(0);
@@ -189,7 +209,7 @@ class PaymentFacadeTest {
         PaymentCreateResponse response = paymentFacade.createPayment(memberId, request);
 
         assertThat(response.status()).isEqualTo(PaymentStatus.PAID);
-        verify(paymentService).confirmPaid(payment);
+        verify(paymentService).confirmPaid(paymentForWebhook);
         verify(webhookService).complete(deferredWebhook);
         verify(webhookService, never()).fail(deferredWebhook);
     }
@@ -227,6 +247,34 @@ class PaymentFacadeTest {
                 90000L,
                 "PAYMENT_CREATE_REJECTED"
         ));
+    }
+
+    @Test
+    @DisplayName("락 획득 실패 같은 인프라 예외는 PortOne 결제 취소로 연결하지 않는다")
+    void createPayment_infraFail_doesNotCancelGatewayPayment() {
+        UUID memberId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        PaymentCreateRequest request = new PaymentCreateRequest(
+                orderId,
+                "pg-key-lock-fail",
+                PaymentPayWay.CARD,
+                null
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-lock-fail",
+                "PAID",
+                100000L,
+                "card"
+        );
+
+        given(paymentGateway.getPayment("pg-key-lock-fail")).willReturn(gatewayResponse);
+        given(paymentLockManager.executeWithOrderLock(eq(orderId), any()))
+                .willThrow(new ServiceErrorException(CommonExceptionEnum.ERR_GET_DISTRIBUTED_LOCK_FAIL));
+
+        assertThatThrownBy(() -> paymentFacade.createPayment(memberId, request))
+                .isInstanceOf(ServiceErrorException.class);
+
+        verify(paymentGateway, never()).cancelPayment(any());
     }
 
     @Test
@@ -283,7 +331,7 @@ class PaymentFacadeTest {
         );
 
         stubSuccessTransactionFlow();
-        given(paymentService.findByPgKeyInNewTransaction("payment-1")).willReturn(Optional.of(payment));
+        given(paymentService.findByPgKey("payment-1")).willReturn(Optional.of(payment));
         given(paymentService.getByPgKeyForUpdate("payment-1")).willReturn(payment);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
         given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
@@ -310,53 +358,11 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("결제 완료 웹훅이 결제 생성 저장보다 먼저 오면 잠깐 재조회한 뒤 처리한다")
-    void handleWebhook_paid_beforePaymentSaved_retry() throws Exception {
-        UUID orderId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        UUID courseId = UUID.randomUUID();
-        Order order = createOrder(orderId, memberId, courseId, 1);
-        Course course = createCourse(courseId);
-        Payment payment = Payment.createPending(
-                orderId,
-                memberId,
-                null,
-                "payment-delayed",
-                100000L,
-                0L,
-                100000L,
-                PaymentPayWay.CARD
-        );
-
-        stubSuccessTransactionFlow();
-        given(paymentService.findByPgKeyInNewTransaction("payment-delayed"))
-                .willReturn(Optional.empty())
-                .willReturn(Optional.of(payment));
-        given(paymentService.getByPgKeyForUpdate("payment-delayed")).willReturn(payment);
-        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        WebhookTransactionPaid verified =
-                new WebhookTransactionPaid(new TestWebhookTransactionData("payment-delayed"));
-
-        given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
-                .willReturn(verified);
-
-        assertThatCode(() ->
-                paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
-                .doesNotThrowAnyException();
-
-        verify(paymentService, times(2)).findByPgKeyInNewTransaction("payment-delayed");
-        verify(paymentService).confirmPaid(payment);
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
-        assertThat(course.getConfirmCount()).isEqualTo(1);
-    }
-
-    @Test
     @DisplayName("결제 완료 웹훅이 먼저 왔지만 결제가 아직 저장되지 않았으면 실패가 아니라 대기 상태로 남긴다")
     void handleWebhook_paid_beforePaymentSaved_defer() throws Exception {
-        stubSuccessTransactionFlow();
-        given(paymentService.findByPgKeyInNewTransaction("payment-not-yet-saved"))
+        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
+        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(paymentService.findByPgKey("payment-not-yet-saved"))
                 .willReturn(Optional.empty());
         WebhookTransactionPaid verified =
                 new WebhookTransactionPaid(new TestWebhookTransactionData("payment-not-yet-saved"));
@@ -368,7 +374,8 @@ class PaymentFacadeTest {
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
                 .doesNotThrowAnyException();
 
-        verify(paymentService, times(15)).findByPgKeyInNewTransaction("payment-not-yet-saved");
+        verify(paymentService).findByPgKey("payment-not-yet-saved");
+        verify(webhookService).defer(savedWebhook, "WebhookTransactionPaid", "payment-not-yet-saved");
         verify(paymentService, never()).confirmPaid(any());
         verify(webhookService, never()).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
@@ -463,13 +470,7 @@ class PaymentFacadeTest {
         given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
-                .willAnswer(invocation -> {
-                    TransactionCallback<?> callback = invocation.getArgument(0);
-                    return callback.doInTransaction(transactionStatus);
-                })
-                .willAnswer(invocation -> {
-                    throw new RuntimeException("business failed");
-                });
+                .willThrow(new RuntimeException("business failed"));
 
         given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
 
@@ -507,12 +508,6 @@ class PaymentFacadeTest {
     }
 
     private void stubReceiveTransaction() {
-        given(transactionTemplate.execute(any(TransactionCallback.class)))
-                .willAnswer(invocation -> {
-                    TransactionCallback<?> callback = invocation.getArgument(0);
-                    return callback.doInTransaction(transactionStatus);
-                });
-
         given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
     }
 
@@ -520,10 +515,6 @@ class PaymentFacadeTest {
         given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
-                .willAnswer(invocation -> {
-                    TransactionCallback<?> callback = invocation.getArgument(0);
-                    return callback.doInTransaction(transactionStatus);
-                })
                 .willAnswer(invocation -> {
                     TransactionCallback<?> callback = invocation.getArgument(0);
                     return callback.doInTransaction(transactionStatus);

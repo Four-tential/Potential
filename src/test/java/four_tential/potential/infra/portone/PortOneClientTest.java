@@ -12,7 +12,9 @@ class PortOneClientTest {
     void createClient_with_properties() {
         PortOneProperties properties = new PortOneProperties();
         properties.setApiSecret("test-api-secret");
+        properties.setWebhookSecret("test-webhook-secret");
         properties.setStoreId("store-test");
+        properties.setChannelKey("channel-test");
 
         PortOneClient portOneClient = new PortOneClient(properties);
 

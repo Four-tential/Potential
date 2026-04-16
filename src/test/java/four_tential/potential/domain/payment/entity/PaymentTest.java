@@ -156,7 +156,7 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("confirmPaid 호출 시 pgKey 가 저장된다")
+    @DisplayName("confirmPaid 호출 시 기존 pgKey 가 유지된다")
     void confirmPaid_pgKey() {
         Payment payment = createPayment();
         payment.confirmPaid();
