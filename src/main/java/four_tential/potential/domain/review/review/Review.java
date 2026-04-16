@@ -44,4 +44,9 @@ public class Review extends BaseTimeEntity {
         review.content = content;
         return review;
     }
+
+    public void update(int rating, String content) {
+        this.rating = rating;
+        this.content = content;
+    }
 }
