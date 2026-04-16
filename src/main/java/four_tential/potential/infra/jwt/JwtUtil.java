@@ -80,6 +80,8 @@ public class JwtUtil {
 
     // 서명은 유효하지만 만료된 토큰인지 확인
     public boolean isExpiredToken(String token) {
+        if(token == null || token.isBlank()) return false;
+
         try {
             parser.parseSignedClaims(token);
             return false;

@@ -34,6 +34,9 @@ public class AuthService {
     @Value("${jwt.secret.refreshExpire}")
     private Long refreshTokenExpire;
 
+    @Value("${member.default-profile-image-url}")
+    private String defaultProfileImageUrl;
+
     @Transactional
     public SignUpResponse signUp(SignUpRequest request) {
         boolean memberExists = memberRepository.existsByEmail(request.email());
@@ -48,6 +51,8 @@ public class AuthService {
                 request.name(),
                 request.phone()
         );
+
+        newMember.setProfileImageUrl(defaultProfileImageUrl);
 
         memberRepository.save(newMember);
 
