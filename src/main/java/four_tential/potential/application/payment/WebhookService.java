@@ -23,8 +23,14 @@ public class WebhookService {
      */
     @Transactional
     public Webhook receive(String recWebhookId, String eventStatus) {
-        Webhook webhook = Webhook.receive(recWebhookId, eventStatus);
-        return webhookRepository.save(webhook);
+        return webhookRepository.findByRecWebhookId(recWebhookId)
+                .map(webhook -> {
+                    if (!webhook.isCompleted()) {
+                        webhook.retry(eventStatus);
+                    }
+                    return webhook;
+                })
+                .orElseGet(() -> webhookRepository.save(Webhook.receive(recWebhookId, eventStatus)));
     }
 
     /**
@@ -36,6 +42,18 @@ public class WebhookService {
     @Transactional(readOnly = true)
     public boolean isDuplicate(String recWebhookId) {
         return webhookRepository.existsByRecWebhookId(recWebhookId);
+    }
+
+    /**
+     *
+     * webhook-id 기준으로 이미 성공 처리된 웹훅인지 확인
+     * COMPLETED라면 멱등성 처리를 위해 이후 로직을 실행하지 않음
+     */
+    @Transactional(readOnly = true)
+    public boolean isCompleted(String recWebhookId) {
+        return webhookRepository.findByRecWebhookId(recWebhookId)
+                .map(Webhook::isCompleted)
+                .orElse(false);
     }
 
     /**

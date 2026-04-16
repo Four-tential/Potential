@@ -1,8 +1,21 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.fixture.CourseFixture;
+import four_tential.potential.domain.order.Order;
+import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.Webhook;
+import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.port.PaymentGateway;
+import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.infra.portone.PortOneWebhookHandler;
+import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
+import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
@@ -19,7 +32,11 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigInteger;
 import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -50,6 +67,15 @@ class PaymentFacadeTest {
     private TransactionTemplate transactionTemplate;
 
     @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private CourseRepository courseRepository;
+
+    @Mock
+    private PaymentDistributedLockExecutor paymentLockManager;
+
+    @Mock
     private TransactionStatus transactionStatus;
 
     private Webhook savedWebhook;
@@ -57,16 +83,96 @@ class PaymentFacadeTest {
     @BeforeEach
     void setUp() {
         savedWebhook = Webhook.receive("test-webhook-id", "UNKNOWN");
+        stubLocks();
     }
 
     @Test
-    @DisplayName("중복 웹훅이면 이후 로직을 수행하지 않는다")
+    @DisplayName("결제 생성 검증 성공 시 PENDING 결제를 생성한다")
+    void createPayment_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        PaymentCreateRequest request = new PaymentCreateRequest(
+                orderId,
+                "pg-key-1",
+                PaymentPayWay.CARD,
+                null
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-1",
+                "PAID",
+                100000L,
+                "card"
+        );
+        Payment payment = Payment.createPending(
+                orderId,
+                memberId,
+                null,
+                "pg-key-1",
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+
+        given(paymentGateway.getPayment("pg-key-1")).willReturn(gatewayResponse);
+        stubOrderAndCourse(orderId, memberId, courseId, 1);
+        given(paymentService.createPendingPayment(any(PaymentCreateCommand.class), eq("pg-key-1"), eq(PaymentPayWay.CARD)))
+                .willReturn(payment);
+
+        PaymentCreateResponse response = paymentFacade.createPayment(memberId, request);
+
+        assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.paidTotalPrice()).isEqualTo(100000L);
+        verify(paymentLockManager).executeWithOrderLock(eq(orderId), any());
+        verify(paymentService).validateNoPayment(orderId);
+        verify(paymentService).validateGatewayPayment(any(PaymentCreateCommand.class), eq("pg-key-1"), eq(PaymentPayWay.CARD), eq(gatewayResponse));
+        verify(paymentGateway, never()).cancelPayment(any());
+    }
+
+    @Test
+    @DisplayName("결제 생성 검증 실패 시 PortOne 결제 취소를 요청한다")
+    void createPayment_validationFail_cancelGatewayPayment() {
+        UUID memberId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        PaymentCreateRequest request = new PaymentCreateRequest(
+                orderId,
+                "pg-key-2",
+                PaymentPayWay.CARD,
+                null
+        );
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
+                "pg-key-2",
+                "PAID",
+                90000L,
+                "card"
+        );
+
+        given(paymentGateway.getPayment("pg-key-2")).willReturn(gatewayResponse);
+        stubOrderAndCourse(orderId, memberId, courseId, 1);
+        doThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH))
+                .when(paymentService)
+                .validateGatewayPayment(any(PaymentCreateCommand.class), eq("pg-key-2"), eq(PaymentPayWay.CARD), eq(gatewayResponse));
+
+        assertThatThrownBy(() -> paymentFacade.createPayment(memberId, request))
+                .isInstanceOf(ServiceErrorException.class);
+
+        verify(paymentGateway).cancelPayment(PaymentGatewayRequest.of(
+                "pg-key-2",
+                90000L,
+                "PAYMENT_CREATE_REJECTED"
+        ));
+    }
+
+    @Test
+    @DisplayName("완료된 중복 웹훅이면 이후 로직을 수행하지 않는다")
     void handleWebhook_duplicate() throws Exception {
-        given(webhookService.isDuplicate("test-webhook-id")).willReturn(true);
+        given(webhookService.isCompleted("test-webhook-id")).willReturn(true);
 
         paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature");
 
-        verify(webhookService).isDuplicate("test-webhook-id");
+        verify(webhookService).isCompleted("test-webhook-id");
         verify(webhookService, never()).receive(any(), any());
         verify(portOneWebhookHandler, never()).verify(any(), any(), any(), any());
         verify(transactionTemplate, never()).execute(any(TransactionCallback.class));
@@ -76,12 +182,12 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("서명 검증 실패 시 WebhookVerificationException을 던지고 완료/실패 처리는 하지 않는다")
+    @DisplayName("서명 검증 실패 시 WebhookVerificationException 을 던지고 웹훅 실패 상태를 저장한다")
     void handleWebhook_verificationFail() throws Exception {
-        given(webhookService.isDuplicate("test-webhook-id")).willReturn(false);
+        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
         stubReceiveTransaction();
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
-                .willThrow(new WebhookVerificationException("검증 실패", new RuntimeException()));
+                .willThrow(new WebhookVerificationException("verify failed", new RuntimeException()));
 
         assertThatThrownBy(() ->
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
@@ -89,14 +195,34 @@ class PaymentFacadeTest {
 
         verify(webhookService).receive("test-webhook-id", "UNKNOWN");
         verify(webhookService, never()).complete(any());
-        verify(webhookService, never()).fail(any());
+        verify(webhookService).fail(savedWebhook);
         verifyNoInteractions(paymentService);
     }
 
     @Test
     @DisplayName("결제 완료 웹훅이면 결제 완료 처리 후 webhook 완료 상태로 저장한다")
     void handleWebhook_paid() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Order order = createOrder(orderId, memberId, courseId, 1);
+        Course course = createCourse(courseId);
+        Payment payment = Payment.createPending(
+                orderId,
+                memberId,
+                null,
+                "payment-1",
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+
         stubSuccessTransactionFlow();
+        given(paymentService.findByPgKey("payment-1")).willReturn(Optional.of(payment));
+        given(paymentService.getByPgKeyForUpdate("payment-1")).willReturn(payment);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
         WebhookTransactionPaid verified =
                 new WebhookTransactionPaid(new TestWebhookTransactionData("payment-1"));
 
@@ -107,10 +233,11 @@ class PaymentFacadeTest {
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
                 .doesNotThrowAnyException();
 
-        verify(paymentService).confirmPaid("payment-1");
-        verify(paymentService, never()).fail(any());
+        verify(paymentService).confirmPaid(payment);
+        verify(paymentService, never()).fail(any(Payment.class));
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
+        assertThat(course.getConfirmCount()).isEqualTo(1);
 
         Object eventStatus = ReflectionTestUtils.getField(savedWebhook, "eventStatus");
         if (eventStatus != null) {
@@ -119,9 +246,54 @@ class PaymentFacadeTest {
     }
 
     @Test
+    @DisplayName("결제 완료 웹훅이 결제 생성 저장보다 먼저 오면 잠깐 재조회한 뒤 처리한다")
+    void handleWebhook_paid_beforePaymentSaved_retry() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Order order = createOrder(orderId, memberId, courseId, 1);
+        Course course = createCourse(courseId);
+        Payment payment = Payment.createPending(
+                orderId,
+                memberId,
+                null,
+                "payment-delayed",
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+
+        stubSuccessTransactionFlow();
+        given(paymentService.findByPgKey("payment-delayed"))
+                .willReturn(Optional.empty())
+                .willReturn(Optional.of(payment));
+        given(paymentService.getByPgKeyForUpdate("payment-delayed")).willReturn(payment);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        WebhookTransactionPaid verified =
+                new WebhookTransactionPaid(new TestWebhookTransactionData("payment-delayed"));
+
+        given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
+                .willReturn(verified);
+
+        assertThatCode(() ->
+                paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
+                .doesNotThrowAnyException();
+
+        verify(paymentService, times(2)).findByPgKey("payment-delayed");
+        verify(paymentService).confirmPaid(payment);
+        verify(webhookService).complete(savedWebhook);
+        verify(webhookService, never()).fail(savedWebhook);
+        assertThat(course.getConfirmCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("결제 실패 웹훅이면 결제 실패 처리 후 webhook 완료 상태로 저장한다")
     void handleWebhook_failed() throws Exception {
+        Payment payment = createPayment("payment-2");
         stubSuccessTransactionFlow();
+        given(paymentService.getByPgKeyForUpdate("payment-2")).willReturn(payment);
         WebhookTransactionFailed verified =
                 new WebhookTransactionFailed(new TestWebhookTransactionData("payment-2"));
 
@@ -132,7 +304,7 @@ class PaymentFacadeTest {
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
                 .doesNotThrowAnyException();
 
-        verify(paymentService).fail("payment-2");
+        verify(paymentService).fail(payment);
         verify(paymentService, never()).confirmPaid(any());
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
@@ -141,7 +313,9 @@ class PaymentFacadeTest {
     @Test
     @DisplayName("결제 취소 웹훅이면 결제 실패 처리 후 webhook 완료 상태로 저장한다")
     void handleWebhook_cancelled() throws Exception {
+        Payment payment = createPayment("payment-3");
         stubSuccessTransactionFlow();
+        given(paymentService.getByPgKeyForUpdate("payment-3")).willReturn(payment);
         WebhookTransactionCancelled verified =
                 new WebhookTransactionCancelled(new TestWebhookTransactionData("payment-3"));
 
@@ -152,14 +326,14 @@ class PaymentFacadeTest {
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
                 .doesNotThrowAnyException();
 
-        verify(paymentService).fail("payment-3");
+        verify(paymentService).fail(payment);
         verify(paymentService, never()).confirmPaid(any());
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
     }
 
     @Test
-    @DisplayName("처리되지 않은 트랜잭션 타입이면 결제 서비스 호출 없이 webhook 완료 상태만 저장한다")
+    @DisplayName("처리하지 않는 트랜잭션 타입이면 결제 서비스 호출 없이 webhook 완료 상태만 저장한다")
     void handleWebhook_unknownTransactionType() throws Exception {
         stubSuccessTransactionFlow();
         WebhookTransactionUnknown verified =
@@ -173,7 +347,7 @@ class PaymentFacadeTest {
                 .doesNotThrowAnyException();
 
         verify(paymentService, never()).confirmPaid(any());
-        verify(paymentService, never()).fail(any());
+        verify(paymentService, never()).fail(any(Payment.class));
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
     }
@@ -192,7 +366,7 @@ class PaymentFacadeTest {
                 .doesNotThrowAnyException();
 
         verify(paymentService, never()).confirmPaid(any());
-        verify(paymentService, never()).fail(any());
+        verify(paymentService, never()).fail(any(Payment.class));
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
     }
@@ -200,7 +374,7 @@ class PaymentFacadeTest {
     @Test
     @DisplayName("비즈니스 처리 중 예외가 발생하면 webhook 실패 상태 저장 후 예외를 다시 던진다")
     void handleWebhook_businessFail() throws Exception {
-        given(webhookService.isDuplicate("test-webhook-id")).willReturn(false);
+        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
                 .willAnswer(invocation -> {
@@ -208,13 +382,13 @@ class PaymentFacadeTest {
                     return callback.doInTransaction(transactionStatus);
                 })
                 .willAnswer(invocation -> {
-                    throw new RuntimeException("비즈니스 처리 실패");
+                    throw new RuntimeException("business failed");
                 });
 
         given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
 
-        WebhookTransactionPaid verified =
-                new WebhookTransactionPaid(new TestWebhookTransactionData("payment-5"));
+        WebhookTransactionFailed verified =
+                new WebhookTransactionFailed(new TestWebhookTransactionData("payment-5"));
 
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
                 .willReturn(verified);
@@ -222,10 +396,28 @@ class PaymentFacadeTest {
         assertThatThrownBy(() ->
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessage("비즈니스 처리 실패");
+                .hasMessage("business failed");
 
         verify(webhookService).fail(savedWebhook);
         verify(webhookService, never()).complete(savedWebhook);
+    }
+
+    private void stubLocks() {
+        lenient().when(paymentLockManager.executeWithOrderLock(any(UUID.class), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(1);
+                    return supplier.get();
+                });
+        lenient().when(paymentLockManager.executeWithCourseLock(any(UUID.class), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(1);
+                    return supplier.get();
+                });
+        lenient().when(paymentLockManager.executeWithPgKeyLock(any(String.class), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(1);
+                    return supplier.get();
+                });
     }
 
     private void stubReceiveTransaction() {
@@ -239,7 +431,7 @@ class PaymentFacadeTest {
     }
 
     private void stubSuccessTransactionFlow() {
-        given(webhookService.isDuplicate("test-webhook-id")).willReturn(false);
+        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
                 .willAnswer(invocation -> {
@@ -254,15 +446,47 @@ class PaymentFacadeTest {
         given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
     }
 
-    /**
-     * PortOne SDK Webhook 인터페이스 테스트용 더미
-     */
+    private void stubOrderAndCourse(UUID orderId, UUID memberId, UUID courseId, int orderCount) {
+        Order order = createOrder(orderId, memberId, courseId, orderCount);
+        Course course = createCourse(courseId);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+    }
+
+    private Order createOrder(UUID orderId, UUID memberId, UUID courseId, int orderCount) {
+        Order order = Order.register(
+                memberId,
+                courseId,
+                orderCount,
+                BigInteger.valueOf(100000),
+                "test course"
+        );
+        ReflectionTestUtils.setField(order, "id", orderId);
+        return order;
+    }
+
+    private Course createCourse(UUID courseId) {
+        Course course = CourseFixture.defaultCourse();
+        ReflectionTestUtils.setField(course, "id", courseId);
+        return course;
+    }
+
+    private Payment createPayment(String pgKey) {
+        return Payment.createPending(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                pgKey,
+                100000L,
+                0L,
+                100000L,
+                PaymentPayWay.CARD
+        );
+    }
+
     private static class PlainWebhook implements io.portone.sdk.server.webhook.Webhook {
     }
 
-    /**
-     * PortOne SDK WebhookTransactionData 테스트용 더미
-     */
     private static class TestWebhookTransactionData implements WebhookTransactionData {
         private final String paymentId;
         private final String storeId;
@@ -292,9 +516,6 @@ class PaymentFacadeTest {
         }
     }
 
-    /**
-     * 반복 구현 줄이기 위한 공통 부모
-     */
     private abstract static class BaseWebhookTransaction implements WebhookTransaction {
         protected final WebhookTransactionData data;
 
@@ -313,9 +534,6 @@ class PaymentFacadeTest {
         }
     }
 
-    /**
-     * getClass().getSimpleName() 값이 PaymentFacade switch 분기명과 같아야 함
-     */
     private static class WebhookTransactionPaid extends BaseWebhookTransaction {
         private WebhookTransactionPaid(WebhookTransactionData data) {
             super(data);
