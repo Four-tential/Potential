@@ -5,6 +5,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.review.dto.request.ReviewCreateRequest;
 import four_tential.potential.presentation.review.dto.request.ReviewUpdateRequest;
+import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +93,18 @@ public class ReviewController {
         reviewService.delete(principal.memberId(), reviewId);
         return ResponseEntity.ok(
                 BaseResponse.success(HttpStatus.OK.name(), "후기가 삭제되었습니다", null)
+        );
+    }
+
+    // 후기 좋아요 토글 (등록 / 해제)
+    @PostMapping("/reviews/{reviewId}/likes")
+    public ResponseEntity<BaseResponse<ReviewLikeResponse>> toggleLike(
+            @PathVariable UUID reviewId,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        ReviewLikeResponse response = reviewService.toggleLike(principal.memberId(), reviewId);
+        return ResponseEntity.ok(
+                BaseResponse.success(HttpStatus.OK.name(), "좋아요가 처리되었습니다", response)
         );
     }
 }
