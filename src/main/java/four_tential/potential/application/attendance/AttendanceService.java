@@ -89,18 +89,19 @@ public class AttendanceService {
         UUID courseId = qrTokenRepository.findCourseIdByToken(qrToken)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_FOUND));
 
-        if (attendanceRepository.existsAttendByMemberIdAndCourseId(memberId, courseId)) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED);
-        }
-
         // 예약 확정 여부 검증
         if (!orderRepository.existsByMemberIdAndCourseIdAndStatus(
                 memberId, courseId, OrderStatus.CONFIRMED)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ORDER_NOT_CONFIRMED);
         }
 
-        Attendance attendance = attendanceRepository.findByMemberIdAndCourseIdQuery(memberId, courseId)
+        // FOR UPDATE 로 행 잠금 + 상태 체크를 원자화
+        Attendance attendance = attendanceRepository.findByMemberIdAndCourseIdForUpdate(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_ENROLLED));
+
+        if (attendance.getStatus() == AttendanceStatus.ATTEND) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED);
+        }
 
         attendance.attend(qrToken);
 

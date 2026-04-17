@@ -2,6 +2,7 @@ package four_tential.potential.domain.attendance;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -82,5 +83,19 @@ public class AttendanceRepositoryImpl implements AttendanceRepositoryCustom {
                         attendance.status.eq(AttendanceStatus.ATTEND)
                 )
                 .fetchFirst() != null;
+    }
+
+    @Override
+    public Optional<Attendance> findByMemberIdAndCourseIdForUpdate(UUID memberId, UUID courseId) {
+        return Optional.ofNullable(
+                queryFactory
+                        .selectFrom(attendance)
+                        .where(
+                                attendance.memberId.eq(memberId),
+                                attendance.courseId.eq(courseId)
+                        )
+                        .setLockMode(LockModeType.PESSIMISTIC_WRITE)  // FOR UPDATE
+                        .fetchOne()
+        );
     }
 }

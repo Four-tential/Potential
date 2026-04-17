@@ -15,4 +15,6 @@ public interface AttendanceRepositoryCustom {
 
     // 중복 출석 확인
     boolean existsAttendByMemberIdAndCourseId(UUID memberId, UUID courseId);
+
+    Optional<Attendance> findByMemberIdAndCourseIdForUpdate(UUID memberId, UUID courseId);
 }
