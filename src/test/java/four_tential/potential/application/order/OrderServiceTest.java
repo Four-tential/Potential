@@ -12,6 +12,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
@@ -109,33 +113,40 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 주문들을 자동 만료 처리한다")
-    void processExpiredOrders_success() {
+    @DisplayName("만료된 주문들을 배치 단위로 자동 만료 처리한다")
+    void processExpiredBatch_success() {
         // given
+        LocalDateTime now = LocalDateTime.now();
+        int batchSize = 100;
         Order expiredOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "만료대상"));
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class)))
-                .willReturn(List.of(expiredOrder));
+        Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
+        
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
+                .willReturn(expiredSlice);
 
         // when
-        orderService.processExpiredOrders();
+        int processedCount = orderService.processExpiredBatch(now, batchSize);
 
         // then
+        assertThat(processedCount).isEqualTo(1);
         assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class));
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
     }
 
     @Test
-    @DisplayName("만료된 주문이 없으면 아무 일도 일어나지 않는다")
-    void processExpiredOrders_empty() {
+    @DisplayName("만료된 주문이 없으면 처리 건수가 0이다")
+    void processExpiredBatch_empty() {
         // given
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class)))
-                .willReturn(Collections.emptyList());
+        LocalDateTime now = LocalDateTime.now();
+        int batchSize = 100;
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
+                .willReturn(new SliceImpl<>(Collections.emptyList()));
 
         // when
-        orderService.processExpiredOrders();
+        int processedCount = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class));
-        verifyNoMoreInteractions(orderRepository);
+        assertThat(processedCount).isEqualTo(0);
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
     }
 }
