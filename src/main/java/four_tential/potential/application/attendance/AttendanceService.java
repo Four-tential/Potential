@@ -2,9 +2,12 @@ package four_tential.potential.application.attendance;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
+import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
@@ -19,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,15 +37,31 @@ public class AttendanceService {
     private final SseEmitterRepository sseEmitterRepository;
     private final AttendanceQueryService attendanceQueryService;
     private final SseAttendanceEventPublisher sseAttendanceEventPublisher;
+    private final CourseRepository courseRepository;
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
+    private static final long QR_OPEN_MINUTES   = 10L;  // QR 생성 가능 시간
 
     // QR 생성(강사 전용)
     public byte[] createQr(UUID courseId, UUID instructorId) {
-        /*TODO: 코스, 유저 도메인 추가 시 추가할 검증
-            1. 강사 본인 코스인 지
-            2. 코스 시작 후 10분 이내 인 지
-        */
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        // 강사 본인 코스인지 검증
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
+        // 코스 시작 이후인지 검증
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(course.getStartAt())) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_STARTED);
+        }
+
+        // 코스 시작 후 10분 이내인지 검증
+        if (now.isAfter(course.getStartAt().plusMinutes(QR_OPEN_MINUTES))) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_EXPIRED_WINDOW);
+        }
 
         String token = UUID.randomUUID().toString();
 

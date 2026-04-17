@@ -37,6 +37,11 @@ public class AttendanceController {
             @PathVariable UUID courseId,
             @AuthenticationPrincipal MemberPrincipal principal
     ) {
+        // 강사 권한 검증
+        if (!MemberRole.ROLE_INSTRUCTOR.name().equals(principal.role())) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
         byte[] qrImage = attendanceService.createQr(courseId, principal.memberId());
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_PNG)
