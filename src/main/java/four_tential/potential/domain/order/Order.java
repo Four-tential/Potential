@@ -1,6 +1,8 @@
 package four_tential.potential.domain.order;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -67,5 +69,25 @@ public class Order extends BaseTimeEntity {
         // 객체 생성 시점에 만료 시간을 결정하기 위해 현재 시각을 기준으로 계산
         order.expireAt = LocalDateTime.now().plusMinutes(ORDER_EXPIRATION_MINUTES);
         return order;
+    }
+
+    /**
+     * 결제 완료 처리
+     */
+    public void completePayment() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_NOT_PENDING_ORDER);
+        }
+        this.status = OrderStatus.PAID;
+    }
+
+    /**
+     * 주문 만료 처리
+     */
+    public void expire() {
+        if (this.status != OrderStatus.PENDING) {
+            return;
+        }
+        this.status = OrderStatus.EXPIRED;
     }
 }

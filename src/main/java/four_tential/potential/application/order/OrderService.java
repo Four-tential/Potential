@@ -4,6 +4,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -71,5 +74,37 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Page<Order> getMyOrders(UUID memberId, Pageable pageable) {
         return orderRepository.findMyOrders(memberId, pageable);
+    }
+
+    /**
+     * 결제 완료 처리
+     */
+    @Transactional
+    public void completePayment(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+
+        order.completePayment();
+        log.info("주문 결제 완료 처리됨: orderId={}", orderId);
+    }
+
+    /**
+     * 만료된 주문 자동 만료 처리
+     * Scheduler에서 호출 예정
+     */
+    @Transactional
+    public void processExpiredOrders() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Order> expiredOrders = orderRepository.findAllByStatusAndExpireAtBefore(OrderStatus.PENDING, now);
+
+        if (expiredOrders.isEmpty()) {
+            return;
+        }
+
+        for (Order order : expiredOrders) {
+            order.expire();
+            // TODO: Redis 재고 해제 및 대기열 이관 로직 연동 필요
+            log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
+        }
     }
 }

@@ -4,6 +4,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,15 +14,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -86,5 +90,52 @@ class OrderServiceTest {
         assertThatThrownBy(() -> orderService.getOrderDetails(orderId, memberId))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_NOT_FOUND_ORDER.getMessage());
+    }
+
+    @Test
+    @DisplayName("결제 완료 처리를 성공한다")
+    void completePayment_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트"));
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        orderService.completePayment(orderId);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(orderRepository).findById(orderId);
+    }
+
+    @Test
+    @DisplayName("만료된 주문들을 자동 만료 처리한다")
+    void processExpiredOrders_success() {
+        // given
+        Order expiredOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "만료대상"));
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class)))
+                .willReturn(List.of(expiredOrder));
+
+        // when
+        orderService.processExpiredOrders();
+
+        // then
+        assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("만료된 주문이 없으면 아무 일도 일어나지 않는다")
+    void processExpiredOrders_empty() {
+        // given
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class)))
+                .willReturn(Collections.emptyList());
+
+        // when
+        orderService.processExpiredOrders();
+
+        // then
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class));
+        verifyNoMoreInteractions(orderRepository);
     }
 }
