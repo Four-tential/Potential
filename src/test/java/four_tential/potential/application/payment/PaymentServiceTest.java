@@ -96,6 +96,17 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("findByPgKeyForUpdate 호출 시 Optional Payment 를 반환한다")
+    void findByPgKeyForUpdate_returns_optional_payment() {
+        Payment payment = createPayment();
+        given(paymentRepository.findByPgKeyForUpdate("portone_key_123")).willReturn(Optional.of(payment));
+
+        Optional<Payment> result = paymentService.findByPgKeyForUpdate("portone_key_123");
+
+        assertThat(result).contains(payment);
+    }
+
+    @Test
     @DisplayName("validateNoPayment 는 같은 주문의 결제가 이미 있으면 예외가 발생한다")
     void validateNoPayment_throws_when_payment_exists() {
         UUID orderId = UUID.randomUUID();

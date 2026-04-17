@@ -584,7 +584,7 @@ class PaymentFacadeTest {
     void handleWebhook_failed() throws Exception {
         Payment payment = createPayment("payment-2");
         stubSuccessTransactionFlow();
-        given(paymentService.getByPgKeyForUpdate("payment-2")).willReturn(payment);
+        given(paymentService.findByPgKeyForUpdate("payment-2")).willReturn(Optional.of(payment));
         WebhookTransactionFailed verified =
                 new WebhookTransactionFailed(new TestWebhookTransactionData("payment-2"));
 
@@ -606,7 +606,7 @@ class PaymentFacadeTest {
     void handleWebhook_cancelled() throws Exception {
         Payment payment = createPayment("payment-3");
         stubSuccessTransactionFlow();
-        given(paymentService.getByPgKeyForUpdate("payment-3")).willReturn(payment);
+        given(paymentService.findByPgKeyForUpdate("payment-3")).willReturn(Optional.of(payment));
         WebhookTransactionCancelled verified =
                 new WebhookTransactionCancelled(new TestWebhookTransactionData("payment-3"));
 
@@ -618,6 +618,27 @@ class PaymentFacadeTest {
                 .doesNotThrowAnyException();
 
         verify(paymentService).fail(payment);
+        verify(paymentService, never()).confirmPaid(any());
+        verify(webhookService).complete(savedWebhook);
+        verify(webhookService, never()).fail(savedWebhook);
+    }
+
+    @Test
+    @DisplayName("결제 실패 웹훅이 먼저 도착해 결제가 없으면 예외 없이 webhook 만 완료 처리한다")
+    void handleWebhook_failedWithoutPayment_completesWebhookOnly() throws Exception {
+        stubSuccessTransactionFlow();
+        given(paymentService.findByPgKeyForUpdate("payment-missing")).willReturn(Optional.empty());
+        WebhookTransactionFailed verified =
+                new WebhookTransactionFailed(new TestWebhookTransactionData("payment-missing"));
+
+        given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
+                .willReturn(verified);
+
+        assertThatCode(() ->
+                paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
+                .doesNotThrowAnyException();
+
+        verify(paymentService, never()).fail(any(Payment.class));
         verify(paymentService, never()).confirmPaid(any());
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);

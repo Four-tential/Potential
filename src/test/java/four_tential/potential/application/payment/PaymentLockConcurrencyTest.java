@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,6 +77,33 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         paymentRepository.deleteAll();
         orderRepository.deleteAll();
         courseRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("같은 orderId로 동시에 요청해도 분산락으로 한 번에 하나씩만 처리된다")
+    void distributedLock_sameOrderId_serializesCriticalSection() throws InterruptedException {
+        UUID orderId = UUID.randomUUID();
+        AtomicInteger activeCount = new AtomicInteger();
+        AtomicInteger maxActiveCount = new AtomicInteger();
+        AtomicInteger successCount = new AtomicInteger();
+
+        ConcurrentResult result = runConcurrently(THREAD_COUNT, () ->
+                paymentDistributedLockExecutor.executeWithOrderLock(orderId, () -> {
+                    enterCriticalSection(activeCount, maxActiveCount);
+                    try {
+                        sleep(80L);
+                        successCount.incrementAndGet();
+                        return null;
+                    } finally {
+                        activeCount.decrementAndGet();
+                    }
+                })
+        );
+
+        assertThat(result.completed()).isTrue();
+        assertThat(result.errors()).isEmpty();
+        assertThat(successCount.get()).isEqualTo(THREAD_COUNT);
+        assertThat(maxActiveCount.get()).isEqualTo(1);
     }
 
     @Test
@@ -172,8 +200,8 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPaidAt()).isNotNull();
         assertThat(updatedCourse.getConfirmCount()).isEqualTo(1);
-        assertThat(webhooks).hasSize(THREAD_COUNT);
         assertThat(webhooks)
+                .hasSize(THREAD_COUNT)
                 .allSatisfy(webhook -> {
                     assertThat(webhook.getStatus()).isEqualTo(WebhookStatus.COMPLETED);
                     assertThat(webhook.getPgKey()).isEqualTo(pgKey);
@@ -249,12 +277,7 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
     }
 
     private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(millis));
     }
 
     @FunctionalInterface

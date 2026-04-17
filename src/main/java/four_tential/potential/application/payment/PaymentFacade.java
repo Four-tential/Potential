@@ -233,15 +233,28 @@ public class PaymentFacade {
         switch (event.eventType()) {
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID:
                 return completePaidWebhook(event.pgKey());
-            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED:
-            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
-                Payment payment = paymentService.getByPgKeyForUpdate(event.pgKey());
-                paymentService.fail(payment);
-                return PaymentCancelDecision.none();
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED,
+                 PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
+                return failPaymentIfExists(event.pgKey());
             default:
                 log.warn("[PORTONE_WEBHOOK] unsupported event type. type={}", event.eventType());
                 return PaymentCancelDecision.none();
         }
+    }
+
+    /**
+     * 실패/취소 웹훅을 처리한다.
+     * 결제 생성 API가 호출되지 않은 실패 결제일 수 있으므로 payment row가 없으면 예외가 아니라 완료 처리한다.
+     */
+    private PaymentCancelDecision failPaymentIfExists(String pgKey) {
+        Optional<Payment> payment = paymentService.findByPgKeyForUpdate(pgKey);
+        if (payment.isEmpty()) {
+            log.info("[PORTONE_WEBHOOK] payment not found for failed/cancelled event. webhook completed. pgKey={}", pgKey);
+            return PaymentCancelDecision.none();
+        }
+
+        paymentService.fail(payment.get());
+        return PaymentCancelDecision.none();
     }
 
     /**

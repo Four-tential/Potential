@@ -48,6 +48,14 @@ public class PaymentService {
     }
 
     /**
+     * Payment row에 비관적 락을 걸고 Optional 형태로 조회한다.
+     * 실패/취소 웹훅처럼 결제 row가 아직 없을 수 있는 흐름에서 사용한다.
+     */
+    public Optional<Payment> findByPgKeyForUpdate(String pgKey) {
+        return paymentRepository.findByPgKeyForUpdate(pgKey);
+    }
+
+    /**
      * 하나의 주문에 이미 결제가 생성되어 있는지 확인한다.
      * 결제가 존재하면 같은 주문으로 결제를 다시 만들 수 없도록 예외를 던진다.
      */

@@ -104,9 +104,6 @@ public class PortOneClient implements PaymentGateway {
     }
 
     private Long paidAmountOf(Payment.Recognized payment) {
-        if (payment.getAmount() == null) {
-            return 0L;
-        }
         return payment.getAmount().getPaid();
     }
 

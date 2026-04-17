@@ -6,8 +6,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,15 +74,15 @@ class WebhookRepositoryTest extends RedisTestContainer {
 
     @Test
     @DisplayName("findLatestProcessableByPgKeyAndEventStatus 호출 시 완료되지 않은 최신 Paid 웹훅을 조회한다")
-    void findLatestProcessableByPgKeyAndEventStatus_returns_latest_pending_webhook() throws InterruptedException {
+    void findLatestProcessableByPgKeyAndEventStatus_returns_latest_pending_webhook() {
         Webhook oldWebhook = Webhook.receive("webhook-old", "WebhookTransactionPaid");
         oldWebhook.updatePgKey("pg-key-1");
+        ReflectionTestUtils.setField(oldWebhook, "receivedAt", LocalDateTime.now().minusMinutes(1));
         webhookRepository.saveAndFlush(oldWebhook);
-
-        Thread.sleep(5L);
 
         Webhook latestWebhook = Webhook.receive("webhook-latest", "WebhookTransactionPaid");
         latestWebhook.updatePgKey("pg-key-1");
+        ReflectionTestUtils.setField(latestWebhook, "receivedAt", LocalDateTime.now());
         webhookRepository.saveAndFlush(latestWebhook);
 
         Webhook completedWebhook = Webhook.receive("webhook-completed-ignore", "WebhookTransactionPaid");
