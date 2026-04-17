@@ -19,4 +19,5 @@ public class MemberFixture {
         member.completeOnboarding();
         return member;
     }
+
 }

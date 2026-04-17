@@ -66,4 +66,15 @@ class MemberTest {
         assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
         assertThat(member.getWithdrawalAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
     }
+
+    @Test
+    @DisplayName("changePassword() - 새 비밀번호로 변경되어 getPassword()가 새 값 반환")
+    void changePassword_success() {
+        Member member = MemberFixture.defaultMember();
+        String newEncodedPassword = "newEncodedPassword!";
+
+        member.changePassword(newEncodedPassword);
+
+        assertThat(member.getPassword()).isEqualTo(newEncodedPassword);
+    }
 }

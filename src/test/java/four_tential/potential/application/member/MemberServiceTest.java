@@ -11,6 +11,7 @@ import four_tential.potential.domain.member.member_onboard.MemberOnBoardGoal;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardRepository;
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
+import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -53,6 +55,9 @@ class MemberServiceTest {
 
     @Mock
     private CourseCategoryRepository courseCategoryRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private MemberService memberService;
@@ -363,6 +368,50 @@ class MemberServiceTest {
         assertThatThrownBy(() -> memberService.updateOnBoarding(member.getId(), request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
+    }
+    // endregion
+
+    // region changePassword
+    @Test
+    @DisplayName("비밀번호 변경 성공 - 현재 비밀번호 일치 시 새 비밀번호로 변경")
+    void changePassword_success() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("OldP@ss1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(passwordEncoder.matches("NewP@ss2!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+        given(passwordEncoder.encode("NewP@ss2!")).willReturn("encodedNewPassword");
+
+        memberService.changePassword(member.getId(), new ChangePasswordRequest("OldP@ss1!", "NewP@ss2!"));
+
+        assertThat(member.getPassword()).isEqualTo("encodedNewPassword");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 실패 - 현재 비밀번호 불일치 시 BAD_REQUEST")
+    void changePassword_wrongCurrentPassword_throwsBadRequest() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("WrongP@ss!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(member.getId(), new ChangePasswordRequest("WrongP@ss!", "NewP@ss2!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("현재 비밀번호가 올바르지 않습니다");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 실패 - 현재와 동일한 비밀번호로 변경 시 BAD_REQUEST")
+    void changePassword_sameAsCurrentPassword_throwsBadRequest() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(member.getId(), new ChangePasswordRequest("P@ssw0rd1!", "P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
     }
     // endregion
 }

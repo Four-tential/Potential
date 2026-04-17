@@ -3,6 +3,7 @@ package four_tential.potential.presentation.member;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
+import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
@@ -62,6 +63,20 @@ public class MemberController {
                         HttpStatus.CREATED.name(),
                         "온보딩 등록 성공",
                         memberService.createOnBoarding(principal.memberId(), request)
+                ));
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<BaseResponse<Void>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        memberService.changePassword(principal.memberId(), request);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "비밀번호가 변경 성공",
+                        null
                 ));
     }
 
