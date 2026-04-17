@@ -89,5 +89,16 @@ public class InstructorMember extends BaseTimeEntity {
         this.respondedAt = now;
     }
 
+    public void reapply(String categoryCode, String content, String imageUrl) {
+        if (this.status != InstructorMemberStatus.REJECTED) {
+            throw new ServiceErrorException(ERR_ALREADY_IN_PROGRESS_APPLICATION);
+        }
 
+        this.categoryCode = categoryCode;
+        this.content = content;
+        this.imageUrl = imageUrl;
+        this.rejectReason = null;
+        this.respondedAt = null;
+        this.status = InstructorMemberStatus.PENDING;
+    }
 }

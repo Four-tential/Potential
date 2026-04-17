@@ -81,6 +81,10 @@ public class Member extends BaseTimeEntity {
         this.withdrawalAt = LocalDateTime.now();
     }
 
+    public void promoteToInstructor() {
+        this.role = MemberRole.ROLE_INSTRUCTOR;
+    }
+
     public void updateInfo(String phone, String profileImageUrl) {
         if (phone != null) {
             this.phone = phone;
