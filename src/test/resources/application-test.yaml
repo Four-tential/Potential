@@ -4,6 +4,9 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  sql:
+    init:
+      mode: never
   flyway:
     enabled: false
   jpa:
@@ -14,6 +17,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+
 
 jwt:
   secret:

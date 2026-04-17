@@ -22,7 +22,12 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_NO_UPDATE_FIELD(HttpStatus.BAD_REQUEST, "수정할 항목을 하나 이상 입력해주세요"),
     ERR_ALREADY_ONBOARDED(HttpStatus.CONFLICT, "이미 온보딩을 완료한 회원입니다"),
     ERR_NOT_FOUND_ONBOARDING(HttpStatus.NOT_FOUND, "온보딩 정보가 존재하지 않습니다"),
-    ERR_DUPLICATED_CATEGORY_IN_REQUEST(HttpStatus.BAD_REQUEST, "중복된 카테고리 코드가 포함되어 있습니다")
+    ERR_DUPLICATED_CATEGORY_IN_REQUEST(HttpStatus.BAD_REQUEST, "중복된 카테고리 코드가 포함되어 있습니다"),
+    ERR_ALREADY_INSTRUCTOR(HttpStatus.CONFLICT, "이미 강사로 등록된 회원입니다"),
+    ERR_ALREADY_IN_PROGRESS_APPLICATION(HttpStatus.CONFLICT, "이미 처리 중인 강사 신청이 있습니다"),
+    ERR_NOT_FOUND_INSTRUCTOR_APPLICATION(HttpStatus.NOT_FOUND, "강사 신청 내역이 존재하지 않습니다"),
+    ERR_NOT_AUTHORIZE_TO_INSTRUCTOR(HttpStatus.FORBIDDEN, "일반 회원 외엔 강사 신청을 할 수 없습니다"),
+    ERR_ALREADY_PROCESSED_APPLICATION(HttpStatus.CONFLICT, "이미 처리된 강사 신청입니다")
     ;
 
     private final HttpStatus httpStatus;

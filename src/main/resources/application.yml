@@ -21,14 +21,25 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
 
+  # Flyway - 엔티티 전체적 완성 이후 활성화 예정, 현재는 ddl-auto: create + data.sql 방식 사용
+  flyway:
+    enabled: false
+
   # JPA
   jpa:
     hibernate:
       ddl-auto: create
     show-sql: true
+    defer-datasource-initialization: true  # JPA 스키마 생성 완료 후 data.sql 실행
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+
+  # Data Seeding
+  sql:
+    init:
+      mode: always        # 내장 DB가 아니어도 data.sql 실행
+      encoding: UTF-8
 
 # JWT
 jwt:

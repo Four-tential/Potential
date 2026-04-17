@@ -114,4 +114,55 @@ class InstructorMemberTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("거절 사유를 입력해주세요");
     }
+
+    // region reapply
+    @Test
+    @DisplayName("reapply() - REJECTED 상태에서 호출 시 status가 PENDING으로 변경되고 필드가 업데이트됨")
+    void reapply_success() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+        instructorMember.reject(InstructorMemberFixture.DEFAULT_REJECT_REASON);
+
+        instructorMember.reapply("YOGA", "요가 강사 자격증 보유", "https://example.com/yoga-cert.jpg");
+
+        assertThat(instructorMember.getStatus()).isEqualTo(InstructorMemberStatus.PENDING);
+        assertThat(instructorMember.getCategoryCode()).isEqualTo("YOGA");
+        assertThat(instructorMember.getContent()).isEqualTo("요가 강사 자격증 보유");
+        assertThat(instructorMember.getImageUrl()).isEqualTo("https://example.com/yoga-cert.jpg");
+    }
+
+    @Test
+    @DisplayName("reapply() - 재신청 후 rejectReason과 respondedAt이 null로 초기화됨")
+    void reapply_clearsRejectedFields() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+        instructorMember.reject(InstructorMemberFixture.DEFAULT_REJECT_REASON);
+
+        instructorMember.reapply("YOGA", "요가 강사 자격증 보유", "https://example.com/yoga-cert.jpg");
+
+        assertThat(instructorMember.getRejectReason()).isNull();
+        assertThat(instructorMember.getRespondedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("reapply() - PENDING 상태에서 호출 시 ERR_ALREADY_IN_PROGRESS_APPLICATION 예외 발생")
+    void reapply_pendingState_throwsException() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+
+        assertThatThrownBy(() -> instructorMember.reapply(
+                "YOGA", "요가 강사 자격증 보유", "https://example.com/yoga-cert.jpg"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 처리 중인 강사 신청이 있습니다");
+    }
+
+    @Test
+    @DisplayName("reapply() - APPROVED 상태에서 호출 시 ERR_ALREADY_IN_PROGRESS_APPLICATION 예외 발생")
+    void reapply_approvedState_throwsException() {
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+        instructorMember.approve();
+
+        assertThatThrownBy(() -> instructorMember.reapply(
+                "YOGA", "요가 강사 자격증 보유", "https://example.com/yoga-cert.jpg"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 처리 중인 강사 신청이 있습니다");
+    }
+    // endregion
 }
