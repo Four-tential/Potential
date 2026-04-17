@@ -7,6 +7,7 @@ import four_tential.potential.domain.course.course_category.QCourseCategory;
 import four_tential.potential.domain.member.member.QMember;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
+import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -77,6 +78,27 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
                         ))
                         .from(instructorMember)
                         .join(member).on(member.id.eq(instructorMember.memberId))
+                        .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
+                        .where(instructorMember.memberId.eq(memberId))
+                        .fetchOne()
+        );
+    }
+
+    @Override
+    public Optional<MyInstructorApplicationResponse> findMyInstructorApplication(UUID memberId) {
+        return Optional.ofNullable(
+                queryFactory
+                        .select(Projections.constructor(MyInstructorApplicationResponse.class,
+                                instructorMember.categoryCode,
+                                courseCategory.name,
+                                instructorMember.content,
+                                instructorMember.imageUrl,
+                                instructorMember.status,
+                                instructorMember.rejectReason,
+                                instructorMember.createdAt,
+                                instructorMember.respondedAt
+                        ))
+                        .from(instructorMember)
                         .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
                         .where(instructorMember.memberId.eq(memberId))
                         .fetchOne()

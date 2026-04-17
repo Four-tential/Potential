@@ -14,6 +14,7 @@ import four_tential.potential.presentation.instructor_member.model.response.Appl
 import four_tential.potential.presentation.instructor_member.model.response.InstructorActionResponse;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
+import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +51,43 @@ class InstructorMemberControllerTest {
             InstructorMemberFixture.DEFAULT_CONTENT,
             InstructorMemberFixture.DEFAULT_IMAGE_URL
     );
+
+    @Test
+    @DisplayName("내 강사 신청 조회 - 200 OK 및 신청 정보 반환")
+    void getMyInstructorApplication_success() {
+        MyInstructorApplicationResponse response = new MyInstructorApplicationResponse(
+                InstructorMemberFixture.DEFAULT_CATEGORY_CODE,
+                "피트니스",
+                InstructorMemberFixture.DEFAULT_CONTENT,
+                InstructorMemberFixture.DEFAULT_IMAGE_URL,
+                InstructorMemberStatus.PENDING,
+                null,
+                null,
+                null
+        );
+        given(instructorMemberService.getMyInstructorApplication(MEMBER_ID)).willReturn(response);
+
+        ResponseEntity<BaseResponse<MyInstructorApplicationResponse>> result =
+                instructorMemberController.getMyInstructorApplication(PRINCIPAL);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().data().categoryCode()).isEqualTo(InstructorMemberFixture.DEFAULT_CATEGORY_CODE);
+        assertThat(result.getBody().data().status()).isEqualTo(InstructorMemberStatus.PENDING);
+        assertThat(result.getBody().data().rejectReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("내 강사 신청 조회 - 신청 이력 없으면 ServiceErrorException 전파")
+    void getMyInstructorApplication_notFound() {
+        given(instructorMemberService.getMyInstructorApplication(MEMBER_ID))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR_APPLICATION));
+
+        assertThatThrownBy(() -> instructorMemberController.getMyInstructorApplication(PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("강사 신청 내역이 존재하지 않습니다");
+    }
+
 
     @Test
     @DisplayName("강사 신청 - STUDENT가 아닌 역할(ADMIN, INSTRUCTOR)이면 ServiceErrorException 발생")
@@ -226,9 +264,7 @@ class InstructorMemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("강사 신청 내역이 존재하지 않습니다");
     }
-    // endregion
 
-    // region getInstructorApplicationDetail
     @Test
     @DisplayName("강사 신청 상세 조회 - 200 OK 및 상세 정보 반환")
     void getInstructorApplicationDetail_success() {
@@ -263,5 +299,4 @@ class InstructorMemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("강사 신청 내역이 존재하지 않습니다");
     }
-    // endregion
 }

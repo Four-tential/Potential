@@ -16,6 +16,7 @@ import four_tential.potential.presentation.instructor_member.model.response.Appl
 import four_tential.potential.presentation.instructor_member.model.response.InstructorActionResponse;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
+import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -99,6 +100,12 @@ public class InstructorMemberService {
     @Transactional(readOnly = true)
     public InstructorApplicationDetail getInstructorApplicationDetail(UUID memberId) {
         return instructorMemberRepository.findInstructorApplicationDetail(memberId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR_APPLICATION));
+    }
+
+    @Transactional(readOnly = true)
+    public MyInstructorApplicationResponse getMyInstructorApplication(UUID memberId) {
+        return instructorMemberRepository.findMyInstructorApplication(memberId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR_APPLICATION));
     }
 

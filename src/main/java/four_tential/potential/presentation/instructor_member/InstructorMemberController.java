@@ -12,6 +12,7 @@ import four_tential.potential.presentation.instructor_member.model.response.Inst
 import four_tential.potential.presentation.instructor_member.model.response.ApplyInstructorResponse;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
+import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -47,6 +48,17 @@ public class InstructorMemberController {
                         "강사 전환 신청 성공",
                         instructorMemberService.applyInstructor(principal.memberId(), request)
                 ));
+    }
+
+    @GetMapping("/members/me/instructor-applications")
+    public ResponseEntity<BaseResponse<MyInstructorApplicationResponse>> getMyInstructorApplication(
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                HttpStatus.OK.name(),
+                "내 강사 신청 이력 조회 성공",
+                instructorMemberService.getMyInstructorApplication(principal.memberId())
+        ));
     }
 
     @GetMapping("/admin/instructor-applications")
