@@ -8,6 +8,8 @@ import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
@@ -38,6 +40,7 @@ public class AttendanceService {
     private final AttendanceQueryService attendanceQueryService;
     private final SseAttendanceEventPublisher sseAttendanceEventPublisher;
     private final CourseRepository courseRepository;
+    private final OrderRepository orderRepository;
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
     private static final long QR_OPEN_MINUTES   = 10L;  // QR 생성 가능 시간
@@ -85,17 +88,23 @@ public class AttendanceService {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED);
         }
 
+        // 예약 확정 여부 검증 추가
+        boolean isConfirmed = orderRepository.existsByMemberIdAndCourseIdAndStatus(
+                memberId, courseId, OrderStatus.CONFIRMED);
+        if (!isConfirmed) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ORDER_NOT_CONFIRMED);
+        }
+
         Attendance attendance = attendanceRepository.findByMemberIdAndCourseId(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_ENROLLED));
 
         attendance.attend(qrToken);
 
-        // DB 커밋 성공 후에만 SSE 이벤트 전송
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        sseAttendanceEventPublisher.publish(courseId, attendance); // 변경
+                        sseAttendanceEventPublisher.publish(courseId, attendance);
                     }
                 }
         );
