@@ -79,6 +79,17 @@ class AttendanceControllerTest {
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE.getMessage());
         }
+
+        @Test
+        @DisplayName("수강생이 QR 생성 시도하면 ERR_QR_FORBIDDEN 예외가 발생한다")
+        void createQr_student_throwsForbidden() {
+            // when & then
+            assertThatThrownBy(() -> attendanceController.createQr(COURSE_ID, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
+
+            verify(attendanceService, never()).createQr(any(), any());
+        }
     }
 
     @Nested
