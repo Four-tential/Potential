@@ -41,8 +41,8 @@ class AttendanceQueryServiceTest {
             Attendance a1 = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
             Attendance a2 = Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID);
             a1.attend("token");
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of(a1, a2));
-
+            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of(a1, a2)));
             // when
             AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(COURSE_ID);
 
@@ -56,7 +56,8 @@ class AttendanceQueryServiceTest {
         @DisplayName("수강생이 없으면 모든 집계가 0 인 스냅샷을 반환한다")
         void getAttendanceSnapshot_empty() {
             // given
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of());
+            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
             // when
             AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(COURSE_ID);

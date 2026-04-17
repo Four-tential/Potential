@@ -4,6 +4,7 @@ import four_tential.potential.application.attendance.AttendanceService;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
+import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
 import four_tential.potential.presentation.attendance.dto.AttendanceScanRequest;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
@@ -165,7 +166,8 @@ class AttendanceControllerTest {
             Attendance a1 = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
             Attendance a2 = Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID);
             a1.attend("token");
-            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of(a1, a2));
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of(a1, a2)));
 
             // when
             ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
@@ -196,7 +198,8 @@ class AttendanceControllerTest {
         @DisplayName("강사 조회 시 수강생 없으면 빈 목록을 반환한다")
         void getAttendances_instructor_emptyList() {
             // given
-            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of());
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
             // when
             ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
@@ -223,7 +226,8 @@ class AttendanceControllerTest {
         void getAttendances_roleBranching() {
             // given
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
-            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of(attendance));
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of(attendance)));
             when(attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID)).thenReturn(attendance);
 
             // when

@@ -80,7 +80,7 @@ public class ReviewService {
         }
 
         // 출석 여부 검증
-        Attendance attendance = attendanceRepository.findByMemberIdAndCourseId(memberId, courseId)
+        Attendance attendance = attendanceRepository.findByMemberIdAndCourseIdQuery(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_ATTENDED));
 
         if (attendance.getStatus() != AttendanceStatus.ATTEND) {

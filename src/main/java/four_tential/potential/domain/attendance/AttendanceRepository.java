@@ -6,11 +6,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
+public interface AttendanceRepository extends JpaRepository<Attendance, UUID>, AttendanceRepositoryCustom {
 
-    List<Attendance> findAllByCourseId(UUID courseId);
-
-    Optional<Attendance> findByMemberIdAndCourseId(UUID memberId, UUID courseId);
-
-    boolean existsByMemberIdAndCourseIdAndStatus(UUID memberId, UUID courseId, AttendanceStatus status);
 }
