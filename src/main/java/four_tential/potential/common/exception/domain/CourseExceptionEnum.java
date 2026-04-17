@@ -19,7 +19,10 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
     ERR_NOT_FOUND_CATEGORY(HttpStatus.BAD_REQUEST, "존재하지 않는 카테고리입니다"),
     ERR_DUPLICATED_CATEGORY_CODE(HttpStatus.CONFLICT, "이미 존재하는 카테고리 코드입니다"),
     ERR_NOT_ADMIN(HttpStatus.FORBIDDEN, "관리자만 접근 할 수 있습니다"),
-    ERR_NOT_FOUND_COURSE(HttpStatus.NOT_FOUND, "존재하지 않는 코스입니다")
+
+
+    ERR_NOT_FOUND_COURSE(HttpStatus.NOT_FOUND, "존재하지 않는 코스입니다"),
+    ERR_COURSE_NOT_OPEN(HttpStatus.FORBIDDEN, "진행 중인 코스에서만 가능합니다")
     ;
 
     private final HttpStatus httpStatus;

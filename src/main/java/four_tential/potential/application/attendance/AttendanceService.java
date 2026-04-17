@@ -58,7 +58,7 @@ public class AttendanceService {
 
         // 코스 상태가 OPEN인지 검증
         if (course.getStatus() != CourseStatus.OPEN) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN);
+            throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
 
         // 코스 시작 이후인지 검증
@@ -148,7 +148,7 @@ public class AttendanceService {
 
         // 코스 상태가 OPEN인지 검증
         if (course.getStatus() != CourseStatus.OPEN) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN);
+            throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);

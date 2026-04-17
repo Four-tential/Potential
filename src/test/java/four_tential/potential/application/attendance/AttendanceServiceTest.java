@@ -135,7 +135,7 @@ class AttendanceServiceTest {
             // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
-                    .hasMessage(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
+                    .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
 
             verify(qrCodeGenerator, never()).generate(any());
         }
@@ -150,7 +150,7 @@ class AttendanceServiceTest {
             // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
-                    .hasMessage(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
+                    .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
         }
 
         @Test
@@ -467,7 +467,7 @@ class AttendanceServiceTest {
             // when & then
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
-                    .hasMessage(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
+                    .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
 
             verify(sseEmitterRepository, never()).save(any(), any());
         }
