@@ -75,19 +75,23 @@ public class PaymentFacade {
             String rawBody,
             String webhookId,
             String webhookTimestamp,
-            String webhookSignature) throws WebhookVerificationException {
+            String webhookSignature) {
 
         // 이미 성공 처리된 webhook-id는 PortOne 재전송으로 보고 멱등하게 무시
-        if (webhookService.isCompleted(webhookId)) {
-            log.info("[PORTONE_WEBHOOK] completed webhook ignored. id={}", webhookId);
+        if (webhookService.isFinished(webhookId)) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored. id={}", webhookId);
             return;
         }
 
         // 수신 기록은 비즈니스 처리보다 먼저 남김
-        Webhook webhook = webhookService.receive(webhookId, PaymentWebhookConstants.EVENT_STATUS_UNKNOWN);
+        Webhook webhook = webhookService.recordReceivedWebhook(
+                webhookId,
+                PaymentWebhookConstants.EVENT_STATUS_UNKNOWN,
+                rawBody
+        );
 
-        if (webhook.isCompleted()) {
-            log.info("[PORTONE_WEBHOOK] completed webhook ignored after receive. id={}", webhookId);
+        if (webhook.isFinished()) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored after receive. id={}", webhookId);
             return;
         }
 
@@ -96,15 +100,32 @@ public class PaymentFacade {
         try {
             verified = portOneWebhookHandler.verify(rawBody, webhookId, webhookSignature, webhookTimestamp);
         } catch (WebhookVerificationException e) {
-            webhookService.fail(webhook);
-            throw e;
+            log.warn("[PORTONE_WEBHOOK] 서명 검증 실패. id={} reason={}", webhookId, e.getMessage());
+            webhookService.recordFailedWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_SIGNATURE_INVALID,
+                    e.getMessage()
+            );
+            return;
         }
 
         PaymentCancelDecision result;
         try {
             result = processVerifiedWebhook(verified, webhook);
+        } catch (ServiceErrorException e) {
+            webhookService.recordFailedWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_BUSINESS_FAILED,
+                    e.getMessage()
+            );
+            log.error("[PORTONE_WEBHOOK] business handling failed. id={} reason={}", webhookId, e.getMessage(), e);
+            return;
         } catch (RuntimeException e) {
-            webhookService.fail(webhook);
+            webhookService.recordFailedWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_UNEXPECTED_ERROR,
+                    e.getMessage()
+            );
             log.error("[PORTONE_WEBHOOK] business handling failed. id={}", webhookId, e);
             throw e;
         }
@@ -113,14 +134,22 @@ public class PaymentFacade {
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
+                webhookService.recordFailedWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                return;
             } catch (RuntimeException e) {
-                webhookService.fail(webhook);
-                throw e;
+                webhookService.recordFailedWebhook(
+                        webhook,
+                        PaymentWebhookConstants.FAIL_REASON_PORTONE_CANCEL_FAILED,
+                        e.getMessage()
+                );
+                log.error("[PORTONE_WEBHOOK] PortOne cancel failed. id={} pgKey={} reason={}",
+                        webhookId, result.pgKey(), result.cancelReason(), e);
+                return;
             }
         }
 
         if (result == null || result.webhookCompletionRequired()) {
-            webhookService.complete(webhook);
+            webhookService.recordCompletedWebhook(webhook);
         }
     }
 
@@ -173,8 +202,16 @@ public class PaymentFacade {
             // 웹훅 전에는 결제를 확정하지 않고 PENDING으로만 저장
             return paymentService.createPendingPayment(preparation, request.pgKey(), request.payWay());
         } catch (ServiceErrorException e) {
-            // 락 획득 실패가 아니라, 락 안쪽 비즈니스 검증에서 거절된 결제만 PortOne 취소 요청
-            cancelGatewayPaymentSafely(request.pgKey(), gatewayResponse.totalAmount(), "PAYMENT_CREATE_REJECTED");
+            // PortOne에서 실제로 결제가 완료된 경우에만 취소 요청
+            // PAID가 아닌 상태(READY, FAILED 등)는 취소할 대상이 없다.
+            if ("PAID".equals(gatewayResponse.status())) {
+                cancelGatewayPaymentSafely(request.pgKey(), gatewayResponse.totalAmount(), "PAYMENT_CREATE_REJECTED");
+            }
+            webhookService.recordDeferredPaidWebhookFailure(
+                    request.pgKey(),
+                    PaymentWebhookConstants.FAIL_REASON_PAYMENT_CREATE_REJECTED,
+                    e.getMessage()
+            );
             throw e;
         }
     }
@@ -194,14 +231,11 @@ public class PaymentFacade {
             return PaymentCancelDecision.none();
         }
 
-        webhook.updateEventStatus(event.eventType());
-        webhook.updatePgKey(event.pgKey());
-
         if (PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID.equals(event.eventType())) {
             Optional<Payment> payment = paymentService.findByPgKey(event.pgKey());
             if (payment.isEmpty()) {
                 log.info("[PORTONE_WEBHOOK] payment is not saved yet. webhook deferred. pgKey={}", event.pgKey());
-                webhookService.defer(webhook, event.eventType(), event.pgKey());
+                webhookService.deferPaidWebhookUntilPaymentSaved(webhook, event.eventType(), event.pgKey());
                 return PaymentCancelDecision.defer();
             }
 
@@ -227,6 +261,7 @@ public class PaymentFacade {
     private PaymentCancelDecision processTransactionWebhook(PortOneWebhookEvent event, Webhook webhook) {
         webhook.updateEventStatus(event.eventType());
         webhook.updatePgKey(event.pgKey());
+        webhookService.merge(webhook);
 
         log.info("[PORTONE_WEBHOOK] type={} pgKey={}", event.eventType(), event.pgKey());
 
@@ -253,6 +288,7 @@ public class PaymentFacade {
             return PaymentCancelDecision.none();
         }
 
+        log.warn("[PORTONE_WEBHOOK] 결제 실패/취소 처리. pgKey={} memberId={}", pgKey, payment.get().getMemberId());
         paymentService.fail(payment.get());
         return PaymentCancelDecision.none();
     }
@@ -266,12 +302,14 @@ public class PaymentFacade {
         // Payment row에 비관적 락
         Payment payment = paymentService.getByPgKeyForUpdate(pgKey);
 
-        // 이미 PAID면 멱등 처리
         if (payment.isPaid()) {
+            log.info("[PORTONE_WEBHOOK] 이미 PAID 상태 — 멱등 처리. pgKey={}", pgKey);
             return PaymentCancelDecision.none();
         }
 
         if (!payment.isPending()) {
+            log.warn("[PORTONE_WEBHOOK] PENDING이 아닌 결제에 Paid 웹훅 수신. pgKey={} status={}",
+                    pgKey, payment.getStatus());
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_STATUS_INVALID");
         }
 
@@ -280,24 +318,29 @@ public class PaymentFacade {
 
         // 웹훅은 최종 확정 지점이므로 결제 생성 때 했던 검증 다시 수행
         if (!order.getMemberId().equals(payment.getMemberId())) {
+            log.error("[PORTONE_WEBHOOK] 주문 회원 불일치. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_ORDER_MEMBER_MISMATCH");
         }
         if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn("[PORTONE_WEBHOOK] 주문 상태 불일치. pgKey={} orderStatus={}", pgKey, order.getStatus());
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "ORDER_STATUS_INVALID");
         }
         if (LocalDateTime.now().isAfter(order.getExpireAt())) {
+            log.warn("[PORTONE_WEBHOOK] 결제 기한 초과. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
         }
         if (!hasAvailableSeats(order, course)) {
+            log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
 
         paymentService.confirmPaid(payment);
         increaseCourseConfirmCount(order, course);
+        log.info("[PORTONE_WEBHOOK] 결제 확정 완료. pgKey={} memberId={}", pgKey, payment.getMemberId());
         return PaymentCancelDecision.none();
     }
 
@@ -311,7 +354,10 @@ public class PaymentFacade {
             return;
         }
 
-        Webhook webhook = webhookService.retry(paidWebhook.get(), PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID);
+        Webhook webhook = webhookService.markWebhookPendingForRetry(
+                paidWebhook.get(),
+                PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID
+        );
         log.info("[PORTONE_WEBHOOK] deferred paid webhook resumed. webhookId={} pgKey={}",
                 webhook.getRecWebhookId(), pgKey);
 
@@ -330,14 +376,22 @@ public class PaymentFacade {
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
+                webhookService.recordFailedWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                return;
             } catch (RuntimeException e) {
-                webhookService.fail(webhook);
-                throw e;
+                webhookService.recordFailedWebhook(
+                        webhook,
+                        PaymentWebhookConstants.FAIL_REASON_PORTONE_CANCEL_FAILED,
+                        e.getMessage()
+                );
+                log.error("[PORTONE_WEBHOOK] PortOne cancel failed. webhookId={} pgKey={} reason={}",
+                        webhook.getRecWebhookId(), result.pgKey(), result.cancelReason(), e);
+                return;
             }
         }
 
         if (result == null || result.webhookCompletionRequired()) {
-            webhookService.complete(webhook);
+            webhookService.recordCompletedWebhook(webhook);
         }
     }
 

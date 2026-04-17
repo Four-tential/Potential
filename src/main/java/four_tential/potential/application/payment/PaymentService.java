@@ -7,6 +7,7 @@ import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -76,18 +78,24 @@ public class PaymentService {
             PaymentGatewayResponse gatewayResponse
     ) {
         if (requestPayWay != PaymentPayWay.CARD) {
+            log.warn("[PAYMENT_VALIDATE] 허용되지 않는 결제 수단 요청. requestPayWay={}", requestPayWay);
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
         }
         if (!pgKey.equals(gatewayResponse.pgKey())) {
+            log.error("[PAYMENT_VALIDATE] pgKey 불일치. request={} gateway={}", pgKey, gatewayResponse.pgKey());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH);
         }
         if (!"PAID".equals(gatewayResponse.status())) {
+            log.warn("[PAYMENT_VALIDATE] PortOne 미결제 상태. pgKey={} status={}", pgKey, gatewayResponse.status());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_NOT_PAID);
         }
         if (!"card".equals(gatewayResponse.payMethod())) {
+            log.warn("[PAYMENT_VALIDATE] PortOne 결제 수단 불일치. pgKey={} payMethod={}", pgKey, gatewayResponse.payMethod());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
         }
         if (!preparation.paidTotalPrice().equals(gatewayResponse.totalAmount())) {
+            log.error("[PAYMENT_VALIDATE] 금액 불일치. pgKey={} expected={} actual={}",
+                    pgKey, preparation.paidTotalPrice(), gatewayResponse.totalAmount());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH);
         }
     }

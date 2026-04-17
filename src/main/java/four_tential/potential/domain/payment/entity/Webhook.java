@@ -36,6 +36,16 @@ public class Webhook {
     @Column(name = "event_status", nullable = false, length = 100)
     private String eventStatus;
 
+    @Lob
+    @Column(name = "payload")
+    private String payload;
+
+    @Column(name = "fail_reason", length = 100)
+    private String failReason;
+
+    @Column(name = "fail_message", length = 1000)
+    private String failMessage;
+
     @Column(name = "received_at", nullable = false)
     private LocalDateTime receivedAt;
 
@@ -43,10 +53,11 @@ public class Webhook {
     private LocalDateTime completedAt;
 
     // 웹훅 수신 기록 생성
-    public static Webhook receive(String recWebhookId, String eventStatus) {
+    public static Webhook createPendingRecord(String recWebhookId, String eventStatus, String payload) {
         Webhook webhook = new Webhook();
         webhook.recWebhookId = recWebhookId;
         webhook.eventStatus = eventStatus;
+        webhook.payload = payload;
         webhook.status = WebhookStatus.PENDING;
         webhook.receivedAt = LocalDateTime.now();
         return webhook;
@@ -60,25 +71,35 @@ public class Webhook {
         this.pgKey = pgKey;
     }
 
+    public void updatePayload(String payload) {
+        this.payload = payload;
+    }
+
     public boolean isCompleted() {
         return this.status == WebhookStatus.COMPLETED;
     }
 
+    public boolean isFinished() {
+        return this.status == WebhookStatus.COMPLETED || this.status == WebhookStatus.FAILED;
+    }
+
     // 실패했던 웹훅을 다시 처리하기 위해 PENDING 상태로 만든다
-    public void retry(String eventStatus) {
+    public void markPendingForRetry(String eventStatus) {
         transitTo(WebhookStatus.PENDING);
         this.eventStatus = eventStatus;
         this.completedAt = null;
         this.receivedAt = LocalDateTime.now();
     }
 
-    public void complete() {
+    public void markCompleted() {
         if (transitTo(WebhookStatus.COMPLETED)) {
             this.completedAt = LocalDateTime.now();
         }
     }
 
-    public void fail() {
+    public void markFailed(String failReason, String failMessage) {
+        this.failReason = failReason;
+        this.failMessage = truncate(failMessage);
         if (transitTo(WebhookStatus.FAILED)) {
             this.completedAt = LocalDateTime.now();
         }
@@ -94,5 +115,12 @@ public class Webhook {
 
         this.status = target;
         return true;
+    }
+
+    private String truncate(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() > 1000 ? message.substring(0, 1000) : message;
     }
 }

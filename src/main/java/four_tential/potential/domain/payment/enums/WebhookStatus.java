@@ -10,13 +10,13 @@ public enum WebhookStatus {
     COMPLETED {
         @Override
         public boolean canTransitTo(WebhookStatus target) {
-            return target == COMPLETED;
+            return false;
         }
     },
     FAILED {
         @Override
         public boolean canTransitTo(WebhookStatus target) {
-            return target == FAILED || target == PENDING;
+            return false;
         }
     };
 
