@@ -77,4 +77,26 @@ class MemberTest {
 
         assertThat(member.getPassword()).isEqualTo(newEncodedPassword);
     }
+
+    @Test
+    @DisplayName("changePassword() - 이전 비밀번호는 더 이상 반환되지 않음")
+    void changePassword_oldPasswordNotRetained() {
+        Member member = MemberFixture.defaultMember();
+        String originalPassword = member.getPassword();
+
+        member.changePassword("newEncodedPassword!");
+
+        assertThat(member.getPassword()).isNotEqualTo(originalPassword);
+    }
+
+    @Test
+    @DisplayName("changePassword() - 연속으로 두 번 호출하면 마지막 비밀번호로 최종 반영")
+    void changePassword_calledTwice_lastValueRetained() {
+        Member member = MemberFixture.defaultMember();
+
+        member.changePassword("firstNewPassword!");
+        member.changePassword("secondNewPassword!");
+
+        assertThat(member.getPassword()).isEqualTo("secondNewPassword!");
+    }
 }

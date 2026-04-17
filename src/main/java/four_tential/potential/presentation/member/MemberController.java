@@ -66,20 +66,6 @@ public class MemberController {
                 ));
     }
 
-    @PatchMapping("/me/password")
-    public ResponseEntity<BaseResponse<Void>> changePassword(
-            @Valid @RequestBody ChangePasswordRequest request,
-            @AuthenticationPrincipal MemberPrincipal principal
-    ) {
-        memberService.changePassword(principal.memberId(), request);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(BaseResponse.success(
-                        HttpStatus.OK.name(),
-                        "비밀번호가 변경 성공",
-                        null
-                ));
-    }
-
     @PatchMapping("/me/onboarding")
     public ResponseEntity<BaseResponse<OnBoardResponse>> updateOnBoarding(
             @RequestBody UpdateOnBoardRequest request,
@@ -90,6 +76,20 @@ public class MemberController {
                         HttpStatus.OK.name(),
                         "온보딩 등록 변경 성공",
                         memberService.updateOnBoarding(principal.memberId(), request)
+                ));
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<BaseResponse<Void>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        memberService.changePassword(principal.memberId(), request);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "비밀번호 변경 성공",
+                        null
                 ));
     }
 }

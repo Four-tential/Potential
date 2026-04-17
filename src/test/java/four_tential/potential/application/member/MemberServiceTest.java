@@ -413,5 +413,60 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
     }
+
+    @Test
+    @DisplayName("비밀번호 변경 실패 - 존재하지 않는 회원 ID면 NOT_FOUND")
+    void changePassword_memberNotFound_throwsNotFound() {
+        UUID unknownId = UUID.randomUUID();
+        given(memberRepository.findById(unknownId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(unknownId, new ChangePasswordRequest("OldP@ss1!", "NewP@ss2!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 회원입니다");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 성공 - passwordEncoder.encode()가 새 비밀번호로 호출됨")
+    void changePassword_success_verifyEncodeCalledWithNewPassword() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("OldP@ss1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(passwordEncoder.matches("NewP@ss2!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+        given(passwordEncoder.encode("NewP@ss2!")).willReturn("encodedNewPassword");
+
+        memberService.changePassword(member.getId(), new ChangePasswordRequest("OldP@ss1!", "NewP@ss2!"));
+
+        verify(passwordEncoder).encode("NewP@ss2!");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 실패 - 현재 비밀번호 불일치 시 encode()는 호출되지 않음")
+    void changePassword_wrongCurrentPassword_encodeNeverCalled() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("WrongP@ss!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(member.getId(), new ChangePasswordRequest("WrongP@ss!", "NewP@ss2!"))
+        ).isInstanceOf(ServiceErrorException.class);
+
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 실패 - 동일 비밀번호 시 encode()는 호출되지 않음")
+    void changePassword_sameAsCurrentPassword_encodeNeverCalled() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(member.getId(), new ChangePasswordRequest("P@ssw0rd1!", "P@ssw0rd1!"))
+        ).isInstanceOf(ServiceErrorException.class);
+
+        verify(passwordEncoder, never()).encode(any());
+    }
     // endregion
 }

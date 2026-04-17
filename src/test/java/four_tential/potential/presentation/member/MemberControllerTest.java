@@ -6,6 +6,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardGoal;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
+import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
@@ -30,6 +31,8 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 class MemberControllerTest {
@@ -231,6 +234,58 @@ class MemberControllerTest {
         assertThatThrownBy(() -> memberController.updateOnBoarding(request, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
+    }
+    // endregion
+
+    // region changePassword
+    @Test
+    @DisplayName("비밀번호 변경 - 200 OK, data는 null, 성공 메시지 반환")
+    void changePassword_success() {
+        ChangePasswordRequest request = new ChangePasswordRequest("OldP@ss1!", "NewP@ss2!");
+        doNothing().when(memberService).changePassword(MEMBER_ID, request);
+
+        ResponseEntity<BaseResponse<Void>> response = memberController.changePassword(request, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("비밀번호 변경 성공");
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 존재하지 않는 회원이면 ServiceErrorException 전파")
+    void changePassword_memberNotFound() {
+        ChangePasswordRequest request = new ChangePasswordRequest("OldP@ss1!", "NewP@ss2!");
+        doThrow(new ServiceErrorException(ERR_NOT_FOUND_MEMBER))
+                .when(memberService).changePassword(MEMBER_ID, request);
+
+        assertThatThrownBy(() -> memberController.changePassword(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 회원입니다");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 현재 비밀번호 불일치 시 ServiceErrorException 전파")
+    void changePassword_wrongCurrentPassword() {
+        ChangePasswordRequest request = new ChangePasswordRequest("WrongP@ss!", "NewP@ss2!");
+        doThrow(new ServiceErrorException(ERR_WRONG_CURRENT_PASSWORD))
+                .when(memberService).changePassword(MEMBER_ID, request);
+
+        assertThatThrownBy(() -> memberController.changePassword(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("현재 비밀번호가 올바르지 않습니다");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 현재와 동일한 비밀번호로 변경 시 ServiceErrorException 전파")
+    void changePassword_sameAsCurrentPassword() {
+        ChangePasswordRequest request = new ChangePasswordRequest("P@ssw0rd1!", "P@ssw0rd1!");
+        doThrow(new ServiceErrorException(ERR_SAME_AS_CURRENT_PASSWORD))
+                .when(memberService).changePassword(MEMBER_ID, request);
+
+        assertThatThrownBy(() -> memberController.changePassword(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
     }
     // endregion
 }
