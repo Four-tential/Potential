@@ -31,7 +31,6 @@ public class CourseFixture {
                 DEFAULT_DESCRIPTION,
                 DEFAULT_ADDRESS_MAIN,
                 DEFAULT_ADDRESS_DETAIL,
-                DEFAULT_CAPACITY,
                 DEFAULT_PRICE,
                 DEFAULT_LEVEL,
                 DEFAULT_ORDER_OPEN_AT,

@@ -4,7 +4,8 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.CommonExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
-import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course_inventory.CourseInventory;
+import four_tential.potential.domain.course.course_inventory.CourseInventoryRepository;
 import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
@@ -46,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -74,7 +76,7 @@ class PaymentFacadeTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private CourseRepository courseRepository;
+    private CourseInventoryRepository courseInventoryRepository;
 
     @Mock
     private PaymentDistributedLockExecutor paymentLockManager;
@@ -122,7 +124,7 @@ class PaymentFacadeTest {
         );
 
         given(paymentGateway.getPayment("pg-key-1")).willReturn(gatewayResponse);
-        stubOrderAndCourse(orderId, memberId, courseId, 1);
+        stubOrderAndInventory(orderId, memberId, courseId, 1);
         given(paymentService.createPendingPayment(any(PaymentCreateCommand.class), eq("pg-key-1"), eq(PaymentPayWay.CARD)))
                 .willReturn(payment);
         given(paymentService.getByPgKey("pg-key-1")).willReturn(payment);
@@ -190,7 +192,7 @@ class PaymentFacadeTest {
         deferredWebhook.updatePgKey("pg-key-first-webhook");
 
         given(paymentGateway.getPayment("pg-key-first-webhook")).willReturn(gatewayResponse);
-        stubOrderAndCourse(orderId, memberId, courseId, 1);
+        stubOrderAndInventory(orderId, memberId, courseId, 1);
         given(paymentService.createPendingPayment(any(PaymentCreateCommand.class), eq("pg-key-first-webhook"), eq(PaymentPayWay.CARD)))
                 .willReturn(createdPayment);
         given(webhookService.findProcessablePaidWebhook("pg-key-first-webhook"))
@@ -244,7 +246,7 @@ class PaymentFacadeTest {
                 100000L,
                 "PAYMENT_CREATE_REJECTED"
         ));
-        verifyNoInteractions(orderRepository, courseRepository);
+        verifyNoInteractions(orderRepository, courseInventoryRepository);
     }
 
     @Test
@@ -267,7 +269,7 @@ class PaymentFacadeTest {
         );
 
         given(paymentGateway.getPayment("pg-key-2")).willReturn(gatewayResponse);
-        stubOrderAndCourse(orderId, memberId, courseId, 1);
+        stubOrderAndInventory(orderId, memberId, courseId, 1);
         doThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH))
                 .when(paymentService)
                 .validateGatewayPayment(any(PaymentCreateCommand.class), eq("pg-key-2"), eq(PaymentPayWay.CARD), eq(gatewayResponse));
@@ -423,13 +425,13 @@ class PaymentFacadeTest {
         UUID courseId = UUID.randomUUID();
         Payment payment = createPayment("payment-member-mismatch");
         Order order = createOrder(payment.getOrderId(), UUID.randomUUID(), courseId, 1);
-        Course course = createCourse(courseId);
+        CourseInventory inventory = createInventory(courseId, 20);
 
         stubSuccessTransactionFlow();
         given(paymentService.findByPgKey("payment-member-mismatch")).willReturn(Optional.of(payment));
         given(paymentService.getByPgKeyForUpdate("payment-member-mismatch")).willReturn(payment);
         given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseInventoryRepository.findByCourseIdForUpdate(courseId)).willReturn(Optional.of(inventory));
         WebhookTransactionPaid verified =
                 new WebhookTransactionPaid(new TestWebhookTransactionData("payment-member-mismatch"));
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
@@ -455,13 +457,13 @@ class PaymentFacadeTest {
         Payment payment = createPayment("payment-order-invalid");
         Order order = createOrder(payment.getOrderId(), payment.getMemberId(), courseId, 1);
         ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELLED);
-        Course course = createCourse(courseId);
+        CourseInventory inventory = createInventory(courseId, 20);
 
         stubSuccessTransactionFlow();
         given(paymentService.findByPgKey("payment-order-invalid")).willReturn(Optional.of(payment));
         given(paymentService.getByPgKeyForUpdate("payment-order-invalid")).willReturn(payment);
         given(orderRepository.findById(payment.getOrderId())).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseInventoryRepository.findByCourseIdForUpdate(courseId)).willReturn(Optional.of(inventory));
         WebhookTransactionPaid verified =
                 new WebhookTransactionPaid(new TestWebhookTransactionData("payment-order-invalid"));
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
@@ -516,7 +518,7 @@ class PaymentFacadeTest {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
         Order order = createOrder(orderId, memberId, courseId, 1);
-        Course course = createCourse(courseId);
+        CourseInventory inventory = createInventory(courseId, 20);
         Payment payment = Payment.createPending(
                 orderId,
                 memberId,
@@ -532,7 +534,7 @@ class PaymentFacadeTest {
         given(paymentService.findByPgKey("payment-1")).willReturn(Optional.of(payment));
         given(paymentService.getByPgKeyForUpdate("payment-1")).willReturn(payment);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseInventoryRepository.findByCourseIdForUpdate(courseId)).willReturn(Optional.of(inventory));
         WebhookTransactionPaid verified =
                 new WebhookTransactionPaid(new TestWebhookTransactionData("payment-1"));
 
@@ -547,7 +549,7 @@ class PaymentFacadeTest {
         verify(paymentService, never()).fail(any(Payment.class));
         verify(webhookService).complete(savedWebhook);
         verify(webhookService, never()).fail(savedWebhook);
-        assertThat(course.getConfirmCount()).isEqualTo(1);
+        assertThat(inventory.getConfirmCount()).isEqualTo(1);
 
         Object eventStatus = ReflectionTestUtils.getField(savedWebhook, "eventStatus");
         if (eventStatus != null) {
@@ -744,11 +746,14 @@ class PaymentFacadeTest {
         given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
     }
 
-    private void stubOrderAndCourse(UUID orderId, UUID memberId, UUID courseId, int orderCount) {
+    private void stubOrderAndInventory(UUID orderId, UUID memberId, UUID courseId, int orderCount) {
         Order order = createOrder(orderId, memberId, courseId, orderCount);
-        Course course = createCourse(courseId);
+        CourseInventory inventory = createInventory(courseId, 20);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseInventoryRepository.findById(courseId)).willReturn(Optional.of(inventory));
+        // completePaidWebhook 경로(비관적 락)는 일부 테스트에서만 호출되므로 lenient 처리
+        lenient().when(courseInventoryRepository.findByCourseIdForUpdate(courseId))
+                .thenReturn(Optional.of(inventory));
     }
 
     private Order createOrder(UUID orderId, UUID memberId, UUID courseId, int orderCount) {
@@ -763,10 +768,8 @@ class PaymentFacadeTest {
         return order;
     }
 
-    private Course createCourse(UUID courseId) {
-        Course course = CourseFixture.defaultCourse();
-        ReflectionTestUtils.setField(course, "id", courseId);
-        return course;
+    private CourseInventory createInventory(UUID courseId, int maxCapacity) {
+        return CourseInventory.register(courseId, maxCapacity);
     }
 
     private Payment createPayment(String pgKey) {

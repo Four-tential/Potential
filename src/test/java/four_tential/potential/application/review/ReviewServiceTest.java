@@ -82,7 +82,7 @@ class ReviewServiceTest {
                 UUID.randomUUID(), UUID.randomUUID(),
                 "테스트 클래스", "설명",
                 "서울시 강남구", "2층",
-                10, BigInteger.valueOf(50000),
+                BigInteger.valueOf(50000),
                 four_tential.potential.domain.course.course.CourseLevel.BEGINNER,
                 orderOpen, orderClose, start, end
         );

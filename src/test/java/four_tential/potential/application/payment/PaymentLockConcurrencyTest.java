@@ -2,6 +2,8 @@ package four_tential.potential.application.payment;
 
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course_inventory.CourseInventory;
+import four_tential.potential.domain.course.course_inventory.CourseInventoryRepository;
 import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
@@ -66,6 +68,9 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
     private CourseRepository courseRepository;
 
     @Autowired
+    private CourseInventoryRepository courseInventoryRepository;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @MockitoBean
@@ -76,6 +81,7 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         webhookRepository.deleteAll();
         paymentRepository.deleteAll();
         orderRepository.deleteAll();
+        courseInventoryRepository.deleteAll();
         courseRepository.deleteAll();
     }
 
@@ -169,6 +175,9 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
     void webhookPaid_samePgKey_confirmsPaymentAndCourseOnlyOnce() throws Exception {
         String pgKey = "pg-webhook-lock-test";
         Course course = courseRepository.saveAndFlush(CourseFixture.defaultCourse());
+        CourseInventory inventory = courseInventoryRepository.saveAndFlush(
+                CourseInventory.register(course.getId(), CourseFixture.DEFAULT_CAPACITY)
+        );
         UUID memberId = UUID.randomUUID();
         Order order = orderRepository.saveAndFlush(Order.register(
                 memberId,
@@ -192,14 +201,14 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         );
 
         Payment payment = paymentRepository.findByPgKey(pgKey).orElseThrow();
-        Course updatedCourse = courseRepository.findById(course.getId()).orElseThrow();
+        CourseInventory updatedInventory = courseInventoryRepository.findById(course.getId()).orElseThrow();
         List<Webhook> webhooks = webhookRepository.findAll();
 
         assertThat(result.completed()).isTrue();
         assertThat(result.errors()).isEmpty();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPaidAt()).isNotNull();
-        assertThat(updatedCourse.getConfirmCount()).isEqualTo(1);
+        assertThat(updatedInventory.getConfirmCount()).isEqualTo(1);
         assertThat(webhooks)
                 .hasSize(THREAD_COUNT)
                 .allSatisfy(webhook -> {

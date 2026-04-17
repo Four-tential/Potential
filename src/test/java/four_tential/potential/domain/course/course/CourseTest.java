@@ -17,17 +17,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CourseTest {
 
     @Test
-    @DisplayName("register() 성공 시 필수 필드가 설정되고 status는 PREPARATION, confirmCount는 0")
+    @DisplayName("register() 성공 시 필수 필드가 설정되고 status는 PREPARATION")
     void register() {
         Course course = CourseFixture.defaultCourse();
 
         assertThat(course.getTitle()).isEqualTo(CourseFixture.DEFAULT_TITLE);
         assertThat(course.getDescription()).isEqualTo(CourseFixture.DEFAULT_DESCRIPTION);
-        assertThat(course.getCapacity()).isEqualTo(CourseFixture.DEFAULT_CAPACITY);
         assertThat(course.getPrice()).isEqualTo(CourseFixture.DEFAULT_PRICE);
         assertThat(course.getLevel()).isEqualTo(CourseFixture.DEFAULT_LEVEL);
         assertThat(course.getStatus()).isEqualTo(CourseStatus.PREPARATION);
-        assertThat(course.getConfirmCount()).isZero();
         assertThat(course.getConfirmedAt()).isNull();
     }
 
@@ -37,28 +35,6 @@ class CourseTest {
         Course course = CourseFixture.defaultCourse();
 
         assertThat(course.getId()).isNull();
-    }
-
-    @Test
-    @DisplayName("정원이 0 이하이면 ERR_INVALID_CAPACITY 예외 발생")
-    void register_invalidCapacity() {
-        assertThatThrownBy(() -> Course.register(
-                CourseFixture.DEFAULT_COURSE_CATEGORY_ID,
-                CourseFixture.DEFAULT_MEMBER_INSTRUCTOR_ID,
-                CourseFixture.DEFAULT_TITLE,
-                CourseFixture.DEFAULT_DESCRIPTION,
-                CourseFixture.DEFAULT_ADDRESS_MAIN,
-                CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                0,
-                CourseFixture.DEFAULT_PRICE,
-                CourseFixture.DEFAULT_LEVEL,
-                CourseFixture.DEFAULT_ORDER_OPEN_AT,
-                CourseFixture.DEFAULT_ORDER_CLOSE_AT,
-                CourseFixture.DEFAULT_START_AT,
-                CourseFixture.DEFAULT_END_AT
-        ))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("코스의 정원은 최소 1명 이상이어야 합니다");
     }
 
     @Test
@@ -73,7 +49,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -97,7 +72,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -121,7 +95,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -145,7 +118,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -169,7 +141,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -193,7 +164,6 @@ class CourseTest {
                 CourseFixture.DEFAULT_DESCRIPTION,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -243,13 +213,12 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("PREPARATION 상태에서 updateInfoInPreparation() 성공 시 가격과 정원이 변경됨")
+    @DisplayName("PREPARATION 상태에서 updateInfoInPreparation() 성공 시 가격과 주소가 변경됨")
     void updateInfoInPreparation_success() {
         Course course = CourseFixture.defaultCourse();
 
         course.updateInfoInPreparation(
                 BigInteger.valueOf(100000),
-                30,
                 "새 주소",
                 "새 상세주소",
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -259,7 +228,6 @@ class CourseTest {
         );
 
         assertThat(course.getPrice()).isEqualTo(BigInteger.valueOf(100000));
-        assertThat(course.getCapacity()).isEqualTo(30);
         assertThat(course.getAddressMain()).isEqualTo("새 주소");
         assertThat(course.getAddressDetail()).isEqualTo("새 상세주소");
     }
@@ -272,7 +240,6 @@ class CourseTest {
 
         assertThatThrownBy(() -> course.updateInfoInPreparation(
                 CourseFixture.DEFAULT_PRICE,
-                CourseFixture.DEFAULT_CAPACITY,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -369,70 +336,6 @@ class CourseTest {
         assertThatThrownBy(course::cancel)
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("OPEN 상태의 코스만 취소할 수 있습니다");
-    }
-
-    @Test
-    @DisplayName("increaseConfirmCount() 호출 시 confirmCount가 1 증가")
-    void increaseConfirmCount() {
-        Course course = CourseFixture.defaultCourse();
-
-        course.increaseConfirmCount();
-
-        assertThat(course.getConfirmCount()).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("정원이 가득 찬 상태에서 increaseConfirmCount() 호출 시 ERR_IS_FULL_CAPACITY 예외 발생")
-    void increaseConfirmCount_whenFull() {
-        Course course = CourseFixture.defaultCourse();
-        for (int i = 0; i < CourseFixture.DEFAULT_CAPACITY; i++) {
-            course.increaseConfirmCount();
-        }
-
-        assertThatThrownBy(() -> course.increaseConfirmCount())
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("코스의 정원이 가득차 추가할 수 없습니다");
-    }
-
-    @Test
-    @DisplayName("confirmCount가 양수일 때 decreaseConfirmCount() 호출 시 1 감소")
-    void decreaseConfirmCount_whenPositive() {
-        Course course = CourseFixture.defaultCourse();
-        course.increaseConfirmCount();
-        course.increaseConfirmCount();
-
-        course.decreaseConfirmCount();
-
-        assertThat(course.getConfirmCount()).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("confirmCount가 0일 때 decreaseConfirmCount() 호출 시 0 유지")
-    void decreaseConfirmCount_whenZero() {
-        Course course = CourseFixture.defaultCourse();
-
-        course.decreaseConfirmCount();
-
-        assertThat(course.getConfirmCount()).isZero();
-    }
-
-    @Test
-    @DisplayName("confirmCount가 capacity 이상이면 isFull()은 true")
-    void isFull_true() {
-        Course course = CourseFixture.defaultCourse();
-        for (int i = 0; i < CourseFixture.DEFAULT_CAPACITY; i++) {
-            course.increaseConfirmCount();
-        }
-
-        assertThat(course.isFull()).isTrue();
-    }
-
-    @Test
-    @DisplayName("confirmCount가 capacity 미만이면 isFull()은 false")
-    void isFull_false() {
-        Course course = CourseFixture.defaultCourse();
-
-        assertThat(course.isFull()).isFalse();
     }
 
     @Test

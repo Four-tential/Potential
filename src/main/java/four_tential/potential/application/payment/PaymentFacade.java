@@ -4,8 +4,8 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.application.payment.consts.PaymentWebhookConstants;
-import four_tential.potential.domain.course.course.Course;
-import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course_inventory.CourseInventory;
+import four_tential.potential.domain.course.course_inventory.CourseInventoryRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -30,6 +30,8 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE_INVENTORY;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -43,7 +45,7 @@ public class PaymentFacade {
     private final PortOneWebhookHandler portOneWebhookHandler;
     private final TransactionTemplate transactionTemplate;
     private final OrderRepository orderRepository;
-    private final CourseRepository courseRepository;
+    private final CourseInventoryRepository courseInventoryRepository;
     private final PaymentDistributedLockExecutor paymentLockExecutor;
 
     /**
@@ -139,7 +141,7 @@ public class PaymentFacade {
             }
 
             Order order = getOrder(request.orderId());
-            Course course = getCourse(order.getCourseId());
+            CourseInventory inventory = getCourseInventory(order.getCourseId());
 
             // 결제 생성은 PENDING 주문, 본인 주문, 결제 기한 내 주문만 가능
             if (!order.getMemberId().equals(memberId)) {
@@ -151,7 +153,7 @@ public class PaymentFacade {
             if (LocalDateTime.now().isAfter(order.getExpireAt())) {
                 throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_DEADLINE_EXCEEDED);
             }
-            if (!hasAvailableSeats(order, course)) {
+            if (!hasAvailableSeats(order, inventory)) {
                 throw new ServiceErrorException(OrderExceptionEnum.ERR_NO_AVAILABLE_SEATS);
             }
 
@@ -259,7 +261,7 @@ public class PaymentFacade {
 
     /**
      * Paid 웹훅을 최종 결제 확정으로 처리한다.
-     * payment row를 비관적 락으로 잡은 뒤 주문과 코스 상태를 다시 검증하고, 문제가 없을 때만 PAID로 변경한다.
+     * payment row를 비관적 락으로 잡은 뒤 주문과 인벤토리 상태를 다시 검증하고, 문제가 없을 때만 PAID로 변경한다.
      */
     private PaymentCancelDecision completePaidWebhook(String pgKey) {
 
@@ -276,7 +278,7 @@ public class PaymentFacade {
         }
 
         Order order = getOrder(payment.getOrderId());
-        Course course = getCourse(order.getCourseId());
+        CourseInventory inventory = getCourseInventoryForUpdate(order.getCourseId());
 
         // 웹훅은 최종 확정 지점이므로 결제 생성 때 했던 검증 다시 수행
         if (!order.getMemberId().equals(payment.getMemberId())) {
@@ -291,13 +293,13 @@ public class PaymentFacade {
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
         }
-        if (!hasAvailableSeats(order, course)) {
+        if (!hasAvailableSeats(order, inventory)) {
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
 
         paymentService.confirmPaid(payment);
-        increaseCourseConfirmCount(order, course);
+        increaseCourseConfirmCount(order, inventory);
         return PaymentCancelDecision.none();
     }
 
@@ -354,23 +356,19 @@ public class PaymentFacade {
      * 현재 확정 인원에 이번 주문 수량을 더해도 코스 정원을 넘지 않는지 확인한다.
      * 결제 생성 시점과 웹훅 확정 시점 모두에서 빈자리 검증에 사용한다.
      */
-    private boolean hasAvailableSeats(Order order, Course course) {
-        return course.getConfirmCount() + order.getOrderCount() <= course.getCapacity();
+    private boolean hasAvailableSeats(Order order, CourseInventory inventory) {
+        return inventory.hasAvailableSeats(order.getOrderCount());
     }
 
     /**
      * 결제가 확정된 주문 수량만큼 코스 확정 인원을 증가시킨다.
-     * 주문 수량이 여러 장일 수 있으므로 orderCount만큼 반복해서 증가시킨다.
      */
-    private void increaseCourseConfirmCount(Order order, Course course) {
-        for (int i = 0; i < order.getOrderCount(); i++) {
-            course.increaseConfirmCount();
-        }
+    private void increaseCourseConfirmCount(Order order, CourseInventory inventory) {
+        inventory.increase(order.getOrderCount());
     }
 
     /**
      * 주문 ID로 주문을 조회한다.
-     * 결제 파트에서는 주문 도메인 코드를 직접 수정하지 않고, 조회 결과를 검증에만 사용한다.
      */
     private Order getOrder(UUID orderId) {
         return orderRepository.findById(orderId)
@@ -378,12 +376,21 @@ public class PaymentFacade {
     }
 
     /**
-     * 코스 ID로 코스를 조회한다.
-     * 결제 확정 가능 여부와 confirmCount 증가 처리를 위해 사용한다.
+     * 코스 ID로 인벤토리를 일반 조회한다.
+     * 결제 생성 시 빈자리 사전 확인에 사용한다.
      */
-    private Course getCourse(UUID courseId) {
-        return courseRepository.findById(courseId)
-                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_COURSE_NOT_FOUND));
+    private CourseInventory getCourseInventory(UUID courseId) {
+        return courseInventoryRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE_INVENTORY));
+    }
+
+    /**
+     * 코스 ID로 인벤토리를 비관적 쓰기 락으로 조회한다.
+     * 웹훅 확정 처리 시 동시 수정을 방지하기 위해 사용한다.
+     */
+    private CourseInventory getCourseInventoryForUpdate(UUID courseId) {
+        return courseInventoryRepository.findByCourseIdForUpdate(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE_INVENTORY));
     }
 
     /**
@@ -400,7 +407,6 @@ public class PaymentFacade {
 
     /**
      * 결제 생성 검증 실패 시 PortOne 취소를 시도하되, 취소 요청 실패가 원래 예외를 덮지 않도록 로그만 남긴다.
-     * 서버 검증은 이미 실패했으므로 운영자가 확인할 수 있게 pgKey와 금액을 함께 기록한다.
      */
     private void cancelGatewayPaymentSafely(String pgKey, Long amount, String reason) {
         try {
@@ -413,7 +419,6 @@ public class PaymentFacade {
 
     /**
      * PortOne 결제 취소 API를 호출한다.
-     * DB 트랜잭션 안에서 외부 API를 직접 호출하지 않도록 별도 메서드로 분리해 사용한다.
      */
     private void cancelGatewayPayment(String pgKey, Long amount, String reason) {
         paymentGateway.cancelPayment(PaymentGatewayRequest.of(pgKey, amount, reason));
@@ -423,7 +428,6 @@ public class PaymentFacade {
 
         /**
          * PortOne SDK 웹훅 객체에서 결제 도메인 처리에 필요한 이벤트 타입과 pgKey를 뽑아낸다.
-         * 결제 트랜잭션 웹훅이 아닌 이벤트는 pgKey 없이 별도 처리한다.
          */
         private static PortOneWebhookEvent from(io.portone.sdk.server.webhook.Webhook verified) {
             String eventType = verified.getClass().getSimpleName();

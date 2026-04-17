@@ -45,12 +45,6 @@ public class Course extends BaseTimeWithDelEntity {
     private String addressDetail;
 
     @Column(nullable = false)
-    private int capacity;
-
-    @Column(name = "confirm_count", nullable = false)
-    private int confirmCount;
-
-    @Column(nullable = false)
     private BigInteger price;
 
     @Enumerated(EnumType.STRING)
@@ -87,7 +81,6 @@ public class Course extends BaseTimeWithDelEntity {
             String description,
             String addressMain,
             String addressDetail,
-            int capacity,
             BigInteger price,
             CourseLevel level,
             LocalDateTime orderOpenAt,
@@ -95,11 +88,6 @@ public class Course extends BaseTimeWithDelEntity {
             LocalDateTime startAt,
             LocalDateTime endAt
     ) {
-        // 정원 1명 이상이여야 함
-        if (capacity < 1) {
-            throw new ServiceErrorException(ERR_INVALID_CAPACITY);
-        }
-
         // 코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
             throw new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME);
@@ -117,8 +105,6 @@ public class Course extends BaseTimeWithDelEntity {
         course.description = description;
         course.addressMain = addressMain;
         course.addressDetail = addressDetail;
-        course.capacity = capacity;
-        course.confirmCount = 0;
         course.price = price;
         course.level = level;
         course.status = CourseStatus.PREPARATION;
@@ -143,10 +129,10 @@ public class Course extends BaseTimeWithDelEntity {
         this.courseCategoryId = courseCategoryId;
     }
 
-    // PREPARATION 에서만 가능한 수정필드들 (가격, 일정, 장소, 정원)
+    // PREPARATION 에서만 가능한 수정필드들 (가격, 일정, 장소)
+    // 정원(maxCapacity)은 CourseInventory.updateMaxCapacity()를 통해 별도로 변경한다
     public void updateInfoInPreparation(
             BigInteger price,
-            int capacity,
             String addressMain,
             String addressDetail,
             LocalDateTime orderOpenAt,
@@ -158,10 +144,6 @@ public class Course extends BaseTimeWithDelEntity {
             throw new ServiceErrorException(ERR_IMMUTABLE_FIELD_IN_OPEN);
         }
 
-        if (capacity < 1) {
-            throw new ServiceErrorException(ERR_INVALID_CAPACITY);
-        }
-
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
             throw new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME);
         }
@@ -171,7 +153,6 @@ public class Course extends BaseTimeWithDelEntity {
         }
 
         this.price = price;
-        this.capacity = capacity;
         this.addressMain = addressMain;
         this.addressDetail = addressDetail;
         this.orderOpenAt = orderOpenAt;
@@ -212,25 +193,6 @@ public class Course extends BaseTimeWithDelEntity {
         }
 
         this.status = CourseStatus.CANCELLED;
-    }
-
-    public void increaseConfirmCount() {
-        if (!this.isFull()) {
-            this.confirmCount++;
-        } else {
-            throw new ServiceErrorException(ERR_IS_FULL_CAPACITY);
-        }
-    }
-
-    public void decreaseConfirmCount() {
-        if (this.confirmCount > 0) {
-            this.confirmCount--;
-        }
-    }
-
-    // 정원 측정 판별
-    public boolean isFull() {
-        return this.confirmCount >= this.capacity;
     }
 
     // 코스 이미지 전체 삭제
