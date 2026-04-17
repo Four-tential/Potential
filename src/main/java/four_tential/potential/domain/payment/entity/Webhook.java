@@ -98,11 +98,11 @@ public class Webhook {
     }
 
     public void markFailed(String failReason, String failMessage) {
-        this.failReason = failReason;
-        this.failMessage = truncate(failMessage);
-        if (transitTo(WebhookStatus.FAILED)) {
+        if (this.status != WebhookStatus.FAILED && transitTo(WebhookStatus.FAILED)) {
             this.completedAt = LocalDateTime.now();
         }
+        this.failReason = failReason;
+        this.failMessage = truncate(failMessage);
     }
 
     private boolean transitTo(WebhookStatus target) {
