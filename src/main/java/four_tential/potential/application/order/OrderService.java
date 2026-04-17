@@ -9,13 +9,14 @@ import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -89,22 +90,25 @@ public class OrderService {
     }
 
     /**
-     * 만료된 주문 자동 만료 처리
-     * Scheduler에서 호출 예정
+     * 만료된 주문 자동 만료 처리 (단일 배치)
+     * Scheduler에서 호출하며, 개별 호출마다 트랜잭션이 커밋됩니다.
      */
     @Transactional
-    public void processExpiredOrders() {
-        LocalDateTime now = LocalDateTime.now();
-        List<Order> expiredOrders = orderRepository.findAllByStatusAndExpireAtBefore(OrderStatus.PENDING, now);
+    public int processExpiredBatch(LocalDateTime now, int batchSize) {
+        // PENDING 상태인 주문을 EXPIRED로 바꾸므로 항상 0페이지를 읽으면 새로운 대상이 나옵니다.
+        Slice<Order> expiredOrdersSlice = orderRepository.findAllByStatusAndExpireAtBefore(
+                OrderStatus.PENDING, now, PageRequest.of(0, batchSize));
 
-        if (expiredOrders.isEmpty()) {
-            return;
+        if (expiredOrdersSlice.isEmpty()) {
+            return 0;
         }
 
-        for (Order order : expiredOrders) {
+        for (Order order : expiredOrdersSlice) {
             order.expire();
             // TODO: Redis 재고 해제 및 대기열 이관 로직 연동 필요
             log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
         }
+        
+        return expiredOrdersSlice.getNumberOfElements();
     }
 }

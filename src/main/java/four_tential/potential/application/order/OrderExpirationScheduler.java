@@ -7,6 +7,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -18,25 +19,41 @@ public class OrderExpirationScheduler {
     private final RedissonClient redissonClient;
 
     private static final String LOCK_KEY = "lock:order:expiration";
+    private static final int BATCH_SIZE = 100;
+    private static final int MAX_TOTAL_PROCESS = 1000;
 
     /**
      * 1분마다 실행: 만료 시간이 지난 PENDING 주문을 EXPIRED로 변경
-     * 분산 환경에서 중복 실행을 방지하기 위해 Redisson 분산 락을 사용
+     * 분산 환경에서 중복 실행을 방지하기 위해 Redisson 분산 락을 사용합니다.
      */
     @Scheduled(cron = "0 * * * * *")
     public void expireOrders() {
         RLock lock = redissonClient.getLock(LOCK_KEY);
 
         try {
-            // waitTime을 0으로 설정하여 락을 획득하지 못하면 즉시 포기 (다른 인스턴스가 이미 실행 중)
-            // leaseTime은 작업 시간을 충분히 고려하여 50초로 설정 (스케줄 간격 1분보다 작게)
             boolean isLocked = lock.tryLock(0, 50, TimeUnit.SECONDS);
 
             if (isLocked) {
-                log.info("만료된 주문 자동 만료 스케줄러 실행 (락 획득 성공)");
-                orderService.processExpiredOrders();
-            } else {
-                log.debug("만료된 주문 자동 만료 스케줄러 실행 스킵 (다른 인스턴스에서 이미 실행 중)");
+                log.info("만료된 주문 자동 만료 스케줄러 시작");
+
+                LocalDateTime now = LocalDateTime.now();
+                int totalProcessed = 0;
+
+                while (totalProcessed < MAX_TOTAL_PROCESS) {
+                    // 각 배치는 개별 트랜잭션으로 처리됨
+                    int processedCount = orderService.processExpiredBatch(now, BATCH_SIZE);
+
+                    if (processedCount == 0) {
+                        break;
+                    }
+
+                    totalProcessed += processedCount;
+                    log.info("만료 주문 배치 처리 완료 ({}건, 누적 {}건)", processedCount, totalProcessed);
+                }
+
+                if (totalProcessed > 0) {
+                    log.info("만료된 주문 자동 만료 스케줄러 종료 (총 {}건 처리)", totalProcessed);
+                }
             }
         } catch (InterruptedException e) {
             log.error("주문 만료 스케줄러 실행 중 인터럽트 발생", e);
@@ -48,3 +65,4 @@ public class OrderExpirationScheduler {
         }
     }
 }
+

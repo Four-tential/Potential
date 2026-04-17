@@ -56,6 +56,9 @@ public class Order extends BaseTimeEntity {
     @Column(name = "expire_at", nullable = false)
     private LocalDateTime expireAt;
 
+    @Version
+    private Long version;
+
     public static Order register(UUID memberId, UUID courseId, int orderCount, 
                                BigInteger priceSnap, String titleSnap) {
         Order order = new Order();
@@ -78,6 +81,12 @@ public class Order extends BaseTimeEntity {
         if (this.status != OrderStatus.PENDING) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_NOT_PENDING_ORDER);
         }
+
+        if (LocalDateTime.now().isAfter(this.expireAt)) {
+            this.status = OrderStatus.EXPIRED; // 상태를 만료로 변경하여 다음 시도 차단
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_ORDER_EXPIRED);
+        }
+
         this.status = OrderStatus.PAID;
     }
 
@@ -86,7 +95,7 @@ public class Order extends BaseTimeEntity {
      */
     public void expire() {
         if (this.status != OrderStatus.PENDING) {
-            return;
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_NOT_PENDING_ORDER);
         }
         this.status = OrderStatus.EXPIRED;
     }
