@@ -447,7 +447,7 @@ class AttendanceServiceTest {
         when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
         when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
         when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
-                MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true); // 이 줄 확인
+                MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
         when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                 .thenReturn(Optional.of(attendance));
 
