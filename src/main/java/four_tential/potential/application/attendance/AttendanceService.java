@@ -112,7 +112,14 @@ public class AttendanceService {
 
     // 출석 현황 조회 (강사 -> 전체)
     @Transactional(readOnly = true)
-    public List<Attendance> findAllByCourse(UUID courseId) {
+    public List<Attendance> findAllByCourse(UUID courseId, UUID instructorId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
         return attendanceRepository.findAllByCourseId(courseId);
     }
 
@@ -124,9 +131,15 @@ public class AttendanceService {
     }
 
     // SSE 스트림 연결 (강사 전용)
-// 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
-//TODO: UUID instructorId 파라미터 사용 강사 본인 코스인지 검증
     public SseEmitter stream(UUID courseId, UUID instructorId) {
+        // 강사 본인 코스인지 검증
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
         // 동일한 emitter 인스턴스일 때만 삭제하여 새 연결이 지워지는 것을 방지

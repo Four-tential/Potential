@@ -72,7 +72,8 @@ public class AttendanceController {
         AttendanceListResponse response;
 
         if (MemberRole.ROLE_INSTRUCTOR.name().equals(principal.role())) {
-            List<Attendance> attendances = attendanceService.findAllByCourse(courseId);
+            List<Attendance> attendances = attendanceService
+                    .findAllByCourse(courseId, principal.memberId());
             response = AttendanceListResponse.ofInstructor(attendances);
         } else {
             Attendance attendance = attendanceService.findMyAttendance(principal.memberId(), courseId);
