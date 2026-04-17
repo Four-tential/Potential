@@ -118,10 +118,11 @@ class OrderServiceTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
+        PageRequest pageRequest = PageRequest.of(0, batchSize);
         Order expiredOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "만료대상"));
         Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
         
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest)))
                 .willReturn(expiredSlice);
 
         // when
@@ -130,7 +131,7 @@ class OrderServiceTest {
         // then
         assertThat(processedCount).isEqualTo(1);
         assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }
 
     @Test
@@ -139,14 +140,15 @@ class OrderServiceTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
+        PageRequest pageRequest = PageRequest.of(0, batchSize);
+        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest)))
                 .willReturn(new SliceImpl<>(Collections.emptyList()));
 
         // when
         int processedCount = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(0);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
+        assertThat(processedCount).isZero();
+        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }
 }
