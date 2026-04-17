@@ -5,7 +5,6 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
-import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
@@ -85,16 +84,13 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("정상적으로 QR 이미지를 생성하고 byte[] 를 반환한다")
         void createQr_success() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
-            // when
             byte[] result = attendanceService.createQr(COURSE_ID, MEMBER_ID);
 
-            // then
             assertThat(result).isEqualTo(QR_IMAGE);
             verify(qrTokenRepository).saveIfAbsent(eq(COURSE_ID), any());
             verify(qrCodeGenerator).generate(any());
@@ -103,10 +99,8 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE 를 던진다")
         void createQr_courseNotFound_throwsException() {
-            // given
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_NOT_FOUND_COURSE.getMessage());
@@ -115,11 +109,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("강사 본인 코스가 아니면 ERR_QR_FORBIDDEN 을 던진다")
         void createQr_notOwnCourse_throwsException() {
-            // given
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
@@ -128,11 +120,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스 상태가 OPEN 이 아니면 ERR_COURSE_NOT_OPEN 을 던진다")
         void createQr_courseNotOpen_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.PREPARATION);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
@@ -143,11 +133,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스 상태가 CLOSED 이면 ERR_COURSE_NOT_OPEN 을 던진다")
         void createQr_courseClosed_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.CLOSED);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
@@ -156,11 +144,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스 시작 전이면 ERR_QR_NOT_STARTED 를 던진다")
         void createQr_beforeStart_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().plusHours(1), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_NOT_STARTED.getMessage());
@@ -169,11 +155,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스 시작 후 10분 초과면 ERR_QR_EXPIRED_WINDOW 를 던진다")
         void createQr_expiredWindow_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(11), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_EXPIRED_WINDOW.getMessage());
@@ -182,12 +166,10 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("활성 QR 이 이미 존재하면 ERR_QR_ALREADY_ACTIVE 를 던진다")
         void createQr_alreadyActive_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(false);
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE.getMessage());
@@ -198,16 +180,13 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("QR 생성 시 Redis 에 원자적으로 저장한다")
         void createQr_savesToRedis() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
-            // when
             attendanceService.createQr(COURSE_ID, MEMBER_ID);
 
-            // then
             verify(qrTokenRepository, times(1)).saveIfAbsent(eq(COURSE_ID), any());
         }
     }
@@ -219,24 +198,19 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("정상적으로 출석 처리한다")
         void scan_success() {
-            // given
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                    .thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
 
             TransactionSynchronizationManager.initSynchronization();
             try {
-                // when
                 attendanceService.scan(QR_TOKEN, MEMBER_ID);
 
-                // then
-                assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
+                assertThat(attendance.getStatus()).isEqualTo(four_tential.potential.domain.attendance.AttendanceStatus.ATTEND);
                 assertThat(attendance.getQrCode()).isEqualTo(QR_TOKEN);
                 assertThat(attendance.getAttendanceAt()).isNotNull();
             } finally {
@@ -247,11 +221,8 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("토큰이 없으면 ERR_QR_NOT_FOUND 를 던진다")
         void scan_tokenNotFound_throwsException() {
-            // given
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                    .thenReturn(Optional.empty());
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_NOT_FOUND.getMessage());
@@ -260,13 +231,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("이미 ATTEND 상태면 ERR_ALREADY_CHECKED 를 던진다")
         void scan_alreadyChecked_throwsException() {
-            // given
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                    .thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(true);
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(true);
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_ALREADY_CHECKED.getMessage());
@@ -275,15 +242,11 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("예약이 확정되지 않으면 ERR_ORDER_NOT_CONFIRMED 를 던진다")
         void scan_orderNotConfirmed_throwsException() {
-            // given
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                    .thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(false);
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_ORDER_NOT_CONFIRMED.getMessage());
@@ -292,17 +255,13 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("출석 레코드가 없으면 ERR_NOT_ENROLLED 를 던진다")
         void scan_notEnrolled_throwsException() {
-            // given
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                    .thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                    MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_NOT_ENROLLED.getMessage());
@@ -316,30 +275,26 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("해당 코스의 전체 출석 목록을 반환한다")
         void findAllByCourse_success() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             List<Attendance> attendances = List.of(
                     Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID),
                     Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID)
             );
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(attendances);
+            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(attendances));
 
-            // when
-            List<Attendance> result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
+            AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
 
-            // then
-            assertThat(result).hasSize(2);
-            assertThat(result).allMatch(a -> a.getCourseId().equals(COURSE_ID));
+            assertThat(result.getTotalCount()).isEqualTo(2);
+            assertThat(result.getAttendances()).hasSize(2);
         }
 
         @Test
         @DisplayName("코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE 를 던진다")
         void findAllByCourse_courseNotFound_throwsException() {
-            // given
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_NOT_FOUND_COURSE.getMessage());
@@ -348,29 +303,26 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("본인 코스가 아니면 ERR_QR_FORBIDDEN 을 던진다")
         void findAllByCourse_notOwnCourse_throwsException() {
-            // given
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
         }
 
         @Test
-        @DisplayName("출석 인원이 없으면 빈 리스트를 반환한다")
+        @DisplayName("출석 인원이 없으면 빈 목록을 반환한다")
         void findAllByCourse_empty() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of());
+            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
-            // when
-            List<Attendance> result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
+            AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
 
-            // then
-            assertThat(result).isEmpty();
+            assertThat(result.getTotalCount()).isZero();
+            assertThat(result.getAttendances()).isEmpty();
         }
     }
 
@@ -381,28 +333,23 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("본인 출석 정보를 반환한다")
         void findMyAttendance_success() {
-            // given
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
 
-            // when
             Attendance result = attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID);
 
-            // then
             assertThat(result.getMemberId()).isEqualTo(MEMBER_ID);
             assertThat(result.getCourseId()).isEqualTo(COURSE_ID);
-            assertThat(result.getStatus()).isEqualTo(AttendanceStatus.ABSENT);
+            assertThat(result.getStatus()).isEqualTo(four_tential.potential.domain.attendance.AttendanceStatus.ABSENT);
         }
 
         @Test
         @DisplayName("출석 정보가 없으면 ERR_NOT_FOUND_ATTENDANCE 를 던진다")
         void findMyAttendance_notFound_throwsException() {
-            // given
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE.getMessage());
@@ -416,7 +363,6 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("SSE 연결 성공 시 SseEmitter 를 반환한다")
         void stream_success() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
@@ -424,10 +370,8 @@ class AttendanceServiceTest {
                             Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID)
                     )));
 
-            // when
             SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
 
-            // then
             assertThat(emitter).isNotNull();
             verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
         }
@@ -435,10 +379,8 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE 를 던진다")
         void stream_courseNotFound_throwsException() {
-            // given
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_NOT_FOUND_COURSE.getMessage());
@@ -447,11 +389,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("본인 코스가 아니면 ERR_QR_FORBIDDEN 을 던진다")
         void stream_notOwnCourse_throwsException() {
-            // given
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
@@ -460,11 +400,9 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("코스 상태가 OPEN 이 아니면 ERR_COURSE_NOT_OPEN 을 던진다")
         void stream_courseNotOpen_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.CLOSED);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(CourseExceptionEnum.ERR_COURSE_NOT_OPEN.getMessage());
@@ -475,16 +413,13 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("SSE 연결 시 수강생이 없어도 빈 스냅샷을 전송한다")
         void stream_emptySnapshot() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
-            // when
             SseEmitter emitter = attendanceService.stream(COURSE_ID, MEMBER_ID);
 
-            // then
             assertThat(emitter).isNotNull();
             verify(sseEmitterRepository).save(eq(COURSE_ID), any(SseEmitter.class));
         }
@@ -492,13 +427,11 @@ class AttendanceServiceTest {
         @Test
         @DisplayName("스냅샷 조회 중 Exception 발생 시 예외를 던진다")
         void stream_snapshotException_throwsException() {
-            // given
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenThrow(new RuntimeException("DB 오류"));
 
-            // when & then
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(RuntimeException.class);
 
@@ -510,25 +443,20 @@ class AttendanceServiceTest {
     @Test
     @DisplayName("scan() 성공 시 afterCommit 콜백이 등록된다")
     void scan_registersAfterCommitCallback() {
-        // given
         Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
-        when(qrTokenRepository.findCourseIdByToken(QR_TOKEN))
-                .thenReturn(Optional.of(COURSE_ID));
-        when(attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                MEMBER_ID, COURSE_ID, AttendanceStatus.ATTEND)).thenReturn(false);
+        when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+        when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
         when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
-                MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-        when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+                MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true); // 이 줄 확인
+        when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                 .thenReturn(Optional.of(attendance));
 
         TransactionSynchronizationManager.initSynchronization();
         try {
-            // when
             attendanceService.scan(QR_TOKEN, MEMBER_ID);
             TransactionSynchronizationManager.getSynchronizations()
                     .forEach(sync -> sync.afterCommit());
 
-            // then
             verify(sseAttendanceEventPublisher).publish(eq(COURSE_ID), any(Attendance.class));
         } finally {
             TransactionSynchronizationManager.clearSynchronization();

@@ -122,7 +122,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
             when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -147,7 +147,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
             when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -264,7 +264,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -281,7 +281,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(absent));
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -298,7 +298,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(true);
 
@@ -316,7 +316,7 @@ class ReviewServiceTest {
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseId(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
             when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
