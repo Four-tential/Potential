@@ -51,7 +51,7 @@ class AdminMemberControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().message()).isEqualTo("회원 상태가 변경 성공");
+        assertThat(response.getBody().message()).isEqualTo("회원 상태 변경 성공");
         assertThat(response.getBody().data().memberId()).isEqualTo(TARGET_MEMBER_ID);
         assertThat(response.getBody().data().status()).isEqualTo("SUSPENDED");
     }
