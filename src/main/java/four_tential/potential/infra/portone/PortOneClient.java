@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.concurrent.CompletionException;
 
 @Slf4j
@@ -104,7 +105,9 @@ public class PortOneClient implements PaymentGateway {
     }
 
     private Long paidAmountOf(Payment.Recognized payment) {
-        return payment.getAmount().getPaid();
+        return Optional.ofNullable(payment.getAmount())
+                .map(PaymentAmount::getPaid)
+                .orElse(0L);
     }
 
     private String payMethodOf(PaymentMethod method) {
