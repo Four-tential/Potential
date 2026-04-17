@@ -1,4 +1,0 @@
-spring:
-  sql:
-    init:
-      mode: never   # data.sql은 MySQL 전용 문법 — H2 테스트 환경에서 실행하지 않음

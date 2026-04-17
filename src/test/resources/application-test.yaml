@@ -6,9 +6,6 @@ spring:
     password:
   flyway:
     enabled: false
-  sql:
-    init:
-      mode: never   # data.sql은 MySQL 전용 문법 사용 — H2 테스트 환경에서 비활성화
   jpa:
     hibernate:
       ddl-auto: create-drop
