@@ -42,17 +42,34 @@ public class MemberCoupon extends BaseTimeEntity {
     // Todo: 생성 팩토리 - 쿠폰 담당자 파트에서 작성 예정
 
 
-    // Todo: 쿠폰이 현재 사용 가능한 상태인지 확인
+    // 쿠폰이 현재 사용 가능한 상태인지 확인
+    public boolean isUsable() {
+        return this.status == MemberCouponStatus.ISSUED && couponPolicy.isAvailable();
+    }
 
 
-    // Todo: 결제 완료 시 쿠폰 사용 처리
+    // 결제 완료 시 쿠폰 사용 처리
+    public void use() {
+        if (!isUsable()) {
+            throw new ServiceErrorException(CouponExceptionEnum.ERR_COUPON_NOT_USABLE);
+        }
+        transitTo(MemberCouponStatus.USED);
+    }
 
 
-    // Todo: 결제 취소 시 쿠폰 복구
+    // 결제 취소 시 쿠폰 복구
+    public void restore() {
+        transitTo(MemberCouponStatus.ISSUED);
+    }
 
 
-    // Todo: 쿠폰 적용 후 실제 결제 금액 계산
-
+    // 쿠폰 적용 후 실제 할인 금액 계산
+    public long calculateDiscountAmount(long originalPrice) {
+        if (!isUsable()) {
+            throw new ServiceErrorException(CouponExceptionEnum.ERR_COUPON_NOT_USABLE);
+        }
+        return couponPolicy.calculateDiscountAmount(originalPrice);
+    }
 
     private void transitTo(MemberCouponStatus target) {
         if (this.status == target) {
