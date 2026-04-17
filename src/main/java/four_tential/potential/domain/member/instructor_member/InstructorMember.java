@@ -14,7 +14,13 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 
 @Getter
 @Entity
-@Table(name = "instructor_members")
+@Table(
+        name = "instructor_members",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_instructor_member_member_id",
+                columnNames = "member_id"
+        )
+)
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class InstructorMember extends BaseTimeEntity {
     @Id

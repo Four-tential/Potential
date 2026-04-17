@@ -116,6 +116,14 @@ class InstructorMemberControllerRoleTest {
     }
 
     @Test
+    @WithMockUser(roles = "INSTRUCTOR")
+    @DisplayName("INSTRUCTOR는 강사 신청 상세 조회 불가 - 403 Forbidden")
+    void getInstructorApplicationDetail_instructor_forbidden() throws Exception {
+        mockMvc.perform(get("/v1/admin/instructor-applications/{memberId}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN은 강사 신청 승인/반려 가능 - 200 OK")
     void processInstructorApplication_admin_success() throws Exception {

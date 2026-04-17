@@ -154,6 +154,23 @@ class InstructorMemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
+
+    @Test
+    @DisplayName("강사 신청 - APPROVED 상태의 기존 신청이 있으면 도메인 reapply()에서 ServiceErrorException 발생")
+    void applyInstructor_approvedStatus_throwsViaReapply() {
+        Member member = MemberFixture.defaultMember();
+        InstructorMember approved = InstructorMemberFixture.defaultInstructorMember();
+        approved.approve(); // APPROVED 상태
+
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(courseCategoryRepository.existsByCode(InstructorMemberFixture.DEFAULT_CATEGORY_CODE)).willReturn(true);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.of(approved));
+
+        // 서비스는 PENDING만 직접 차단 → APPROVED는 reapply() 내부에서 예외 발생
+        assertThatThrownBy(() -> instructorMemberService.applyInstructor(member.getId(), DEFAULT_REQUEST))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 처리 중인 강사 신청이 있습니다");
+    }
     // endregion
 
     // region processInstructorApplication
@@ -232,6 +249,38 @@ class InstructorMemberServiceTest {
         assertThatThrownBy(() -> instructorMemberService.processInstructorApplication(member.getId(), request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("거절 사유를 입력해주세요");
+    }
+
+    @Test
+    @DisplayName("강사 신청 승인 - 승인 대상 회원이 존재하지 않으면 ServiceErrorException 발생")
+    void processInstructorApplication_approve_memberNotFound() {
+        UUID unknownMemberId = UUID.randomUUID();
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(unknownMemberId)).willReturn(Optional.of(instructorMember));
+        given(memberRepository.findById(unknownMemberId)).willReturn(Optional.empty());
+
+        InstructorActionRequest request = new InstructorActionRequest(InstructorAction.APPROVE, null);
+
+        assertThatThrownBy(() -> instructorMemberService.processInstructorApplication(unknownMemberId, request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 회원입니다");
+    }
+
+    @Test
+    @DisplayName("강사 신청 반려 - 이미 처리된(REJECTED) 신청이면 ServiceErrorException 발생 (409)")
+    void processInstructorApplication_alreadyRejected() {
+        Member member = MemberFixture.defaultMember();
+        InstructorMember instructorMember = InstructorMemberFixture.defaultInstructorMember();
+        instructorMember.reject(InstructorMemberFixture.DEFAULT_REJECT_REASON);
+
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.of(instructorMember));
+
+        InstructorActionRequest request = new InstructorActionRequest(InstructorAction.REJECT, InstructorMemberFixture.DEFAULT_REJECT_REASON);
+
+        assertThatThrownBy(() -> instructorMemberService.processInstructorApplication(member.getId(), request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 처리된 강사 신청입니다");
     }
     // endregion
 

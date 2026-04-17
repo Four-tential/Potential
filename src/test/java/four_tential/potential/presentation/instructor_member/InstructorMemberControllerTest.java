@@ -90,11 +90,21 @@ class InstructorMemberControllerTest {
 
 
     @Test
-    @DisplayName("강사 신청 - STUDENT가 아닌 역할(ADMIN, INSTRUCTOR)이면 ServiceErrorException 발생")
-    void applyInstructor_notStudent() {
+    @DisplayName("강사 신청 - ADMIN 역할이면 ServiceErrorException 발생")
+    void applyInstructor_adminRole_forbidden() {
         MemberPrincipal adminPrincipal = new MemberPrincipal(MEMBER_ID, "admin@test.com", "ROLE_ADMIN");
 
         assertThatThrownBy(() -> instructorMemberController.applyInstructor(DEFAULT_REQUEST, adminPrincipal))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("일반 회원 외엔 강사 신청을 할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("강사 신청 - INSTRUCTOR 역할이면 ServiceErrorException 발생")
+    void applyInstructor_instructorRole_forbidden() {
+        MemberPrincipal instructorPrincipal = new MemberPrincipal(MEMBER_ID, "instructor@test.com", "ROLE_INSTRUCTOR");
+
+        assertThatThrownBy(() -> instructorMemberController.applyInstructor(DEFAULT_REQUEST, instructorPrincipal))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("일반 회원 외엔 강사 신청을 할 수 없습니다");
     }
@@ -186,7 +196,7 @@ class InstructorMemberControllerTest {
 
     @Test
     @DisplayName("강사 신청 목록 조회 - PENDING 필터 적용 시 필터된 결과 반환")
-    void getInstructorApplications_withStatusFilter() {
+    void getInstructorApplications_withPendingFilter() {
         PageResponse<InstructorApplicationItem> pageResponse = new PageResponse<>(
                 List.of(), 0, 0, 0, 10, true
         );
@@ -197,8 +207,49 @@ class InstructorMemberControllerTest {
                 instructorMemberController.getInstructorApplications(0, 10, InstructorMemberStatus.PENDING);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().content()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("강사 신청 목록 조회 - APPROVED 필터 적용 시 승인된 목록 반환")
+    void getInstructorApplications_withApprovedFilter() {
+        PageResponse<InstructorApplicationItem> pageResponse = new PageResponse<>(
+                List.of(new InstructorApplicationItem(
+                        UUID.randomUUID(), "홍길동", "hong@test.com",
+                        "FITNESS", "피트니스", InstructorMemberStatus.APPROVED, null
+                )),
+                0, 1, 1, 10, true
+        );
+        given(instructorMemberService.getInstructorApplications(InstructorMemberStatus.APPROVED, PageRequest.of(0, 10)))
+                .willReturn(pageResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorApplicationItem>>> response =
+                instructorMemberController.getInstructorApplications(0, 10, InstructorMemberStatus.APPROVED);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).status()).isEqualTo(InstructorMemberStatus.APPROVED);
+    }
+
+    @Test
+    @DisplayName("강사 신청 목록 조회 - REJECTED 필터 적용 시 반려된 목록 반환")
+    void getInstructorApplications_withRejectedFilter() {
+        PageResponse<InstructorApplicationItem> pageResponse = new PageResponse<>(
+                List.of(new InstructorApplicationItem(
+                        UUID.randomUUID(), "김철수", "kim@test.com",
+                        "YOGA", "요가", InstructorMemberStatus.REJECTED, null
+                )),
+                0, 1, 1, 10, true
+        );
+        given(instructorMemberService.getInstructorApplications(InstructorMemberStatus.REJECTED, PageRequest.of(0, 10)))
+                .willReturn(pageResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorApplicationItem>>> response =
+                instructorMemberController.getInstructorApplications(0, 10, InstructorMemberStatus.REJECTED);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).status()).isEqualTo(InstructorMemberStatus.REJECTED);
     }
 
     // region processInstructorApplication
@@ -237,6 +288,19 @@ class InstructorMemberControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().data().status()).isEqualTo(InstructorMemberStatus.REJECTED);
+    }
+
+    @Test
+    @DisplayName("강사 신청 반려 - 반려 사유 없으면 ServiceErrorException 전파")
+    void processInstructorApplication_rejectWithoutReason() {
+        UUID memberId = UUID.randomUUID();
+        InstructorActionRequest request = new InstructorActionRequest(InstructorAction.REJECT, null);
+        given(instructorMemberService.processInstructorApplication(memberId, request))
+                .willThrow(new ServiceErrorException(ERR_BLANK_REJECT_REASON));
+
+        assertThatThrownBy(() -> instructorMemberController.processInstructorApplication(memberId, request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("거절 사유를 입력해주세요");
     }
 
     @Test
