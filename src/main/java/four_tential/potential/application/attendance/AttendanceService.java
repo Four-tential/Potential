@@ -2,9 +2,15 @@ package four_tential.potential.application.attendance;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
+import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
 import four_tential.potential.infra.qr.QrCodeGenerator;
 import four_tential.potential.infra.qr.QrTokenRepository;
@@ -19,6 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,15 +40,37 @@ public class AttendanceService {
     private final SseEmitterRepository sseEmitterRepository;
     private final AttendanceQueryService attendanceQueryService;
     private final SseAttendanceEventPublisher sseAttendanceEventPublisher;
+    private final CourseRepository courseRepository;
+    private final OrderRepository orderRepository;
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
+    private static final long QR_OPEN_MINUTES   = 10L;  // QR 생성 가능 시간
 
     // QR 생성(강사 전용)
     public byte[] createQr(UUID courseId, UUID instructorId) {
-        /*TODO: 코스, 유저 도메인 추가 시 추가할 검증
-            1. 강사 본인 코스인 지
-            2. 코스 시작 후 10분 이내 인 지
-        */
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        // 강사 본인 코스인지 검증
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
+        // 코스 상태가 OPEN인지 검증
+        if (course.getStatus() != CourseStatus.OPEN) {
+            throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
+        }
+
+        // 코스 시작 이후인지 검증
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(course.getStartAt())) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_STARTED);
+        }
+
+        // 코스 시작 후 10분 이내인지 검증
+        if (now.isAfter(course.getStartAt().plusMinutes(QR_OPEN_MINUTES))) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_EXPIRED_WINDOW);
+        }
 
         String token = UUID.randomUUID().toString();
 
@@ -65,17 +94,23 @@ public class AttendanceService {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED);
         }
 
+        // 예약 확정 여부 검증 추가
+        boolean isConfirmed = orderRepository.existsByMemberIdAndCourseIdAndStatus(
+                memberId, courseId, OrderStatus.CONFIRMED);
+        if (!isConfirmed) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ORDER_NOT_CONFIRMED);
+        }
+
         Attendance attendance = attendanceRepository.findByMemberIdAndCourseId(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_ENROLLED));
 
         attendance.attend(qrToken);
 
-        // DB 커밋 성공 후에만 SSE 이벤트 전송
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        sseAttendanceEventPublisher.publish(courseId, attendance); // 변경
+                        sseAttendanceEventPublisher.publish(courseId, attendance);
                     }
                 }
         );
@@ -83,7 +118,14 @@ public class AttendanceService {
 
     // 출석 현황 조회 (강사 -> 전체)
     @Transactional(readOnly = true)
-    public List<Attendance> findAllByCourse(UUID courseId) {
+    public List<Attendance> findAllByCourse(UUID courseId, UUID instructorId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
         return attendanceRepository.findAllByCourseId(courseId);
     }
 
@@ -95,9 +137,20 @@ public class AttendanceService {
     }
 
     // SSE 스트림 연결 (강사 전용)
-// 추후 수강생 등 다른 역할로 확장 시 파라미터에 role 추가하여 분기 처리 가능
-//TODO: UUID instructorId 파라미터 사용 강사 본인 코스인지 검증
     public SseEmitter stream(UUID courseId, UUID instructorId) {
+        // 강사 본인 코스인지 검증
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
+        // 코스 상태가 OPEN인지 검증
+        if (course.getStatus() != CourseStatus.OPEN) {
+            throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
+        }
+
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
         // 동일한 emitter 인스턴스일 때만 삭제하여 새 연결이 지워지는 것을 방지

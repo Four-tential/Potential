@@ -37,6 +37,11 @@ public class AttendanceController {
             @PathVariable UUID courseId,
             @AuthenticationPrincipal MemberPrincipal principal
     ) {
+        // 강사 권한 검증
+        if (!MemberRole.ROLE_INSTRUCTOR.name().equals(principal.role())) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
         byte[] qrImage = attendanceService.createQr(courseId, principal.memberId());
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_PNG)
@@ -67,7 +72,8 @@ public class AttendanceController {
         AttendanceListResponse response;
 
         if (MemberRole.ROLE_INSTRUCTOR.name().equals(principal.role())) {
-            List<Attendance> attendances = attendanceService.findAllByCourse(courseId);
+            List<Attendance> attendances = attendanceService
+                    .findAllByCourse(courseId, principal.memberId());
             response = AttendanceListResponse.ofInstructor(attendances);
         } else {
             Attendance attendance = attendanceService.findMyAttendance(principal.memberId(), courseId);

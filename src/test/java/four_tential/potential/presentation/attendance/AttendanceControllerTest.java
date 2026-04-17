@@ -68,6 +68,17 @@ class AttendanceControllerTest {
         }
 
         @Test
+        @DisplayName("수강생이 QR 생성 시도하면 ERR_QR_FORBIDDEN 예외가 발생한다")
+        void createQr_student_throwsForbidden() {
+            // when & then
+            assertThatThrownBy(() -> attendanceController.createQr(COURSE_ID, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
+
+            verify(attendanceService, never()).createQr(any(), any());
+        }
+
+        @Test
         @DisplayName("활성 QR 이 존재하면 예외가 전파된다")
         void createQr_alreadyActive_propagatesException() {
             // given
@@ -154,14 +165,14 @@ class AttendanceControllerTest {
             Attendance a1 = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
             Attendance a2 = Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID);
             a1.attend("token");
-            when(attendanceService.findAllByCourse(COURSE_ID)).thenReturn(List.of(a1, a2));
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of(a1, a2));
 
             // when
             ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
 
             // then
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            verify(attendanceService).findAllByCourse(COURSE_ID);
+            verify(attendanceService).findAllByCourse(COURSE_ID, MEMBER_ID);
             verify(attendanceService, never()).findMyAttendance(any(), any());
         }
 
@@ -178,14 +189,14 @@ class AttendanceControllerTest {
             // then
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             verify(attendanceService).findMyAttendance(MEMBER_ID, COURSE_ID);
-            verify(attendanceService, never()).findAllByCourse(any());
+            verify(attendanceService, never()).findAllByCourse(any(), any());
         }
 
         @Test
         @DisplayName("강사 조회 시 수강생 없으면 빈 목록을 반환한다")
         void getAttendances_instructor_emptyList() {
             // given
-            when(attendanceService.findAllByCourse(COURSE_ID)).thenReturn(List.of());
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of());
 
             // when
             ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
@@ -212,7 +223,7 @@ class AttendanceControllerTest {
         void getAttendances_roleBranching() {
             // given
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
-            when(attendanceService.findAllByCourse(COURSE_ID)).thenReturn(List.of(attendance));
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID)).thenReturn(List.of(attendance));
             when(attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID)).thenReturn(attendance);
 
             // when
@@ -220,7 +231,7 @@ class AttendanceControllerTest {
             attendanceController.getAttendances(COURSE_ID, studentPrincipal);
 
             // then
-            verify(attendanceService, times(1)).findAllByCourse(COURSE_ID);
+            verify(attendanceService, times(1)).findAllByCourse(COURSE_ID, MEMBER_ID);
             verify(attendanceService, times(1)).findMyAttendance(MEMBER_ID, COURSE_ID);
         }
     }
@@ -265,6 +276,20 @@ class AttendanceControllerTest {
             // then
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             verify(attendanceService, never()).stream(any(), any());
+        }
+
+        @Test
+        @DisplayName("서비스에서 본인 코스 아님 예외 발생 시 403 을 반환한다")
+        void stream_notOwnCourse_returns403() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
 
         @Test
