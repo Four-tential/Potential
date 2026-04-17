@@ -70,7 +70,7 @@ public class InstructorMemberService {
             instructorMemberRepository.save(instructorMember);
         }
 
-        return ApplyInstructorResponse.from(instructorMember);
+        return ApplyInstructorResponse.register(instructorMember);
     }
 
     @Transactional
@@ -94,7 +94,7 @@ public class InstructorMemberService {
             instructorMember.reject(request.rejectReason());
         }
 
-        return InstructorActionResponse.from(instructorMember);
+        return InstructorActionResponse.register(instructorMember);
     }
 
     @Transactional(readOnly = true)

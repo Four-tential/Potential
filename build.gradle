@@ -112,9 +112,6 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
-    // data.sql은 MySQL 전용 문법(UUID_TO_BIN, INSERT IGNORE) — H2 테스트 환경에서 실행하지 않음
-    // yml 클래스패스 우선순위 문제를 피하기 위해 시스템 프로퍼티로 직접 주입
-    systemProperty 'spring.sql.init.mode', 'never'
     finalizedBy tasks.named('jacocoTestReport')
 }
 

@@ -10,11 +10,11 @@ public record ApplyInstructorResponse(
         String categoryCode,
         LocalDateTime appliedAt
 ) {
-    public static ApplyInstructorResponse from(InstructorMember instructorMember) {
+    public static ApplyInstructorResponse register(InstructorMember instructorMember) {
         return new ApplyInstructorResponse(
                 instructorMember.getStatus(),
                 instructorMember.getCategoryCode(),
-                instructorMember.getCreatedAt()
+                instructorMember.getUpdatedAt()
         );
     }
 }

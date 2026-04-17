@@ -11,7 +11,7 @@ public record InstructorActionResponse(
         InstructorMemberStatus status,
         LocalDateTime respondedAt
 ) {
-    public static InstructorActionResponse from(InstructorMember instructorMember) {
+    public static InstructorActionResponse register(InstructorMember instructorMember) {
         return new InstructorActionResponse(
                 instructorMember.getMemberId(),
                 instructorMember.getStatus(),

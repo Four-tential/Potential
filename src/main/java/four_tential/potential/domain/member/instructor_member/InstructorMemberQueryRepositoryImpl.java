@@ -3,8 +3,6 @@ package four_tential.potential.domain.member.instructor_member;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import four_tential.potential.domain.course.course_category.QCourseCategory;
-import four_tential.potential.domain.member.member.QMember;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
 import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
 import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
@@ -50,8 +48,6 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
         Long total = queryFactory
                 .select(instructorMember.count())
                 .from(instructorMember)
-                .join(member).on(member.id.eq(instructorMember.memberId))
-                .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
                 .where(statusEq(status))
                 .fetchOne();
 
