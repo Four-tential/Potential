@@ -85,6 +85,10 @@ public class Member extends BaseTimeEntity {
         this.role = MemberRole.ROLE_INSTRUCTOR;
     }
 
+    public void changePassword(String encodedNewPassword) {
+        this.password = encodedNewPassword;
+    }
+
     public void updateInfo(String phone, String profileImageUrl) {
         if (phone != null) {
             this.phone = phone;

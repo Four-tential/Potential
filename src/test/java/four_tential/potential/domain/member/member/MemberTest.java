@@ -66,4 +66,37 @@ class MemberTest {
         assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
         assertThat(member.getWithdrawalAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
     }
+
+    @Test
+    @DisplayName("changePassword() - 새 비밀번호로 변경되어 getPassword()가 새 값 반환")
+    void changePassword_success() {
+        Member member = MemberFixture.defaultMember();
+        String newEncodedPassword = "newEncodedPassword!";
+
+        member.changePassword(newEncodedPassword);
+
+        assertThat(member.getPassword()).isEqualTo(newEncodedPassword);
+    }
+
+    @Test
+    @DisplayName("changePassword() - 이전 비밀번호는 더 이상 반환되지 않음")
+    void changePassword_oldPasswordNotRetained() {
+        Member member = MemberFixture.defaultMember();
+        String originalPassword = member.getPassword();
+
+        member.changePassword("newEncodedPassword!");
+
+        assertThat(member.getPassword()).isNotEqualTo(originalPassword);
+    }
+
+    @Test
+    @DisplayName("changePassword() - 연속으로 두 번 호출하면 마지막 비밀번호로 최종 반영")
+    void changePassword_calledTwice_lastValueRetained() {
+        Member member = MemberFixture.defaultMember();
+
+        member.changePassword("firstNewPassword!");
+        member.changePassword("secondNewPassword!");
+
+        assertThat(member.getPassword()).isEqualTo("secondNewPassword!");
+    }
 }

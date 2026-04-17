@@ -8,6 +8,7 @@ import four_tential.potential.domain.member.member_onboard.MemberOnBoard;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardRepository;
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
+import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
@@ -16,6 +17,7 @@ import four_tential.potential.presentation.member.model.response.OnBoardResponse
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,8 @@ import java.util.stream.Collectors;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 
+
+
 @Service
 @RequiredArgsConstructor
 public class MemberService {
@@ -36,6 +40,7 @@ public class MemberService {
     private final MemberOnBoardRepository memberOnBoardRepository;
     private final OnBoardCategoryRepository onBoardCategoryRepository;
     private final CourseCategoryRepository courseCategoryRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${member.default-profile-image-url}")
     private String defaultProfileImageUrl;
@@ -163,6 +168,24 @@ public class MemberService {
         }
 
         return OnBoardResponse.register(onBoard, resultCategoryCodes);
+    }
+
+    @Transactional
+    public void changePassword(UUID memberId, ChangePasswordRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
+
+        // 현재 비밀번호 일치 확인
+        if (!passwordEncoder.matches(request.currentPassword(), member.getPassword())) {
+            throw new ServiceErrorException(ERR_WRONG_CURRENT_PASSWORD);
+        }
+
+        // 현재와 동일한 비밀번호로 변경 불가
+        if (passwordEncoder.matches(request.newPassword(), member.getPassword())) {
+            throw new ServiceErrorException(ERR_SAME_AS_CURRENT_PASSWORD);
+        }
+
+        member.changePassword(passwordEncoder.encode(request.newPassword()));
     }
 
     private String getProfileImageUrlOrDefault(Member member) {
