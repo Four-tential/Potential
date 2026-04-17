@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
+import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
@@ -200,17 +201,16 @@ class AttendanceServiceTest {
         void scan_success() {
             Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
             when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdForUpdate(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.of(attendance));
 
             TransactionSynchronizationManager.initSynchronization();
             try {
                 attendanceService.scan(QR_TOKEN, MEMBER_ID);
 
-                assertThat(attendance.getStatus()).isEqualTo(four_tential.potential.domain.attendance.AttendanceStatus.ATTEND);
+                assertThat(attendance.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
                 assertThat(attendance.getQrCode()).isEqualTo(QR_TOKEN);
                 assertThat(attendance.getAttendanceAt()).isNotNull();
             } finally {
@@ -229,21 +229,9 @@ class AttendanceServiceTest {
         }
 
         @Test
-        @DisplayName("이미 ATTEND 상태면 ERR_ALREADY_CHECKED 를 던진다")
-        void scan_alreadyChecked_throwsException() {
-            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(true);
-
-            assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
-                    .isInstanceOf(ServiceErrorException.class)
-                    .hasMessage(AttendanceExceptionEnum.ERR_ALREADY_CHECKED.getMessage());
-        }
-
-        @Test
         @DisplayName("예약이 확정되지 않으면 ERR_ORDER_NOT_CONFIRMED 를 던진다")
         void scan_orderNotConfirmed_throwsException() {
             when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(false);
 
@@ -253,13 +241,30 @@ class AttendanceServiceTest {
         }
 
         @Test
+        @DisplayName("이미 ATTEND 상태면 ERR_ALREADY_CHECKED 를 던진다")
+        void scan_alreadyChecked_throwsException() {
+            // ATTEND 상태인 attendance 생성
+            Attendance attended = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            attended.attend(QR_TOKEN);
+
+            when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
+            when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
+                    MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
+            when(attendanceRepository.findByMemberIdAndCourseIdForUpdate(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attended));
+
+            assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_ALREADY_CHECKED.getMessage());
+        }
+
+        @Test
         @DisplayName("출석 레코드가 없으면 ERR_NOT_ENROLLED 를 던진다")
         void scan_notEnrolled_throwsException() {
             when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
-            when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
             when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                     MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+            when(attendanceRepository.findByMemberIdAndCourseIdForUpdate(MEMBER_ID, COURSE_ID))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> attendanceService.scan(QR_TOKEN, MEMBER_ID))
@@ -445,10 +450,9 @@ class AttendanceServiceTest {
     void scan_registersAfterCommitCallback() {
         Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
         when(qrTokenRepository.findCourseIdByToken(QR_TOKEN)).thenReturn(Optional.of(COURSE_ID));
-        when(attendanceRepository.existsAttendByMemberIdAndCourseId(MEMBER_ID, COURSE_ID)).thenReturn(false);
         when(orderRepository.existsByMemberIdAndCourseIdAndStatus(
                 MEMBER_ID, COURSE_ID, OrderStatus.CONFIRMED)).thenReturn(true);
-        when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+        when(attendanceRepository.findByMemberIdAndCourseIdForUpdate(MEMBER_ID, COURSE_ID))
                 .thenReturn(Optional.of(attendance));
 
         TransactionSynchronizationManager.initSynchronization();
