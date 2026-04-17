@@ -42,6 +42,19 @@ class PaymentRepositoryTest extends RedisTestContainer {
     }
 
     @Test
+    @DisplayName("findByOrderId 호출 시 orderId 가 일치하는 결제를 조회한다")
+    void findByOrderId_returns_payment() {
+        UUID orderId = UUID.randomUUID();
+        Payment payment = createPayment(orderId, "pg-key-by-order");
+        paymentRepository.saveAndFlush(payment);
+
+        Optional<Payment> result = paymentRepository.findByOrderId(orderId);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getOrderId()).isEqualTo(orderId);
+    }
+
+    @Test
     @DisplayName("findByPgKeyForUpdate 호출 시 pgKey 가 일치하는 결제를 조회한다")
     void findByPgKeyForUpdate_returns_payment() {
         Payment payment = createPayment(UUID.randomUUID(), "pg-key-lock");

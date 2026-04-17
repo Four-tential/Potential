@@ -124,6 +124,29 @@ class WebhookTest {
 
         assertThat(webhook.getEventStatus()).isEqualTo("WebhookTransactionPaid");
     }
+
+    @Test
+    @DisplayName("updatePayload changes payload")
+    void updatePayload_changes_payload() {
+        Webhook webhook = Webhook.createPendingRecord("rec_id_123", "UNKNOWN", null);
+
+        webhook.updatePayload("{\"type\":\"WebhookTransactionPaid\"}");
+
+        assertThat(webhook.getPayload()).isEqualTo("{\"type\":\"WebhookTransactionPaid\"}");
+    }
+
+    @Test
+    @DisplayName("isCompleted returns true only for completed webhook")
+    void isCompleted_returns_true_only_when_completed() {
+        Webhook pendingWebhook = Webhook.createPendingRecord("pending_rec_id", "UNKNOWN", null);
+        Webhook completedWebhook = Webhook.createPendingRecord("completed_rec_id", "UNKNOWN", null);
+
+        completedWebhook.markCompleted();
+
+        assertThat(pendingWebhook.isCompleted()).isFalse();
+        assertThat(completedWebhook.isCompleted()).isTrue();
+    }
+
     @Test
     @DisplayName("receive stores payload")
     void receive_payload() {
@@ -141,5 +164,16 @@ class WebhookTest {
 
         assertThat(webhook.getFailReason()).isEqualTo("PAYMENT_AMOUNT_MISMATCH");
         assertThat(webhook.getFailMessage()).isEqualTo("amount mismatch");
+    }
+
+    @Test
+    @DisplayName("fail message is truncated to 1000 characters")
+    void fail_truncates_long_message() {
+        Webhook webhook = Webhook.createPendingRecord("rec_id_123", "Transaction.Paid", null);
+        String longMessage = "a".repeat(1001);
+
+        webhook.markFailed("PAYMENT_AMOUNT_MISMATCH", longMessage);
+
+        assertThat(webhook.getFailMessage()).hasSize(1000);
     }
 }

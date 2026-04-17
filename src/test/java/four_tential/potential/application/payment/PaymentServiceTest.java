@@ -76,6 +76,18 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("findByOrderId 호출 시 Optional Payment 를 반환한다")
+    void findByOrderId_returns_optional_payment() {
+        UUID orderId = UUID.randomUUID();
+        Payment payment = createPayment();
+        given(paymentRepository.findByOrderId(orderId)).willReturn(Optional.of(payment));
+
+        Optional<Payment> result = paymentService.findByOrderId(orderId);
+
+        assertThat(result).contains(payment);
+    }
+
+    @Test
     @DisplayName("getByPgKeyForUpdate 호출 시 Payment 를 반환한다")
     void getByPgKeyForUpdate_returns_payment() {
         Payment payment = createPayment();
@@ -302,6 +314,30 @@ class PaymentServiceTest {
         Payment result = paymentService.createPendingPayment(preparation, "pg-key-1", PaymentPayWay.CARD);
 
         assertThat(result).isEqualTo(payment);
+        verify(paymentRepository).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("createFailedPayment 는 FAILED 결제를 저장한다")
+    void createFailedPayment_returns_saved_failed_payment() {
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        PaymentCreateCommand preparation = new PaymentCreateCommand(
+                orderId,
+                memberId,
+                null,
+                100000L,
+                0L,
+                100000L
+        );
+        given(paymentRepository.save(any(Payment.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        Payment result = paymentService.createFailedPayment(preparation, "pg-key-failed", PaymentPayWay.CARD);
+
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(result.getOrderId()).isEqualTo(orderId);
+        assertThat(result.getPgKey()).isEqualTo("pg-key-failed");
         verify(paymentRepository).save(any(Payment.class));
     }
 
