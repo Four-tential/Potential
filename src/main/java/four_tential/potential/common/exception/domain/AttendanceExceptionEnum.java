@@ -27,6 +27,9 @@ public enum AttendanceExceptionEnum implements ServiceErrorCode {
 
     // 출석 조회 관련
     ERR_NOT_FOUND_ATTENDANCE(HttpStatus.NOT_FOUND, "출석 정보를 찾을 수 없습니다"),
+
+    ERR_COURSE_NOT_OPEN(HttpStatus.FORBIDDEN, "진행 중인 코스에서만 가능합니다"),
+
     ;
 
     private final HttpStatus httpStatus;

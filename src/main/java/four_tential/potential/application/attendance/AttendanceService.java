@@ -8,6 +8,7 @@ import four_tential.potential.domain.attendance.AttendanceRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
@@ -53,6 +54,11 @@ public class AttendanceService {
         // 강사 본인 코스인지 검증
         if (!course.getMemberInstructorId().equals(instructorId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
+        // 코스 상태가 OPEN인지 검증
+        if (course.getStatus() != CourseStatus.OPEN) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
 
         // 코스 시작 이후인지 검증
@@ -138,6 +144,11 @@ public class AttendanceService {
 
         if (!course.getMemberInstructorId().equals(instructorId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
+
+        // 코스 상태가 OPEN인지 검증
+        if (course.getStatus() != CourseStatus.OPEN) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
