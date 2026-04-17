@@ -210,7 +210,7 @@ class InstructorMemberServiceTest {
         instructorMember.approve(); // APPROVED 상태로 변경
 
         given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        // 서비스에서 PENDING 아님을 감지하고 즉시 예외를 던지므로 memberRepository 호출 없음
 
         InstructorActionRequest request = new InstructorActionRequest(InstructorAction.APPROVE, null);
 
