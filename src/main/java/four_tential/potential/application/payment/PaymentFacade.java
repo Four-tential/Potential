@@ -3,6 +3,7 @@ package four_tential.potential.application.payment;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
+import four_tential.potential.application.payment.consts.PaymentWebhookConstants;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
@@ -83,7 +84,7 @@ public class PaymentFacade {
         }
 
         // 수신 기록은 비즈니스 처리보다 먼저 남김
-        Webhook webhook = webhookService.receive(webhookId, "UNKNOWN");
+        Webhook webhook = webhookService.receive(webhookId, PaymentWebhookConstants.EVENT_STATUS_UNKNOWN);
 
         if (webhook.isCompleted()) {
             log.info("[PORTONE_WEBHOOK] completed webhook ignored after receive. id={}", webhookId);
@@ -196,7 +197,7 @@ public class PaymentFacade {
         webhook.updateEventStatus(event.eventType());
         webhook.updatePgKey(event.pgKey());
 
-        if ("WebhookTransactionPaid".equals(event.eventType())) {
+        if (PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID.equals(event.eventType())) {
             Optional<Payment> payment = paymentService.findByPgKey(event.pgKey());
             if (payment.isEmpty()) {
                 log.info("[PORTONE_WEBHOOK] payment is not saved yet. webhook deferred. pgKey={}", event.pgKey());
@@ -205,12 +206,12 @@ public class PaymentFacade {
             }
 
             UUID courseId = findCourseIdByPayment(payment.get());
-            return paymentLockExecutor.executeWithPgKeyLock(event.pgKey(), () -> {
-                return paymentLockExecutor.executeWithCourseLock(
+            return paymentLockExecutor.executeWithPgKeyLock(event.pgKey(), () ->
+                    paymentLockExecutor.executeWithCourseLock(
                         courseId,
                         () -> transactionTemplate.execute(status -> processTransactionWebhook(event, webhook))
-                );
-            });
+                    )
+            );
         }
 
         return paymentLockExecutor.executeWithPgKeyLock(
@@ -229,18 +230,18 @@ public class PaymentFacade {
 
         log.info("[PORTONE_WEBHOOK] type={} pgKey={}", event.eventType(), event.pgKey());
 
-        return switch (event.eventType()) {
-            case "WebhookTransactionPaid" -> completePaidWebhook(event.pgKey());
-            case "WebhookTransactionFailed", "WebhookTransactionCancelled" -> {
+        switch (event.eventType()) {
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID:
+                return completePaidWebhook(event.pgKey());
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED:
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
                 Payment payment = paymentService.getByPgKeyForUpdate(event.pgKey());
                 paymentService.fail(payment);
-                yield PaymentCancelDecision.none();
-            }
-            default -> {
+                return PaymentCancelDecision.none();
+            default:
                 log.warn("[PORTONE_WEBHOOK] unsupported event type. type={}", event.eventType());
-                yield PaymentCancelDecision.none();
-            }
-        };
+                return PaymentCancelDecision.none();
+        }
     }
 
     /**
@@ -297,7 +298,7 @@ public class PaymentFacade {
             return;
         }
 
-        Webhook webhook = webhookService.retry(paidWebhook.get(), "WebhookTransactionPaid");
+        Webhook webhook = webhookService.retry(paidWebhook.get(), PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID);
         log.info("[PORTONE_WEBHOOK] deferred paid webhook resumed. webhookId={} pgKey={}",
                 webhook.getRecWebhookId(), pgKey);
 
@@ -307,7 +308,7 @@ public class PaymentFacade {
                 paymentLockExecutor.executeWithCourseLock(
                         courseId,
                         () -> transactionTemplate.execute(status -> processTransactionWebhook(
-                                new PortOneWebhookEvent(true, "WebhookTransactionPaid", pgKey),
+                                new PortOneWebhookEvent(true, PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID, pgKey),
                                 webhook
                         ))
                 )

@@ -1,5 +1,6 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.application.payment.consts.PaymentWebhookConstants;
 import four_tential.potential.domain.payment.entity.Webhook;
 import four_tential.potential.domain.payment.repository.WebhookRepository;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +66,10 @@ public class WebhookService {
      */
     @Transactional(readOnly = true)
     public Optional<Webhook> findProcessablePaidWebhook(String pgKey) {
-        return webhookRepository.findLatestProcessableByPgKeyAndEventStatus(pgKey, "WebhookTransactionPaid");
+        return webhookRepository.findLatestProcessableByPgKeyAndEventStatus(
+                pgKey,
+                PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID
+        );
     }
 
     /**
