@@ -1,11 +1,14 @@
 package four_tential.potential.domain.member.member;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
+import four_tential.potential.common.exception.ServiceErrorException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_MEMBER_STATUS_TRANSITION;
 import org.hibernate.annotations.UuidGenerator;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -83,6 +86,18 @@ public class Member extends BaseTimeEntity {
 
     public void promoteToInstructor() {
         this.role = MemberRole.ROLE_INSTRUCTOR;
+    }
+
+    // 관리자가 회원 상태 변경 (ACTIVE ↔ SUSPENDED 전환만 허용)
+    public void changeStatus(MemberStatus newStatus) {
+        boolean validTransition =
+                (this.status == MemberStatus.ACTIVE && newStatus == MemberStatus.SUSPENDED) ||
+                (this.status == MemberStatus.SUSPENDED && newStatus == MemberStatus.ACTIVE);
+
+        if (!validTransition) {
+            throw new ServiceErrorException(ERR_INVALID_MEMBER_STATUS_TRANSITION);
+        }
+        this.status = newStatus;
     }
 
     public void changePassword(String encodedNewPassword) {
