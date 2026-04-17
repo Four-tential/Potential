@@ -9,8 +9,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -32,12 +35,14 @@ class OrderExpirationSchedulerTest {
         given(redissonClient.getLock("lock:order:expiration")).willReturn(lock);
         given(lock.tryLock(eq(0L), anyLong(), eq(TimeUnit.SECONDS))).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
+        // 한 번 실행 후 0을 반환하여 종료되도록 설정
+        given(orderService.processExpiredBatch(any(LocalDateTime.class), anyInt())).willReturn(10, 0);
 
         // when
         scheduler.expireOrders();
 
         // then
-        verify(orderService, times(1)).processExpiredOrders();
+        verify(orderService, atLeastOnce()).processExpiredBatch(any(LocalDateTime.class), anyInt());
         verify(lock).unlock();
     }
 
@@ -52,7 +57,7 @@ class OrderExpirationSchedulerTest {
         scheduler.expireOrders();
 
         // then
-        verify(orderService, never()).processExpiredOrders();
+        verify(orderService, never()).processExpiredBatch(any(LocalDateTime.class), anyInt());
         verify(lock, never()).unlock();
     }
 
@@ -67,7 +72,8 @@ class OrderExpirationSchedulerTest {
         scheduler.expireOrders();
 
         // then
-        verify(orderService, never()).processExpiredOrders();
+        verify(orderService, never()).processExpiredBatch(any(LocalDateTime.class), anyInt());
+        assertThat(Thread.interrupted()).isTrue(); // 검증과 동시에 플래그 정리(Clear)
     }
 
     @Test
@@ -77,17 +83,13 @@ class OrderExpirationSchedulerTest {
         given(redissonClient.getLock("lock:order:expiration")).willReturn(lock);
         given(lock.tryLock(eq(0L), anyLong(), eq(TimeUnit.SECONDS))).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
-        doThrow(new RuntimeException("DB Error")).when(orderService).processExpiredOrders();
+        doThrow(new RuntimeException("DB Error")).when(orderService).processExpiredBatch(any(LocalDateTime.class), anyInt());
 
-        // when
-        try {
-            scheduler.expireOrders();
-        } catch (Exception e) {
-            // 예외는 내부에서 로그만 남기고 삼켜지거나 발생할 수 있음 (현재 코드상 로그만 남음)
-        }
+        // when & then
+        assertThatThrownBy(() -> scheduler.expireOrders())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("DB Error");
 
-        // then
-        verify(orderService, times(1)).processExpiredOrders();
         verify(lock).unlock(); // 예외 발생 시에도 언락 확인
     }
 

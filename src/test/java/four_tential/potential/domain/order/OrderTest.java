@@ -4,12 +4,14 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 class OrderTest {
 
@@ -20,13 +22,15 @@ class OrderTest {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
         BigInteger price = BigInteger.valueOf(10000);
+        LocalDateTime now = LocalDateTime.now();
 
         // when
         Order order = Order.register(memberId, courseId, 1, price, "테스트 코스");
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(order.getExpireAt()).isAfter(order.getCreatedAt() != null ? order.getCreatedAt() : java.time.LocalDateTime.now());
+        // 실행 시간을 고려하여 1초 이내의 오차만 허용하고, 정확히 10분 후인지 검증
+        assertThat(order.getExpireAt()).isCloseTo(now.plusMinutes(10), within(1, ChronoUnit.SECONDS));
         assertThat(order.getTotalPriceSnap()).isEqualTo(price);
     }
 
@@ -45,7 +49,7 @@ class OrderTest {
 
     @Test
     @DisplayName("PENDING 상태가 아닌 주문을 결제 완료 처리하면 예외가 발생한다")
-    void completePaymentFail() {
+    void completePaymentFail_InvalidStatus() {
         // given
         Order order = createPendingOrder();
         order.completePayment(); // PAID 상태로 변경
@@ -53,8 +57,23 @@ class OrderTest {
         // when & then
         assertThatThrownBy(order::completePayment)
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage(OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getMessage())
-                .hasFieldOrPropertyWithValue("httpStatus", OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getHttpStatus());
+                .hasMessage(OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getMessage());
+    }
+
+    @Test
+    @DisplayName("만료 시간이 지난 주문을 결제 완료 처리하면 EXPIRED 상태로 변경되고 예외가 발생한다")
+    void completePaymentFail_Expired() {
+        // given
+        Order order = createPendingOrder();
+        // 리플렉션을 사용하여 만료 시간을 과거로 설정
+        ReflectionTestUtils.setField(order, "expireAt", LocalDateTime.now().minusMinutes(1));
+
+        // when & then
+        assertThatThrownBy(order::completePayment)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_ORDER_EXPIRED.getMessage());
+        
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
     }
 
     @Test
@@ -68,6 +87,20 @@ class OrderTest {
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("PENDING 상태가 아닌 주문을 만료 처리하면 예외가 발생한다")
+    void expireFail() {
+        // given
+        Order order = createPendingOrder();
+        order.completePayment(); // PAID 상태
+
+        // when & then
+        assertThatThrownBy(order::expire)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getMessage())
+                .hasFieldOrPropertyWithValue("httpStatus", OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getHttpStatus());
     }
 
     private Order createPendingOrder() {
