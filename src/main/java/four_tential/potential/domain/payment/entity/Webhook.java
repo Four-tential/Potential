@@ -37,7 +37,7 @@ public class Webhook {
     private String eventStatus;
 
     @Lob
-    @Column(name = "payload")
+    @Column(name = "payload", columnDefinition = "LONGTEXT")
     private String payload;
 
     @Column(name = "fail_reason", length = 100)

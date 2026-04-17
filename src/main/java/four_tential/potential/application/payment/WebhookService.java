@@ -3,6 +3,7 @@ package four_tential.potential.application.payment;
 import four_tential.potential.application.payment.consts.PaymentWebhookConstants;
 import four_tential.potential.domain.payment.entity.Webhook;
 import four_tential.potential.domain.payment.repository.WebhookRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,17 +19,19 @@ import java.util.Optional;
 public class WebhookService {
 
     private final WebhookRepository webhookRepository;
+    private final EntityManager entityManager;
 
     /**
-     * PortOne 웹훅 수신 기록을 PENDING 상태로 저장한다.
-     * 같은 webhook-id가 동시에 들어와 unique constraint가 발생하면 기존 row를 재조회해 멱등 처리한다.
-     * REQUIRES_NEW: 이후 비즈니스 로직이 실패해 롤백되어도 수신 기록은 반드시 커밋된다.
+     * PortOne 웹훅 수신 기록을 먼저 남긴다
+     * 처리 중 실패해도 원본 payload는 남아야 하므로 별도 트랜잭션으로 저장한다
+     * 같은 webhook-id가 동시에 들어오면 기존 row를 다시 조회해 멱등하게 처리한다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Webhook recordReceivedWebhook(String recWebhookId, String eventStatus, String payload) {
+    public Webhook saveIncomingWebhook(String recWebhookId, String eventStatus, String payload) {
         try {
             return webhookRepository.saveAndFlush(Webhook.createPendingRecord(recWebhookId, eventStatus, payload));
         } catch (DataIntegrityViolationException e) {
+            entityManager.clear();
             Webhook duplicated = webhookRepository.findByRecWebhookId(recWebhookId)
                     .orElseThrow(() -> e);
             if (duplicated.isFinished()) {
@@ -42,24 +45,8 @@ public class WebhookService {
     }
 
     /**
-     * 같은 webhook-id의 수신 기록이 이미 존재하는지 확인한다.
-     */
-    @Transactional(readOnly = true)
-    public boolean isDuplicate(String recWebhookId) {
-        return webhookRepository.existsByRecWebhookId(recWebhookId);
-    }
-
-    /**
-     * webhook-id 기준으로 이미 성공 처리된 웹훅인지 확인한다.
-     */
-    @Transactional(readOnly = true)
-    public boolean isCompleted(String recWebhookId) {
-        return webhookRepository.existsCompletedByRecWebhookId(recWebhookId);
-    }
-
-    /**
-     * webhook-id 기준으로 이미 종료된 웹훅인지 확인한다.
-     * COMPLETED 또는 FAILED 라면 재전송되어도 더 이상 비즈니스 로직을 실행하지 않는다.
+     * 이미 끝난 webhook-id인지 확인한다
+     * COMPLETED 또는 FAILED면 재전송되어도 다시 처리하지 않는다
      */
     @Transactional(readOnly = true)
     public boolean isFinished(String recWebhookId) {
@@ -67,10 +54,10 @@ public class WebhookService {
     }
 
     /**
-     * 결제 생성 API보다 먼저 도착해 아직 완료되지 않은 Paid 웹훅을 조회한다.
+     * 결제 생성보다 먼저 도착해 기다리는 Paid 웹훅을 찾는다
      */
     @Transactional(readOnly = true)
-    public Optional<Webhook> findProcessablePaidWebhook(String pgKey) {
+    public Optional<Webhook> findPendingPaidWebhook(String pgKey) {
         return webhookRepository.findLatestProcessableByPgKeyAndEventStatus(
                 pgKey,
                 PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID
@@ -78,7 +65,7 @@ public class WebhookService {
     }
 
     /**
-     * 웹훅의 실제 이벤트 타입을 저장한다.
+     * UNKNOWN으로 저장했던 이벤트 타입을 실제 PortOne 이벤트 타입으로 바꾼다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Webhook updateEventStatus(Webhook webhook, String eventStatus) {
@@ -87,63 +74,68 @@ public class WebhookService {
     }
 
     /**
-     * 실패 또는 보류 상태의 웹훅을 다시 처리 가능한 PENDING 상태로 되돌린다.
+     * 다시 처리할 웹훅을 PENDING 상태로 돌려놓는다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Webhook markWebhookPendingForRetry(Webhook webhook, String eventStatus) {
+    public Webhook prepareRetry(Webhook webhook, String eventStatus) {
         webhook.markPendingForRetry(eventStatus);
         return webhookRepository.save(webhook);
     }
 
     /**
-     * Paid 웹훅이 payment 저장보다 먼저 도착했을 때 실패 처리하지 않고 보류한다.
-     * 결제 생성 API가 payment를 저장하면 pgKey로 이 웹훅을 찾아 이어서 확정 처리한다.
+     * payment보다 먼저 온 Paid 웹훅을 잠시 보류한다
+     * 순서 역전일 수 있으므로 FAILED로 끝내지 않고 pgKey를 남겨 둔다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Webhook deferPaidWebhookUntilPaymentSaved(Webhook webhook, String eventStatus, String pgKey) {
+    public Webhook deferPaidWebhook(Webhook webhook, String eventStatus, String pgKey) {
         webhook.markPendingForRetry(eventStatus);
         webhook.updatePgKey(pgKey);
         return webhookRepository.save(webhook);
     }
 
     /**
-     * 결제 생성 검증 실패로 더 이상 이어갈 수 없는 선도착 Paid 웹훅을 실패 기록으로 마무리한다.
+     * 더 이상 이어갈 수 없는 보류 Paid 웹훅을 FAILED로 마무리한다
+     * 실패 사유를 남겨 PortOne 재전송 없이 추적할 수 있게 한다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordDeferredPaidWebhookFailure(String pgKey, String reason, String message) {
-        findProcessablePaidWebhook(pgKey)
-                .ifPresent(webhook -> recordFailedWebhook(webhook, reason, message));
+    public void failDeferredPaidWebhook(String pgKey, String reason, String message) {
+        webhookRepository.findLatestProcessableByPgKeyAndEventStatus(
+                        pgKey,
+                        PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID
+                )
+                .ifPresent(webhook -> markFailedAndSave(webhook, reason, message));
     }
 
     /**
-     * 웹훅 처리를 COMPLETED 상태로 마무리한다.
-     * REQUIRES_NEW로 독립 저장해 비즈니스 처리 트랜잭션과 무관하게 완료 기록을 남긴다.
+     * 웹훅을 COMPLETED 상태로 마무리한다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordCompletedWebhook(Webhook webhook) {
+    public void completeWebhook(Webhook webhook) {
         webhook.markCompleted();
         webhookRepository.save(webhook);
     }
 
     /**
-     * 웹훅 처리를 FAILED 상태로 마무리한다.
-     * REQUIRES_NEW로 독립 저장해 비즈니스 처리 트랜잭션이 롤백되어도 실패 기록을 남긴다.
-     * webhook이 null이면 수신 자체가 실패한 것이므로 기록 없이 로그만 남기고 종료한다.
+     * 웹훅을 FAILED 상태로 마무리한다
+     * 실패 사유와 메시지는 운영 확인용으로 함께 남긴다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordFailedWebhook(Webhook webhook, String reason, String message) {
+    public void failWebhook(Webhook webhook, String reason, String message) {
         if (webhook == null) {
-            log.warn("[PORTONE_WEBHOOK] recordFailedWebhook() called with null webhook — 수신 기록 없음. reason={} message={}",
+            log.warn("[PORTONE_WEBHOOK] failWebhook() called with null webhook — 수신 기록 없음. reason={} message={}",
                     reason, message);
             return;
         }
+        markFailedAndSave(webhook, reason, message);
+    }
+
+    private void markFailedAndSave(Webhook webhook, String reason, String message) {
         webhook.markFailed(reason, message);
         webhookRepository.save(webhook);
     }
 
     /**
-     * detached 상태의 webhook을 현재 트랜잭션에 merge해 변경사항을 저장한다.
-     * processTransactionWebhook처럼 기존 트랜잭션 안에서 호출해야 한다.
+     * 현재 비즈니스 트랜잭션 안에서 webhook 변경사항을 저장한다
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Webhook merge(Webhook webhook) {
