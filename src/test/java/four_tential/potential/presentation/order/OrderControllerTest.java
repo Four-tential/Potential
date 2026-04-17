@@ -2,6 +2,7 @@ package four_tential.potential.presentation.order;
 
 import four_tential.potential.application.order.OrderFacade;
 import four_tential.potential.common.dto.BaseResponse;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.order.dto.*;
@@ -12,15 +13,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class OrderControllerTest {
@@ -135,5 +141,48 @@ class OrderControllerTest {
         assertThat(actualResponse.createdAt()).isEqualTo(now);
         assertThat(actualResponse.updatedAt()).isEqualTo(now);
         assertThat(actualResponse.expireAt()).isEqualTo(now.plusMinutes(10));
+    }
+
+    @Test
+    @DisplayName("나의 주문 목록 조회 성공 시 200 OK와 페이징된 정보를 반환한다")
+    void getMyOrders_success() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        OrderMyListResponse orderResponse = new OrderMyListResponse(
+                ORDER_ID,
+                COURSE_ID,
+                "테스트 강의",
+                BigInteger.valueOf(10000),
+                OrderStatus.PAID,
+                now,
+                now,
+                now.plusMinutes(10)
+        );
+        PageResponse<OrderMyListResponse> expectedPageResponse = new PageResponse<>(
+                List.of(orderResponse),
+                0,
+                1,
+                1,
+                10,
+                true
+        );
+        Pageable pageable = PageRequest.of(0, 10);
+        given(orderFacade.getMyOrders(eq(MEMBER_ID), eq(pageable))).willReturn(expectedPageResponse);
+
+        // when
+        ResponseEntity<BaseResponse<PageResponse<OrderMyListResponse>>> response =
+                orderController.getMyOrders(studentPrincipal, pageable);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+
+        PageResponse<OrderMyListResponse> actualResponse = response.getBody().data();
+        assertThat(actualResponse.content()).hasSize(1);
+        assertThat(actualResponse.content().get(0).orderId()).isEqualTo(ORDER_ID);
+        assertThat(actualResponse.totalElements()).isEqualTo(1);
+        assertThat(actualResponse.isLast()).isTrue();
+
+        verify(orderFacade).getMyOrders(MEMBER_ID, pageable);
     }
 }

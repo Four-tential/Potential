@@ -14,7 +14,13 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 
 @Getter
 @Entity
-@Table(name = "instructor_members")
+@Table(
+        name = "instructor_members",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_instructor_member_member_id",
+                columnNames = "member_id"
+        )
+)
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class InstructorMember extends BaseTimeEntity {
     @Id
@@ -89,5 +95,16 @@ public class InstructorMember extends BaseTimeEntity {
         this.respondedAt = now;
     }
 
+    public void reapply(String categoryCode, String content, String imageUrl) {
+        if (this.status != InstructorMemberStatus.REJECTED) {
+            throw new ServiceErrorException(ERR_ALREADY_IN_PROGRESS_APPLICATION);
+        }
 
+        this.categoryCode = categoryCode;
+        this.content = content;
+        this.imageUrl = imageUrl;
+        this.rejectReason = null;
+        this.respondedAt = null;
+        this.status = InstructorMemberStatus.PENDING;
+    }
 }
