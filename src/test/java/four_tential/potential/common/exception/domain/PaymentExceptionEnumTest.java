@@ -38,6 +38,20 @@ class PaymentExceptionEnumTest {
     }
 
     @Test
+    @DisplayName("ERR_PAYMENT_KEY_MISMATCH 는 BAD_REQUEST 상태코드를 반환한다")
+    void err_payment_key_mismatch_status() {
+        assertThat(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH.getHttpStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("ERR_PAYMENT_KEY_MISMATCH 는 올바른 메시지를 반환한다")
+    void err_payment_key_mismatch_message() {
+        assertThat(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH.getMessage())
+                .isEqualTo("결제 식별자가 일치하지 않습니다");
+    }
+
+    @Test
     @DisplayName("ERR_REFUND_NOT_ALLOWED 는 CONFLICT 상태코드를 반환한다")
     void err_refund_not_allowed_status() {
         assertThat(PaymentExceptionEnum.ERR_REFUND_NOT_ALLOWED.getHttpStatus())

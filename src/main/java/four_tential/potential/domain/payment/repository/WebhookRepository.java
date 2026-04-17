@@ -5,7 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.UUID;
 
-public interface WebhookRepository extends JpaRepository<Webhook, UUID> {
-
-    boolean existsByRecWebhookId(String recWebhookId);
+public interface WebhookRepository extends JpaRepository<Webhook, UUID>, WebhookCustomRepository {
 }

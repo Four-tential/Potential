@@ -1,6 +1,8 @@
 package four_tential.potential.domain.payment.entity;
 
 import four_tential.potential.common.entity.BaseTimeEntity;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import jakarta.persistence.*;
@@ -14,7 +16,9 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "payments")
+@Table(name = "payments", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_payments_order_id", columnNames = {"order_id"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment extends BaseTimeEntity {
 
@@ -29,8 +33,8 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID memberId;
 
-    @Column(name = "coupon_id", columnDefinition = "BINARY(16)")
-    private UUID couponId;
+    @Column(name = "member_coupon_id", columnDefinition = "BINARY(16)")
+    private UUID memberCouponId;
 
     @Column(name = "pg_key", unique = true, length = 300)
     private String pgKey;
@@ -55,10 +59,11 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
-    public static Payment create(
+    public static Payment createPending(
             UUID orderId,
             UUID memberId,
-            UUID couponId,
+            UUID memberCouponId,
+            String pgKey,
             Long totalPrice,
             Long discountPrice,
             Long paidTotalPrice,
@@ -66,7 +71,8 @@ public class Payment extends BaseTimeEntity {
         Payment payment = new Payment();
         payment.orderId = orderId;
         payment.memberId = memberId;
-        payment.couponId = couponId;
+        payment.memberCouponId = memberCouponId;
+        payment.pgKey = pgKey;
         payment.totalPrice = totalPrice;
         payment.discountPrice = discountPrice;
         payment.paidTotalPrice = paidTotalPrice;
@@ -75,29 +81,42 @@ public class Payment extends BaseTimeEntity {
         return payment;
     }
 
-    /**
-     * 결제 확정 처리
-     * 웹훅 Transaction.Paid 수신 시 호출
-     */
-    public void confirmPaid(String pgKey) {
-        this.pgKey = pgKey;
-        this.status = PaymentStatus.PAID;
-        this.paidAt = LocalDateTime.now();
+    public boolean isPending() {
+        return this.status == PaymentStatus.PENDING;
     }
 
-    /**
-     * 결제 실패 처리
-     * 웹훅 Transaction.Failed 수신 시 호출
-     */
+    public boolean isPaid() {
+        return this.status == PaymentStatus.PAID;
+    }
+
+    // 결제를 PAID 상태로 확정
+    public void confirmPaid() {
+        if (transitTo(PaymentStatus.PAID)) {
+            this.paidAt = LocalDateTime.now();
+        }
+    }
+
     public void fail() {
-        this.status = PaymentStatus.FAILED;
+        transitTo(PaymentStatus.FAILED);
     }
 
     public void refund() {
-        this.status = PaymentStatus.REFUNDED;
+        transitTo(PaymentStatus.REFUNDED);
     }
 
     public void partRefund() {
-        this.status = PaymentStatus.PART_REFUNDED;
+        transitTo(PaymentStatus.PART_REFUNDED);
+    }
+
+    private boolean transitTo(PaymentStatus target) {
+        if (this.status == target) {
+            return false;
+        }
+        if (!this.status.canTransitTo(target)) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_INVALID_PAYMENT_STATUS_TRANSITION);
+        }
+
+        this.status = target;
+        return true;
     }
 }

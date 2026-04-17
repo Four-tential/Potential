@@ -2,137 +2,733 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>결제 테스트</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PortOne 결제 테스트</title>
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; }
-        div { margin: 10px 0; }
-        label { display: block; margin-bottom: 4px; font-size: 14px; }
-        input { width: 100%; padding: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #4CAF50;
-            color: white; border: none; cursor: pointer; font-size: 16px; }
-        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+        :root {
+            color-scheme: light;
+            --ink: #171717;
+            --muted: #666f7a;
+            --line: #d7dde4;
+            --panel: #f6f8fa;
+            --accent: #176b87;
+            --accent-strong: #0f5268;
+            --danger: #b42318;
+            --ok: #146c43;
+            --warn: #8a5a00;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, "Noto Sans KR", sans-serif;
+            color: var(--ink);
+            background: #ffffff;
+        }
+
+        main {
+            width: min(1120px, calc(100% - 32px));
+            margin: 32px auto 56px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+            line-height: 1.25;
+            letter-spacing: 0;
+        }
+
+        h2 {
+            margin: 0 0 14px;
+            font-size: 18px;
+            line-height: 1.35;
+            letter-spacing: 0;
+        }
+
+        p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .top {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 22px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+            gap: 18px;
+            align-items: start;
+        }
+
+        section {
+            border-top: 1px solid var(--line);
+            padding: 20px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            border: 1px solid #bcc7d3;
+            border-radius: 8px;
+            padding: 10px 11px;
+            font-size: 14px;
+            letter-spacing: 0;
+            background: #fff;
+            color: var(--ink);
+        }
+
+        textarea {
+            min-height: 86px;
+            resize: vertical;
+            font-family: Consolas, "Courier New", monospace;
+        }
+
+        input[readonly] {
+            background: var(--panel);
+            color: #39424e;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .field {
+            min-width: 0;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 8px;
+            padding: 11px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0;
+            cursor: pointer;
+            background: var(--accent);
+            color: #fff;
+        }
+
+        button:hover {
+            background: var(--accent-strong);
+        }
+
+        button.secondary {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+        }
+
+        button.secondary:hover {
+            background: var(--panel);
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .status-bar {
+            display: grid;
+            gap: 10px;
+            position: sticky;
+            top: 16px;
+        }
+
+        .box {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 14px;
+            background: #fff;
+        }
+
+        .box.info {
+            background: var(--panel);
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 112px minmax(0, 1fr);
+            gap: 8px 12px;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .kv dt {
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .kv dd {
+            margin: 0;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        pre {
+            width: 100%;
+            min-height: 120px;
+            max-height: 420px;
+            margin: 0;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border-radius: 8px;
+            padding: 12px;
+            background: #101418;
+            color: #edf2f7;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .ok {
+            color: var(--ok);
+            font-weight: 700;
+        }
+
+        .danger {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        .warn {
+            color: var(--warn);
+            font-weight: 700;
+        }
+
+        ol {
+            margin: 10px 0 0;
+            padding-left: 20px;
+            color: #333b45;
+            line-height: 1.7;
+        }
+
+        code {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 13px;
+        }
+
+        @media (max-width: 860px) {
+            main {
+                width: min(100% - 24px, 720px);
+                margin-top: 22px;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .status-bar {
+                position: static;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .actions {
+                display: grid;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-<h2>PortOne 결제 테스트</h2>
+<main>
+    <div class="top">
+        <h1>PortOne 실제 결제 테스트</h1>
+        <p>
+            DB에 준비된 PENDING 주문을 조회하고, 같은 금액으로 PortOne 결제창을 띄운 뒤
+            서버 결제 생성 API까지 호출합니다. 웹훅이 들어오면 DB에서 payment/webhook 상태를 확인하세요.
+        </p>
+    </div>
 
-<div>
-    <label>주문 ID</label>
-    <input type="text" id="orderId" value="test-order-001" />
-</div>
-<div>
-    <label>결제 금액 (원)</label>
-    <input type="number" id="amount" value="1000" />
-</div>
-<div>
-    <label>상품명</label>
-    <input type="text" id="productName" value="테스트 코스" />
-</div>
-<div>
-    <label>회원 ID</label>
-    <input type="text" id="memberId" value="test-member-001" />
-</div>
-<div>
-    <label>구매자 이름</label>
-    <input type="text" id="buyerName" value="테스트 유저" />
-</div>
-<div>
-    <label>구매자 이메일 (필수)</label>
-    <input type="email" id="buyerEmail" value="test@test.com" />
-</div>
-<div>
-    <label>구매자 전화번호</label>
-    <input type="text" id="buyerPhone" value="010-1234-5678" />
-</div>
+    <div class="layout">
+        <div>
+            <section>
+                <h2>1. 인증 정보</h2>
+                <div class="grid">
+                    <div class="field full">
+                        <label for="accessToken">학생 accessToken</label>
+                        <textarea id="accessToken" placeholder="Bearer 없이 accessToken 값만 붙여넣으세요."></textarea>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="secondary" type="button" onclick="saveToken()">토큰 저장</button>
+                    <button class="secondary" type="button" onclick="clearToken()">토큰 삭제</button>
+                </div>
+            </section>
 
-<button onclick="requestPayment()">결제하기</button>
-<div id="result"></div>
+            <section>
+                <h2>2. 주문 조회</h2>
+                <div class="grid">
+                    <div class="field full">
+                        <label for="orderId">주문 ID</label>
+                        <input id="orderId" type="text" placeholder="orders.id UUID를 입력하세요.">
+                    </div>
+                    <div class="field">
+                        <label for="orderStatus">주문 상태</label>
+                        <input id="orderStatus" type="text" readonly placeholder="주문 조회 후 표시됩니다.">
+                    </div>
+                    <div class="field">
+                        <label for="expireAt">결제 만료 시간</label>
+                        <input id="expireAt" type="text" readonly placeholder="주문 조회 후 표시됩니다.">
+                    </div>
+                    <div class="field">
+                        <label for="courseId">코스 ID</label>
+                        <input id="courseId" type="text" readonly placeholder="주문 조회 후 표시됩니다.">
+                    </div>
+                    <div class="field">
+                        <label for="orderCount">수강권 수량</label>
+                        <input id="orderCount" type="number" readonly placeholder="0">
+                    </div>
+                    <div class="field full">
+                        <label for="orderName">결제창 상품명</label>
+                        <input id="orderName" type="text" placeholder="주문 조회 시 titleSnap으로 채워집니다.">
+                    </div>
+                    <div class="field">
+                        <label for="amount">결제 금액</label>
+                        <input id="amount" type="number" min="1" step="1" placeholder="주문 조회 시 totalPriceSnap으로 채워집니다.">
+                    </div>
+                    <div class="field">
+                        <label for="payWay">결제 수단</label>
+                        <select id="payWay">
+                            <option value="CARD">CARD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button type="button" onclick="loadOrder()">주문 조회</button>
+                    <button class="secondary" type="button" onclick="fillManualExample()">화면 입력값만 새로고침</button>
+                </div>
+            </section>
+
+            <section>
+                <h2>3. PortOne 결제자 정보</h2>
+                <div class="grid">
+                    <div class="field">
+                        <label for="buyerName">구매자 이름</label>
+                        <input id="buyerName" type="text" value="테스트 수강생">
+                    </div>
+                    <div class="field">
+                        <label for="buyerEmail">구매자 이메일</label>
+                        <input id="buyerEmail" type="email" value="student@test.com">
+                    </div>
+                    <div class="field">
+                        <label for="buyerPhone">구매자 전화번호</label>
+                        <input id="buyerPhone" type="text" value="010-1234-5678">
+                    </div>
+                    <div class="field">
+                        <label for="customerId">PortOne customerId</label>
+                        <input id="customerId" type="text" placeholder="비워두면 orderId 기반으로 자동 생성됩니다.">
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>4. 결제 실행</h2>
+                <div class="grid">
+                    <div class="field full">
+                        <label for="paymentId">PortOne paymentId / 서버 pgKey</label>
+                        <input id="paymentId" type="text" readonly maxlength="40" placeholder="주문 ID 입력 또는 주문 조회 후 자동 생성됩니다.">
+                    </div>
+                </div>
+                <div class="actions">
+                    <button type="button" onclick="requestPayment()" id="payButton">결제창 호출 후 서버 검증</button>
+                    <button class="secondary" type="button" onclick="regeneratePaymentId()">paymentId 다시 생성</button>
+                </div>
+            </section>
+        </div>
+
+        <aside class="status-bar">
+            <div class="box info">
+                <h2>PortOne 설정</h2>
+                <dl class="kv">
+                    <dt>storeId</dt>
+                    <dd id="storeIdView">로딩 중</dd>
+                    <dt>channelKey</dt>
+                    <dd id="channelKeyView">로딩 중</dd>
+                </dl>
+            </div>
+
+            <div class="box">
+                <h2>현재 단계</h2>
+                <dl class="kv">
+                    <dt>주문 조회</dt>
+                    <dd id="orderLoadedView" class="warn">아직 안 됨</dd>
+                    <dt>PortOne 결제</dt>
+                    <dd id="portonePaidView" class="warn">아직 안 됨</dd>
+                    <dt>서버 검증</dt>
+                    <dd id="serverVerifiedView" class="warn">아직 안 됨</dd>
+                    <dt>웹훅 반영</dt>
+                    <dd>DB에서 확인</dd>
+                </dl>
+            </div>
+
+            <div class="box">
+                <h2>결과 로그</h2>
+                <pre id="result">페이지를 열면 PortOne 설정을 먼저 불러옵니다.</pre>
+            </div>
+
+            <div class="box info">
+                <h2>DB 확인 SQL</h2>
+                <ol>
+                    <li><code>select * from payments where order_id = unhex(replace('주문UUID','-',''));</code></li>
+                    <li><code>select * from payments where pg_key = 'paymentId값';</code></li>
+                    <li><code>select * from webhooks where pg_key = 'paymentId값';</code></li>
+                </ol>
+            </div>
+        </aside>
+    </div>
+</main>
 
 <script src="https://cdn.portone.io/v2/browser-sdk.js"></script>
-
 <script>
+    const storageKeys = {
+        token: 'potential.paymentTest.accessToken',
+        orderId: 'potential.paymentTest.orderId'
+    };
+
     let storeId = '';
     let channelKey = '';
+    let loadedOrder = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('accessToken').value = localStorage.getItem(storageKeys.token) || '';
+        document.getElementById('orderId').value = localStorage.getItem(storageKeys.orderId) || '';
+        document.getElementById('orderId').addEventListener('input', regeneratePaymentId);
+        regeneratePaymentId();
+        loadConfig();
+    });
 
     async function loadConfig() {
         try {
-            const res = await fetch('/api/v1/payments/portone-config');
-            const data = await res.json();
-            storeId = data.data.storeId;
-            channelKey = data.data.channelKey;
-            console.log('PortOne 설정값 로드 완료', { storeId, channelKey });
-        } catch (e) {
-            console.error('설정값 로드 실패', e);
-            showResult('설정값 로드 실패: 서버가 실행 중인지 확인하세요', 'red');
+            const response = await fetch('/api/v1/payments/portone-config');
+            const body = await readJson(response);
+
+            if (!response.ok || !body.success) {
+                throw new Error(body.message || 'PortOne 설정 조회 실패');
+            }
+
+            storeId = body.data.storeId;
+            channelKey = body.data.channelKey;
+            document.getElementById('storeIdView').textContent = maskValue(storeId);
+            document.getElementById('channelKeyView').textContent = maskValue(channelKey);
+            log('PortOne 설정을 불러왔습니다.', body);
+        } catch (error) {
+            document.getElementById('storeIdView').textContent = '실패';
+            document.getElementById('channelKeyView').textContent = '실패';
+            logError('PortOne 설정 조회 실패. 서버 실행 여부와 portone 환경변수를 확인하세요.', error);
         }
     }
 
-    loadConfig();
+    async function loadOrder() {
+        const token = getToken();
+        const orderId = getOrderId();
 
-    async function requestPayment() {
-        const orderId = document.getElementById('orderId').value;
-        const amount = parseInt(document.getElementById('amount').value);
-        const productName = document.getElementById('productName').value;
-        const memberId = document.getElementById('memberId').value;
-        const buyerName = document.getElementById('buyerName').value;
-        const buyerEmail = document.getElementById('buyerEmail').value;
-        const buyerPhone = document.getElementById('buyerPhone').value;
-
-        if (!buyerEmail) {
-            showResult('구매자 이메일을 입력해주세요', 'red');
+        if (!token) {
+            logError('학생 accessToken을 먼저 입력하세요.');
+            return;
+        }
+        if (!orderId) {
+            logError('주문 ID를 입력하세요.');
             return;
         }
 
-        showResult('결제 요청 중...', 'black');
+        localStorage.setItem(storageKeys.orderId, orderId);
 
         try {
-            const response = await PortOne.requestPayment({
-                storeId: storeId,
-                channelKey: channelKey,
-                paymentId: orderId,
-                orderName: productName,
+            const response = await fetch(`/v1/orders/${encodeURIComponent(orderId)}`, {
+                method: 'GET',
+                headers: authHeaders()
+            });
+            const body = await readJson(response);
+
+            if (!response.ok || !body.success) {
+                throw new Error(body.message || `주문 조회 실패: HTTP ${response.status}`);
+            }
+
+            loadedOrder = body.data;
+            document.getElementById('orderStatus').value = loadedOrder.status || '';
+            document.getElementById('expireAt').value = loadedOrder.expireAt || '';
+            document.getElementById('courseId').value = loadedOrder.courseId || '';
+            document.getElementById('orderCount').value = loadedOrder.orderCount || '';
+            document.getElementById('orderName').value = loadedOrder.titleSnap || `주문 ${orderId}`;
+            document.getElementById('amount').value = loadedOrder.totalPriceSnap || '';
+            document.getElementById('orderLoadedView').textContent = '완료';
+            document.getElementById('orderLoadedView').className = 'ok';
+            regeneratePaymentId();
+            log('주문 조회 성공. 이 금액 그대로 결제를 진행하세요.', body);
+        } catch (error) {
+            loadedOrder = null;
+            document.getElementById('orderLoadedView').textContent = '실패';
+            document.getElementById('orderLoadedView').className = 'danger';
+            logError('주문 조회 실패. accessToken의 회원과 주문의 memberId가 같은지 확인하세요.', error);
+        }
+    }
+
+    async function requestPayment() {
+        const token = getToken();
+        const orderId = getOrderId();
+        const paymentId = document.getElementById('paymentId').value.trim();
+        const amount = Number(document.getElementById('amount').value);
+        const orderName = document.getElementById('orderName').value.trim();
+        const buyerName = document.getElementById('buyerName').value.trim();
+        const buyerEmail = document.getElementById('buyerEmail').value.trim();
+        const buyerPhone = document.getElementById('buyerPhone').value.trim();
+        const customerId = normalizePgId(
+            document.getElementById('customerId').value.trim() || buildCustomerId(orderId),
+            30
+        );
+
+        if (!storeId || !channelKey) {
+            logError('PortOne 설정이 아직 준비되지 않았습니다.');
+            return;
+        }
+        if (!token) {
+            logError('학생 accessToken을 먼저 입력하세요.');
+            return;
+        }
+        if (!orderId) {
+            logError('주문 ID를 입력하세요.');
+            return;
+        }
+        if (!paymentId) {
+            logError('paymentId가 없습니다. paymentId 다시 생성을 누르세요.');
+            return;
+        }
+        if (!orderName) {
+            logError('결제창 상품명을 입력하세요.');
+            return;
+        }
+        if (!Number.isInteger(amount) || amount <= 0) {
+            logError('결제 금액은 1원 이상의 정수여야 합니다.');
+            return;
+        }
+        if (!buyerEmail) {
+            logError('구매자 이메일은 PortOne 테스트 결제에 필요합니다.');
+            return;
+        }
+        if (loadedOrder && loadedOrder.status !== 'PENDING') {
+            logError(`주문 상태가 PENDING이 아닙니다. 현재 상태: ${loadedOrder.status}`);
+            return;
+        }
+        if (loadedOrder && Number(loadedOrder.totalPriceSnap) !== amount) {
+            logError(`주문 금액과 화면 금액이 다릅니다. 주문 금액: ${loadedOrder.totalPriceSnap}, 화면 금액: ${amount}`);
+            return;
+        }
+
+        setBusy(true);
+        document.getElementById('portonePaidView').textContent = '진행 중';
+        document.getElementById('portonePaidView').className = 'warn';
+        document.getElementById('serverVerifiedView').textContent = '대기';
+        document.getElementById('serverVerifiedView').className = 'warn';
+        log('PortOne 결제창을 호출합니다.', { orderId, paymentId, amount, orderName });
+
+        try {
+            const portoneResponse = await PortOne.requestPayment({
+                storeId,
+                channelKey,
+                paymentId,
+                orderName,
                 totalAmount: amount,
-                currency: "KRW",
-                payMethod: "CARD",
+                currency: 'KRW',
+                payMethod: 'CARD',
                 customer: {
-                    customerId: memberId,
+                    customerId,
                     fullName: buyerName,
                     email: buyerEmail,
                     phoneNumber: buyerPhone
                 }
             });
 
-            if (response.code !== undefined) {
-                showResult(`결제 실패: ${response.message}`, 'red');
+            if (portoneResponse.code !== undefined) {
+                document.getElementById('portonePaidView').textContent = '실패';
+                document.getElementById('portonePaidView').className = 'danger';
+                logError('PortOne 결제가 실패하거나 사용자가 결제창을 닫았습니다.', portoneResponse);
                 return;
             }
 
-            showResult('결제 완료! 서버 검증 중...', 'blue');
+            document.getElementById('portonePaidView').textContent = '완료';
+            document.getElementById('portonePaidView').className = 'ok';
+            log('PortOne 결제 완료. 이제 서버 결제 생성 API로 검증 요청을 보냅니다.', portoneResponse);
 
             const serverResponse = await fetch('/api/v1/payments', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    ...authHeaders(),
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                    orderId: orderId,
-                    pgKey: response.paymentId,
-                    payWay: "CARD"
+                    orderId,
+                    pgKey: portoneResponse.paymentId,
+                    payWay: document.getElementById('payWay').value
                 })
             });
+            const serverBody = await readJson(serverResponse);
 
-            const result = await serverResponse.json();
-            showResult(
-                `서버 검증 완료!\n${JSON.stringify(result, null, 2)}`,
-                'green'
-            );
+            if (!serverResponse.ok || !serverBody.success) {
+                document.getElementById('serverVerifiedView').textContent = '실패';
+                document.getElementById('serverVerifiedView').className = 'danger';
+                logError('서버 검증 실패. 이 경우 서버가 PortOne 결제 취소를 시도합니다.', serverBody);
+                return;
+            }
 
+            document.getElementById('serverVerifiedView').textContent = '완료';
+            document.getElementById('serverVerifiedView').className = 'ok';
+            log('서버 결제 생성 성공. payments에는 PENDING으로 저장되고, 웹훅 수신 후 PAID로 바뀝니다.', serverBody);
         } catch (error) {
-            showResult(`오류 발생: ${error.message}`, 'red');
+            logError('결제 테스트 중 오류가 발생했습니다.', error);
+        } finally {
+            setBusy(false);
         }
     }
 
-    function showResult(message, color) {
-        document.getElementById('result').innerHTML =
-            `<pre style="color:${color}">${message}</pre>`;
+    function regeneratePaymentId() {
+        const orderId = getOrderId();
+        const compactOrderId = orderId.replace(/[^a-zA-Z0-9]/g, '');
+        const orderSuffix = compactOrderId ? compactOrderId.slice(-8) : 'manual';
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).slice(2, 8);
+
+        // 일부 PG사의 주문번호(oid)는 40자 이하만 허용하므로 짧은 결제 식별자를 만든다.
+        document.getElementById('paymentId').value = `p${orderSuffix}${timestamp}${random}`.slice(0, 40);
+    }
+
+    function buildCustomerId(orderId) {
+        const compactOrderId = orderId.replace(/[^a-zA-Z0-9]/g, '');
+        const orderSuffix = compactOrderId ? compactOrderId.slice(-8) : 'manual';
+        return `c${orderSuffix}${Date.now().toString(36).slice(-6)}`;
+    }
+
+    function normalizePgId(value, maxLength) {
+        const normalized = value.replace(/[^a-zA-Z0-9]/g, '');
+        return (normalized || `c${Date.now().toString(36)}`).slice(0, maxLength);
+    }
+
+    function fillManualExample() {
+        loadedOrder = null;
+        document.getElementById('orderLoadedView').textContent = '수동 입력';
+        document.getElementById('orderLoadedView').className = 'warn';
+        regeneratePaymentId();
+        log('주문 조회 없이 수동 입력 모드입니다. 서버 검증은 DB 주문 금액과 화면 금액이 정확히 같아야 통과합니다.');
+    }
+
+    function saveToken() {
+        const token = getToken();
+        if (!token) {
+            logError('저장할 accessToken이 없습니다.');
+            return;
+        }
+        localStorage.setItem(storageKeys.token, token);
+        log('accessToken을 브라우저 localStorage에 저장했습니다.');
+    }
+
+    function clearToken() {
+        localStorage.removeItem(storageKeys.token);
+        document.getElementById('accessToken').value = '';
+        log('저장된 accessToken을 삭제했습니다.');
+    }
+
+    function getToken() {
+        return document.getElementById('accessToken').value.trim().replace(/^Bearer\s+/i, '');
+    }
+
+    function getOrderId() {
+        return document.getElementById('orderId').value.trim();
+    }
+
+    function authHeaders() {
+        return {
+            Authorization: `Bearer ${getToken()}`
+        };
+    }
+
+    async function readJson(response) {
+        const text = await response.text();
+        if (!text) {
+            return {};
+        }
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            return {
+                success: false,
+                message: text
+            };
+        }
+    }
+
+    function setBusy(busy) {
+        document.getElementById('payButton').disabled = busy;
+    }
+
+    function maskValue(value) {
+        if (!value) {
+            return '비어 있음';
+        }
+        if (value.length <= 12) {
+            return value;
+        }
+        return `${value.slice(0, 8)}...${value.slice(-4)}`;
+    }
+
+    function log(message, payload) {
+        const result = document.getElementById('result');
+        const now = new Date().toLocaleString('ko-KR');
+        result.textContent = `[${now}] ${message}${payload ? `\n\n${JSON.stringify(payload, null, 2)}` : ''}`;
+    }
+
+    function logError(message, payload) {
+        const result = document.getElementById('result');
+        const now = new Date().toLocaleString('ko-KR');
+        const normalized = normalizeError(payload);
+        result.textContent = `[${now}] ${message}${normalized ? `\n\n${normalized}` : ''}`;
+    }
+
+    function normalizeError(payload) {
+        if (!payload) {
+            return '';
+        }
+        if (payload instanceof Error) {
+            return payload.message;
+        }
+        if (typeof payload === 'string') {
+            return payload;
+        }
+        return JSON.stringify(payload, null, 2);
     }
 </script>
 </body>

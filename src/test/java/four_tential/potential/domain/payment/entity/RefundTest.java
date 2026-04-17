@@ -9,15 +9,15 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class RefundTest {
 
     private Payment createPayment() {
-        return Payment.create(
+        return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 null,
+                "portone_key_123",
                 100000L,
                 0L,
                 100000L,
