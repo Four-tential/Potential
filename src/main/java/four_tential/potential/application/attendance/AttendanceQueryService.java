@@ -16,10 +16,9 @@ public class AttendanceQueryService {
 
     private final AttendanceRepository attendanceRepository;
 
-    // 스냅샷 조회 — AttendanceService 내부 호출 시 AOP 프록시 미적용 문제로 별도 클래스 분리
+    // 스냅샷 조회
     @Transactional(readOnly = true)
     public AttendanceListResponse getAttendanceSnapshot(UUID courseId) {
-        List<Attendance> attendances = attendanceRepository.findAllByCourseId(courseId);
-        return AttendanceListResponse.ofInstructor(attendances);
+        return attendanceRepository.findStatsByCourseId(courseId);
     }
 }

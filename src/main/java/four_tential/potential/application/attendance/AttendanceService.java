@@ -35,8 +35,8 @@ import java.util.UUID;
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
-    private final QrTokenRepository    qrTokenRepository;
-    private final QrCodeGenerator      qrCodeGenerator;
+    private final QrTokenRepository qrTokenRepository;
+    private final QrCodeGenerator qrCodeGenerator;
     private final SseEmitterRepository sseEmitterRepository;
     private final AttendanceQueryService attendanceQueryService;
     private final SseAttendanceEventPublisher sseAttendanceEventPublisher;
@@ -89,19 +89,17 @@ public class AttendanceService {
         UUID courseId = qrTokenRepository.findCourseIdByToken(qrToken)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_FOUND));
 
-        if (attendanceRepository.existsByMemberIdAndCourseIdAndStatus(
-                memberId, courseId, AttendanceStatus.ATTEND)) {
+        if (attendanceRepository.existsAttendByMemberIdAndCourseId(memberId, courseId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED);
         }
 
-        // 예약 확정 여부 검증 추가
-        boolean isConfirmed = orderRepository.existsByMemberIdAndCourseIdAndStatus(
-                memberId, courseId, OrderStatus.CONFIRMED);
-        if (!isConfirmed) {
+        // 예약 확정 여부 검증
+        if (!orderRepository.existsByMemberIdAndCourseIdAndStatus(
+                memberId, courseId, OrderStatus.CONFIRMED)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_ORDER_NOT_CONFIRMED);
         }
 
-        Attendance attendance = attendanceRepository.findByMemberIdAndCourseId(memberId, courseId)
+        Attendance attendance = attendanceRepository.findByMemberIdAndCourseIdQuery(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_ENROLLED));
 
         attendance.attend(qrToken);
@@ -118,7 +116,7 @@ public class AttendanceService {
 
     // 출석 현황 조회 (강사 -> 전체)
     @Transactional(readOnly = true)
-    public List<Attendance> findAllByCourse(UUID courseId, UUID instructorId) {
+    public AttendanceListResponse findAllByCourse(UUID courseId, UUID instructorId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
@@ -126,13 +124,13 @@ public class AttendanceService {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
         }
 
-        return attendanceRepository.findAllByCourseId(courseId);
+        return attendanceRepository.findStatsByCourseId(courseId);
     }
 
     // 출석 현황 조회 (수강생 -> 본인)
     @Transactional(readOnly = true)
     public Attendance findMyAttendance(UUID memberId, UUID courseId) {
-        return attendanceRepository.findByMemberIdAndCourseId(memberId, courseId)
+        return attendanceRepository.findByMemberIdAndCourseIdQuery(memberId, courseId)
                 .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE));
     }
 
