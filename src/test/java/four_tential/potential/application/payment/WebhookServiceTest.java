@@ -29,7 +29,7 @@ class WebhookServiceTest {
     private WebhookRepository webhookRepository;
 
     private Webhook createWebhook() {
-        return Webhook.receive("rec_id_123", "UNKNOWN");
+        return Webhook.createPendingRecord("rec_id_123", "UNKNOWN", null);
     }
 
     @Test
@@ -38,7 +38,7 @@ class WebhookServiceTest {
         Webhook webhook = createWebhook();
         given(webhookRepository.saveAndFlush(any(Webhook.class))).willReturn(webhook);
 
-        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", null);
 
         assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
         verify(webhookRepository).saveAndFlush(any(Webhook.class));
@@ -48,33 +48,30 @@ class WebhookServiceTest {
     @DisplayName("receive 호출 중 webhook-id 중복 저장이 발생하면 기존 웹훅을 재조회해 멱등 처리한다")
     void receive_duplicateKey_returns_existing_webhook() {
         Webhook duplicated = createWebhook();
-        duplicated.fail();
+        duplicated.markFailed(null, null);
         given(webhookRepository.saveAndFlush(any(Webhook.class)))
                 .willThrow(new DataIntegrityViolationException("duplicate webhook-id"));
         given(webhookRepository.findByRecWebhookId("rec_id_123"))
                 .willReturn(Optional.of(duplicated));
-        given(webhookRepository.save(duplicated)).willReturn(duplicated);
 
-        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", null);
 
-        assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
-        assertThat(result.getCompletedAt()).isNull();
+        assertThat(result.getStatus()).isEqualTo(WebhookStatus.FAILED);
         verify(webhookRepository).saveAndFlush(any(Webhook.class));
         verify(webhookRepository).findByRecWebhookId("rec_id_123");
-        verify(webhookRepository).save(duplicated);
     }
 
     @Test
     @DisplayName("receive 호출 중 완료된 중복 웹훅이면 상태를 바꾸지 않고 기존 웹훅을 반환한다")
     void receive_duplicateKey_completed_returns_existing_webhook() {
         Webhook duplicated = createWebhook();
-        duplicated.complete();
+        duplicated.markCompleted();
         given(webhookRepository.saveAndFlush(any(Webhook.class)))
                 .willThrow(new DataIntegrityViolationException("duplicate webhook-id"));
         given(webhookRepository.findByRecWebhookId("rec_id_123"))
                 .willReturn(Optional.of(duplicated));
 
-        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", null);
 
         assertThat(result.getStatus()).isEqualTo(WebhookStatus.COMPLETED);
         verify(webhookRepository).saveAndFlush(any(Webhook.class));
@@ -124,6 +121,16 @@ class WebhookServiceTest {
     }
 
     @Test
+    @DisplayName("isFinished 호출 시 종료된 웹훅이면 true 를 반환한다")
+    void isFinished_returns_true_when_finished() {
+        given(webhookRepository.existsFinishedByRecWebhookId("rec_id_123")).willReturn(true);
+
+        boolean result = webhookService.isFinished("rec_id_123");
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
     @DisplayName("findProcessablePaidWebhook 호출 시 처리 가능한 Paid 웹훅을 반환한다")
     void findProcessablePaidWebhook_returns_webhook() {
         Webhook webhook = createWebhook();
@@ -151,10 +158,9 @@ class WebhookServiceTest {
     @DisplayName("retry 호출 시 실패 웹훅을 다시 PENDING 상태로 저장한다")
     void retry_saves_pending_status() {
         Webhook webhook = createWebhook();
-        webhook.fail();
         given(webhookRepository.save(webhook)).willReturn(webhook);
 
-        Webhook result = webhookService.retry(webhook, "WebhookTransactionPaid");
+        Webhook result = webhookService.markWebhookPendingForRetry(webhook, "WebhookTransactionPaid");
 
         assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
         assertThat(result.getEventStatus()).isEqualTo("WebhookTransactionPaid");
@@ -168,7 +174,7 @@ class WebhookServiceTest {
         Webhook webhook = createWebhook();
         given(webhookRepository.save(webhook)).willReturn(webhook);
 
-        Webhook result = webhookService.defer(webhook, "WebhookTransactionPaid", "pg-key-1");
+        Webhook result = webhookService.deferPaidWebhookUntilPaymentSaved(webhook, "WebhookTransactionPaid", "pg-key-1");
 
         assertThat(result.getStatus()).isEqualTo(WebhookStatus.PENDING);
         assertThat(result.getEventStatus()).isEqualTo("WebhookTransactionPaid");
@@ -181,7 +187,7 @@ class WebhookServiceTest {
     void complete_saves_completed_status() {
         Webhook webhook = createWebhook();
 
-        webhookService.complete(webhook);
+        webhookService.recordCompletedWebhook(webhook);
 
         assertThat(webhook.getStatus()).isEqualTo(WebhookStatus.COMPLETED);
         assertThat(webhook.getCompletedAt()).isNotNull();
@@ -193,10 +199,23 @@ class WebhookServiceTest {
     void fail_saves_failed_status() {
         Webhook webhook = createWebhook();
 
-        webhookService.fail(webhook);
+        webhookService.recordFailedWebhook(webhook, null, null);
 
         assertThat(webhook.getStatus()).isEqualTo(WebhookStatus.FAILED);
         assertThat(webhook.getCompletedAt()).isNotNull();
+        verify(webhookRepository).save(webhook);
+    }
+
+    @Test
+    @DisplayName("fail 호출 시 실패 이유와 메시지를 저장한다")
+    void fail_saves_reason_and_message() {
+        Webhook webhook = createWebhook();
+
+        webhookService.recordFailedWebhook(webhook, "PAYMENT_AMOUNT_MISMATCH", "amount mismatch");
+
+        assertThat(webhook.getStatus()).isEqualTo(WebhookStatus.FAILED);
+        assertThat(webhook.getFailReason()).isEqualTo("PAYMENT_AMOUNT_MISMATCH");
+        assertThat(webhook.getFailMessage()).isEqualTo("amount mismatch");
         verify(webhookRepository).save(webhook);
     }
 
@@ -206,9 +225,20 @@ class WebhookServiceTest {
         Webhook webhook = createWebhook();
         given(webhookRepository.saveAndFlush(any(Webhook.class))).willReturn(webhook);
 
-        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", null);
 
         assertThat(result.getRecWebhookId()).isEqualTo("rec_id_123");
+    }
+
+    @Test
+    @DisplayName("receive 호출 시 payload 를 저장한다")
+    void receive_saves_payload() {
+        Webhook webhook = Webhook.createPendingRecord("rec_id_123", "UNKNOWN", "{\"type\":\"test\"}");
+        given(webhookRepository.saveAndFlush(any(Webhook.class))).willReturn(webhook);
+
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", "{\"type\":\"test\"}");
+
+        assertThat(result.getPayload()).isEqualTo("{\"type\":\"test\"}");
     }
 
     @Test
@@ -217,7 +247,7 @@ class WebhookServiceTest {
         Webhook webhook = createWebhook();
         given(webhookRepository.saveAndFlush(any(Webhook.class))).willReturn(webhook);
 
-        Webhook result = webhookService.receive("rec_id_123", "UNKNOWN");
+        Webhook result = webhookService.recordReceivedWebhook("rec_id_123", "UNKNOWN", null);
 
         assertThat(result.getReceivedAt()).isNotNull();
     }

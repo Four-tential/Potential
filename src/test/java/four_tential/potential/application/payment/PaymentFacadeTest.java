@@ -86,7 +86,7 @@ class PaymentFacadeTest {
 
     @BeforeEach
     void setUp() {
-        savedWebhook = Webhook.receive("test-webhook-id", "UNKNOWN");
+        savedWebhook = Webhook.createPendingRecord("test-webhook-id", "UNKNOWN", null);
         lenient().when(webhookService.findProcessablePaidWebhook(anyString()))
                 .thenReturn(Optional.empty());
         stubLocks();
@@ -186,7 +186,7 @@ class PaymentFacadeTest {
                 PaymentPayWay.CARD
         );
         latestPayment.confirmPaid();
-        Webhook deferredWebhook = Webhook.receive("webhook-first", "WebhookTransactionPaid");
+        Webhook deferredWebhook = Webhook.createPendingRecord("webhook-first", "WebhookTransactionPaid", null);
         deferredWebhook.updatePgKey("pg-key-first-webhook");
 
         given(paymentGateway.getPayment("pg-key-first-webhook")).willReturn(gatewayResponse);
@@ -195,7 +195,7 @@ class PaymentFacadeTest {
                 .willReturn(createdPayment);
         given(webhookService.findProcessablePaidWebhook("pg-key-first-webhook"))
                 .willReturn(Optional.of(deferredWebhook));
-        given(webhookService.retry(deferredWebhook, "WebhookTransactionPaid"))
+        given(webhookService.markWebhookPendingForRetry(deferredWebhook, "WebhookTransactionPaid"))
                 .willReturn(deferredWebhook);
         given(paymentService.getByPgKey("pg-key-first-webhook"))
                 .willReturn(createdPayment)
@@ -211,8 +211,8 @@ class PaymentFacadeTest {
 
         assertThat(response.status()).isEqualTo(PaymentStatus.PAID);
         verify(paymentService).confirmPaid(paymentForWebhook);
-        verify(webhookService).complete(deferredWebhook);
-        verify(webhookService, never()).fail(deferredWebhook);
+        verify(webhookService).recordCompletedWebhook(deferredWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(deferredWebhook), any(), any());
     }
 
     @Test
@@ -313,51 +313,51 @@ class PaymentFacadeTest {
     @Test
     @DisplayName("완료된 중복 웹훅이면 이후 로직을 수행하지 않는다")
     void handleWebhook_duplicate() throws Exception {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(true);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(true);
 
         paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature");
 
-        verify(webhookService).isCompleted("test-webhook-id");
-        verify(webhookService, never()).receive(any(), any());
+        verify(webhookService).isFinished("test-webhook-id");
+        verify(webhookService, never()).recordReceivedWebhook(any(), any(), any());
         verify(portOneWebhookHandler, never()).verify(any(), any(), any(), any());
         verify(transactionTemplate, never()).execute(any(TransactionCallback.class));
-        verify(webhookService, never()).complete(any());
-        verify(webhookService, never()).fail(any());
+        verify(webhookService, never()).recordCompletedWebhook(any());
+        verify(webhookService, never()).recordFailedWebhook(any(), any(), any());
         verifyNoInteractions(paymentService);
     }
 
     @Test
     @DisplayName("수신 저장 직후 이미 완료 상태로 확인된 웹훅이면 이후 로직을 수행하지 않는다")
     void handleWebhook_completedAfterReceive_ignored() throws Exception {
-        Webhook completedWebhook = Webhook.receive("test-webhook-id", "UNKNOWN");
-        completedWebhook.complete();
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(completedWebhook);
+        Webhook completedWebhook = Webhook.createPendingRecord("test-webhook-id", "UNKNOWN", null);
+        completedWebhook.markCompleted();
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(completedWebhook);
 
         paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature");
 
-        verify(webhookService).receive("test-webhook-id", "UNKNOWN");
+        verify(webhookService).recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}");
         verify(portOneWebhookHandler, never()).verify(any(), any(), any(), any());
-        verify(webhookService, never()).complete(any());
-        verify(webhookService, never()).fail(any());
+        verify(webhookService, never()).recordCompletedWebhook(any());
+        verify(webhookService, never()).recordFailedWebhook(any(), any(), any());
         verifyNoInteractions(paymentService);
     }
 
     @Test
     @DisplayName("서명 검증 실패 시 WebhookVerificationException 을 던지고 웹훅 실패 상태를 저장한다")
     void handleWebhook_verificationFail() throws Exception {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
         stubReceiveTransaction();
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
                 .willThrow(new WebhookVerificationException("verify failed", new RuntimeException()));
 
-        assertThatThrownBy(() ->
+        assertThatCode(() ->
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
-                .isInstanceOf(WebhookVerificationException.class);
+                .doesNotThrowAnyException();
 
-        verify(webhookService).receive("test-webhook-id", "UNKNOWN");
-        verify(webhookService, never()).complete(any());
-        verify(webhookService).fail(savedWebhook);
+        verify(webhookService).recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}");
+        verify(webhookService, never()).recordCompletedWebhook(any());
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("WEBHOOK_SIGNATURE_INVALID"), anyString());
         verifyNoInteractions(paymentService);
     }
 
@@ -385,7 +385,7 @@ class PaymentFacadeTest {
         verify(paymentService, never()).confirmPaid(payment);
         verify(paymentService, never()).fail(any(Payment.class));
         verify(paymentGateway, never()).cancelPayment(any());
-        verify(webhookService).complete(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
     }
 
     @Test
@@ -414,7 +414,8 @@ class PaymentFacadeTest {
                 100000L,
                 "PAYMENT_STATUS_INVALID"
         ));
-        verify(webhookService).complete(savedWebhook);
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("PAYMENT_STATUS_INVALID"), anyString());
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
     }
 
     @Test
@@ -445,7 +446,8 @@ class PaymentFacadeTest {
                 100000L,
                 "PAYMENT_ORDER_MEMBER_MISMATCH"
         ));
-        verify(webhookService).complete(savedWebhook);
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("PAYMENT_ORDER_MEMBER_MISMATCH"), anyString());
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
     }
 
     @Test
@@ -477,7 +479,8 @@ class PaymentFacadeTest {
                 100000L,
                 "ORDER_STATUS_INVALID"
         ));
-        verify(webhookService).complete(savedWebhook);
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("ORDER_STATUS_INVALID"), anyString());
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
     }
 
     @Test
@@ -500,13 +503,12 @@ class PaymentFacadeTest {
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
                 .willReturn(verified);
 
-        assertThatThrownBy(() ->
+        assertThatCode(() ->
                 paymentFacade.handleWebhook("{}", "test-webhook-id", "timestamp", "signature"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("cancel failed");
+                .doesNotThrowAnyException();
 
-        verify(webhookService).fail(savedWebhook);
-        verify(webhookService, never()).complete(savedWebhook);
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("PORTONE_CANCEL_FAILED"), anyString());
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
     }
 
     @Test
@@ -545,8 +547,8 @@ class PaymentFacadeTest {
 
         verify(paymentService).confirmPaid(payment);
         verify(paymentService, never()).fail(any(Payment.class));
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
         assertThat(course.getConfirmCount()).isEqualTo(1);
 
         Object eventStatus = ReflectionTestUtils.getField(savedWebhook, "eventStatus");
@@ -558,8 +560,8 @@ class PaymentFacadeTest {
     @Test
     @DisplayName("결제 완료 웹훅이 먼저 왔지만 결제가 아직 저장되지 않았으면 실패가 아니라 대기 상태로 남긴다")
     void handleWebhook_paid_beforePaymentSaved_defer() throws Exception {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(savedWebhook);
         given(paymentService.findByPgKey("payment-not-yet-saved"))
                 .willReturn(Optional.empty());
         WebhookTransactionPaid verified =
@@ -573,10 +575,10 @@ class PaymentFacadeTest {
                 .doesNotThrowAnyException();
 
         verify(paymentService).findByPgKey("payment-not-yet-saved");
-        verify(webhookService).defer(savedWebhook, "WebhookTransactionPaid", "payment-not-yet-saved");
+        verify(webhookService).deferPaidWebhookUntilPaymentSaved(savedWebhook, "WebhookTransactionPaid", "payment-not-yet-saved");
         verify(paymentService, never()).confirmPaid(any());
-        verify(webhookService, never()).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
@@ -597,8 +599,8 @@ class PaymentFacadeTest {
 
         verify(paymentService).fail(payment);
         verify(paymentService, never()).confirmPaid(any());
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
@@ -619,8 +621,8 @@ class PaymentFacadeTest {
 
         verify(paymentService).fail(payment);
         verify(paymentService, never()).confirmPaid(any());
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
@@ -640,8 +642,8 @@ class PaymentFacadeTest {
 
         verify(paymentService, never()).fail(any(Payment.class));
         verify(paymentService, never()).confirmPaid(any());
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
@@ -660,15 +662,15 @@ class PaymentFacadeTest {
 
         verify(paymentService, never()).confirmPaid(any());
         verify(paymentService, never()).fail(any(Payment.class));
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
     @DisplayName("트랜잭션 타입이 아닌 웹훅이면 결제 서비스 호출 없이 webhook 완료 상태만 저장한다")
     void handleWebhook_nonTransactionWebhook() throws Exception {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(savedWebhook);
         PlainWebhook verified = new PlainWebhook();
 
         given(portOneWebhookHandler.verify("{}", "test-webhook-id", "signature", "timestamp"))
@@ -681,19 +683,19 @@ class PaymentFacadeTest {
         verify(webhookService).updateEventStatus(savedWebhook, "PlainWebhook");
         verify(paymentService, never()).confirmPaid(any());
         verify(paymentService, never()).fail(any(Payment.class));
-        verify(webhookService).complete(savedWebhook);
-        verify(webhookService, never()).fail(savedWebhook);
+        verify(webhookService).recordCompletedWebhook(savedWebhook);
+        verify(webhookService, never()).recordFailedWebhook(eq(savedWebhook), any(), any());
     }
 
     @Test
     @DisplayName("비즈니스 처리 중 예외가 발생하면 webhook 실패 상태 저장 후 예외를 다시 던진다")
     void handleWebhook_businessFail() throws Exception {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
                 .willThrow(new RuntimeException("business failed"));
 
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(savedWebhook);
 
         WebhookTransactionFailed verified =
                 new WebhookTransactionFailed(new TestWebhookTransactionData("payment-5"));
@@ -706,8 +708,8 @@ class PaymentFacadeTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("business failed");
 
-        verify(webhookService).fail(savedWebhook);
-        verify(webhookService, never()).complete(savedWebhook);
+        verify(webhookService).recordFailedWebhook(eq(savedWebhook), eq("WEBHOOK_UNEXPECTED_ERROR"), anyString());
+        verify(webhookService, never()).recordCompletedWebhook(savedWebhook);
     }
 
     private void stubLocks() {
@@ -729,11 +731,11 @@ class PaymentFacadeTest {
     }
 
     private void stubReceiveTransaction() {
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(savedWebhook);
     }
 
     private void stubSuccessTransactionFlow() {
-        given(webhookService.isCompleted("test-webhook-id")).willReturn(false);
+        given(webhookService.isFinished("test-webhook-id")).willReturn(false);
 
         given(transactionTemplate.execute(any(TransactionCallback.class)))
                 .willAnswer(invocation -> {
@@ -741,7 +743,7 @@ class PaymentFacadeTest {
                     return callback.doInTransaction(transactionStatus);
                 });
 
-        given(webhookService.receive("test-webhook-id", "UNKNOWN")).willReturn(savedWebhook);
+        given(webhookService.recordReceivedWebhook("test-webhook-id", "UNKNOWN", "{}")).willReturn(savedWebhook);
     }
 
     private void stubOrderAndCourse(UUID orderId, UUID memberId, UUID courseId, int orderCount) {

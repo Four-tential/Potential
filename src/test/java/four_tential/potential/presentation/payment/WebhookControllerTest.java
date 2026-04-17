@@ -1,7 +1,6 @@
 package four_tential.potential.presentation.payment;
 
 import four_tential.potential.application.payment.PaymentFacade;
-import io.portone.sdk.server.errors.WebhookVerificationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,10 +10,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class WebhookControllerTest {
 
@@ -49,12 +47,11 @@ class WebhookControllerTest {
     }
 
     @Test
-    @DisplayName("서명 검증 실패 시 401 Unauthorized를 반환한다")
-    void receiveWebhook_verificationFail() throws Exception {
+    @DisplayName("서명 검증 실패가 Facade 내부에서 기록되면 200 OK를 반환한다")
+    void receiveWebhook_verificationFailHandledInFacade() throws Exception {
         String rawBody = "{\"type\":\"PAID\"}";
 
-        doThrow(new WebhookVerificationException("서명 검증 실패", new RuntimeException()))
-                .when(paymentFacade)
+        doNothing().when(paymentFacade)
                 .handleWebhook(rawBody, "webhook-2", "timestamp-2", "signature-2");
 
         mockMvc.perform(post("/api/v1/webhooks/portone")
@@ -63,7 +60,7 @@ class WebhookControllerTest {
                         .header("webhook-timestamp", "timestamp-2")
                         .header("webhook-signature", "signature-2")
                         .content(rawBody))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
 
         verify(paymentFacade)
                 .handleWebhook(rawBody, "webhook-2", "timestamp-2", "signature-2");
