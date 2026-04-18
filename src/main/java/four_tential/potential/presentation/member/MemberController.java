@@ -103,7 +103,7 @@ public class MemberController {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
-                        "회원 상태가 변경 성공",
+                        "회원 상태 변경 성공",
                         memberService.changeMemberStatus(memberId, request)
                 ));
     }
