@@ -2,6 +2,8 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -39,6 +41,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
+    @Mock private CourseRepository courseRepository;
     @Mock private WaitingListService waitingListService;
     @Mock private ApplicationContext applicationContext;
     @InjectMocks @Spy private OrderService orderService;
@@ -215,5 +218,28 @@ class OrderServiceTest {
         // then
         assertThat(result.successCount()).isZero();
         assertThat(result.fetchedCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("주문 취소 처리를 성공하고 취소된 주문을 반환한다")
+    void cancelOrder_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        
+        Order order = spy(Order.register(memberId, courseId, 2, BigInteger.valueOf(20000), "테스트"));
+        Course course = mock(Course.class);
+        
+        given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(10));
+
+        // when
+        Order result = orderService.cancelOrder(orderId, memberId);
+
+        // then
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(order).cancel(any());
     }
 }

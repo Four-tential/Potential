@@ -103,6 +103,76 @@ class OrderTest {
                 .hasFieldOrPropertyWithValue("httpStatus", OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getHttpStatus());
     }
 
+    @Test
+    @DisplayName("PENDING 상태의 주문은 언제든지 취소할 수 있다")
+    void cancelPendingOrderSuccess() {
+        // given
+        Order order = createPendingOrder();
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(1); // PENDING은 날짜 제약 없음
+
+        // when
+        order.cancel(courseStartAt);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PAID 상태의 주문은 코스 시작 7일 전까지만 취소할 수 있다")
+    void cancelPaidOrderSuccess() {
+        // given
+        Order order = createPendingOrder();
+        order.completePayment(); // PAID 상태
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(8);
+
+        // when
+        order.cancel(courseStartAt);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("PAID 상태의 주문이 코스 시작 7일 이내라면 취소 시 예외가 발생한다")
+    void cancelPaidOrderFail_TooLate() {
+        // given
+        Order order = createPendingOrder();
+        order.completePayment();
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(6);
+
+        // when & then
+        assertThatThrownBy(() -> order.cancel(courseStartAt))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
+    }
+
+    @Test
+    @DisplayName("이미 취소되었거나 만료된 주문은 다시 취소할 수 없다")
+    void cancelOrderFail_AlreadyCancelledOrExpired() {
+        // given
+        Order order = createPendingOrder();
+        order.expire();
+
+        // when & then
+        assertThatThrownBy(() -> order.cancel(LocalDateTime.now().plusDays(10)))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_ORDER.getMessage());
+    }
+
+    @Test
+    @DisplayName("확정(CONFIRMED)된 주문은 취소할 수 없다")
+    void cancelOrderFail_Confirmed() {
+        // given
+        Order order = createPendingOrder();
+        ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);
+
+        // when & then
+        assertThatThrownBy(() -> order.cancel(LocalDateTime.now().plusDays(10)))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_CONFIRMED_ORDER.getMessage());
+    }
+
     private Order createPendingOrder() {
         return Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트 코스");
     }
