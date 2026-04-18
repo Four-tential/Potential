@@ -12,6 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -98,6 +100,27 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("나의 주문 목록을 성공적으로 조회한다")
+    void getMyOrders_success() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Order order = mock(Order.class);
+        Page<Order> orderPage = new PageImpl<>(List.of(order), pageable, 1);
+        
+        given(orderRepository.findMyOrders(memberId, pageable)).willReturn(orderPage);
+
+        // when
+        Page<Order> result = orderService.getMyOrders(memberId, pageable);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(orderRepository).findMyOrders(memberId, pageable);
+    }
+
+    @Test
     @DisplayName("결제 완료 처리를 성공한다")
     void completePayment_success() {
         // given
@@ -129,10 +152,11 @@ class OrderServiceTest {
                 .willReturn(expiredSlice);
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.fetchedCount()).isEqualTo(1);
         assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
         
         // Redis 재고 복구 호출 확인
@@ -158,10 +182,11 @@ class OrderServiceTest {
                 .when(waitingListService).rollbackOccupiedSeat(any(), any());
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.fetchedCount()).isEqualTo(1);
         assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
         verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
     }
@@ -186,10 +211,11 @@ class OrderServiceTest {
                 .willReturn(expiredSlice);
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(1); // normalOrder만 성공
+        assertThat(result.successCount()).isEqualTo(1); // normalOrder만 성공
+        assertThat(result.fetchedCount()).isEqualTo(2); // 2건 조회됨
         assertThat(normalOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
         assertThat(failOrder.getStatus()).isEqualTo(OrderStatus.PENDING); // 실패했으므로 상태 유지
     }
@@ -205,10 +231,11 @@ class OrderServiceTest {
                 .willReturn(new SliceImpl<>(Collections.emptyList()));
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isZero();
+        assertThat(result.successCount()).isZero();
+        assertThat(result.fetchedCount()).isZero();
         verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
         verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }

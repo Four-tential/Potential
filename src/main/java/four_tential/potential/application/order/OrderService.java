@@ -95,13 +95,14 @@ public class OrderService {
      * Scheduler에서 호출하며, 개별 호출마다 트랜잭션이 커밋됩니다.
      */
     @Transactional
-    public int processExpiredBatch(LocalDateTime now, int batchSize) {
+    public OrderBatchResult processExpiredBatch(LocalDateTime now, int batchSize) {
         // PENDING 상태인 주문을 EXPIRED로 바꾸므로 항상 0페이지를 읽으면 새로운 대상이 나옵니다.
         Slice<Order> expiredOrdersSlice = orderRepository.findAllByStatusAndExpireAtBefore(
                 OrderStatus.PENDING, now, PageRequest.of(0, batchSize));
 
-        if (expiredOrdersSlice.isEmpty()) {
-            return 0;
+        int fetchedCount = expiredOrdersSlice.getNumberOfElements();
+        if (fetchedCount == 0) {
+            return new OrderBatchResult(0, 0);
         }
 
         int successCount = 0;
@@ -110,9 +111,11 @@ public class OrderService {
                 successCount++;
             }
         }
-        
-        return successCount;
+
+        return new OrderBatchResult(fetchedCount, successCount);
     }
+
+    public record OrderBatchResult(int fetchedCount, int successCount) {}
 
     private boolean expireSingleOrder(Order order) {
         try {
