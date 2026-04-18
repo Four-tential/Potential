@@ -1,12 +1,19 @@
 package four_tential.potential.domain.payment.repository;
 
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.domain.payment.entity.Payment;
+import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -80,5 +87,46 @@ public class PaymentCustomRepositoryImpl implements PaymentCustomRepository {
                 .fetchOne();
 
         return Optional.ofNullable(result);
+    }
+
+    @Override
+    public Page<PaymentListResponse> findListByMemberIdAndStatus(
+            UUID memberId, PaymentStatus status, Pageable pageable) {
+
+        List<PaymentListResponse> content = queryFactory
+                .select(Projections.constructor(PaymentListResponse.class,
+                        payment.id,
+                        payment.orderId,
+                        order.titleSnap,
+                        order.orderCount,
+                        payment.paidTotalPrice,
+                        payment.status,
+                        payment.paidAt
+                ))
+                .from(payment)
+                .join(order).on(order.id.eq(payment.orderId))
+                .where(
+                        payment.memberId.eq(memberId),
+                        statusEq(status)
+                )
+                .orderBy(payment.createdAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(payment.count())
+                .from(payment)
+                .where(
+                        payment.memberId.eq(memberId),
+                        statusEq(status)
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total == null ? 0 : total);
+    }
+
+    private BooleanExpression statusEq(PaymentStatus status) {
+        return status != null ? payment.status.eq(status) : null;
     }
 }

@@ -4,11 +4,15 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
+import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -179,5 +183,13 @@ public class PaymentService {
     public PaymentDetailResponse getMyPayment(UUID paymentId, UUID memberId) {
         return paymentRepository.findDetailByIdAndMemberId(paymentId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+    }
+
+    /**
+     * 결제 목록 조회
+     */
+    public Page<PaymentListResponse> getAllMyPayments(
+            UUID memberId, PaymentStatus status, Pageable pageable) {
+        return paymentRepository.findListByMemberIdAndStatus(memberId, status, pageable);
     }
 }
