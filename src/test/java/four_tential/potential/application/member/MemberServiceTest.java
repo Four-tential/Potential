@@ -892,4 +892,81 @@ class MemberServiceTest {
         return im;
     }
 
+    @Test
+    @DisplayName("팔로우 해제 성공 - 팔로우 기록 삭제 후 isFollowed=false 반환")
+    void unfollowInstructor_success() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Follow follow = Follow.register(followerId, instructor.getId());
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.of(follow));
+
+        FollowResponse response = memberService.unfollowInstructor(followerId, instructorMemberId);
+
+        assertThat(response.instructorId()).isEqualTo(instructorMemberId);
+        assertThat(response.isFollowed()).isFalse();
+        verify(followRepository).delete(follow);
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 존재하지 않는 강사 memberId면 NOT_FOUND")
+    void unfollowInstructor_instructorNotFound_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID unknownInstructorId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(unknownInstructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, unknownInstructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 미승인 강사(PENDING)는 NOT_FOUND 처리")
+    void unfollowInstructor_instructorNotApproved_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 팔로우 기록이 없으면 NOT_FOUND")
+    void unfollowInstructor_followNotFound_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("팔로우한 기록이 없습니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 성공 - followRepository.delete()가 정확히 한 번 호출됨")
+    void unfollowInstructor_success_deleteCalledOnce() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Follow follow = Follow.register(followerId, instructor.getId());
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.of(follow));
+
+        memberService.unfollowInstructor(followerId, instructorMemberId);
+
+        verify(followRepository).delete(follow);
+    }
+
 }

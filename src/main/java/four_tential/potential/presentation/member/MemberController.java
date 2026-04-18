@@ -139,6 +139,19 @@ public class MemberController {
                 .build();
     }
 
+    @DeleteMapping("/instructors/{memberId}/follows")
+    public ResponseEntity<BaseResponse<FollowResponse>> unfollowInstructor(
+            @PathVariable UUID memberId,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "팔로우 해제 성공",
+                        memberService.unfollowInstructor(principal.memberId(), memberId)
+                ));
+    }
+
     @PostMapping("/instructors/{memberId}/follows")
     public ResponseEntity<BaseResponse<FollowResponse>> followInstructor(
             @PathVariable UUID memberId,

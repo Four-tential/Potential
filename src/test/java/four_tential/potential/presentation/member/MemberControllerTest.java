@@ -436,4 +436,45 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("이미 팔로우한 강사입니다");
     }
+
+    @Test
+    @DisplayName("팔로우 해제 - 200 OK, isFollowed=false 응답 반환")
+    void unfollowInstructor_success() {
+        UUID instructorMemberId = UUID.randomUUID();
+        FollowResponse serviceResponse = FollowResponse.register(instructorMemberId, false);
+        given(memberService.unfollowInstructor(MEMBER_ID, instructorMemberId)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<FollowResponse>> response =
+                memberController.unfollowInstructor(instructorMemberId, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("팔로우 해제 성공");
+        assertThat(response.getBody().data().isFollowed()).isFalse();
+        assertThat(response.getBody().data().instructorId()).isEqualTo(instructorMemberId);
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 - 존재하지 않는 강사면 ServiceErrorException 전파")
+    void unfollowInstructor_instructorNotFound() {
+        UUID instructorMemberId = UUID.randomUUID();
+        given(memberService.unfollowInstructor(MEMBER_ID, instructorMemberId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.unfollowInstructor(instructorMemberId, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 - 팔로우 기록이 없으면 ServiceErrorException 전파")
+    void unfollowInstructor_followNotFound() {
+        UUID instructorMemberId = UUID.randomUUID();
+        given(memberService.unfollowInstructor(MEMBER_ID, instructorMemberId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_FOLLOW));
+
+        assertThatThrownBy(() -> memberController.unfollowInstructor(instructorMemberId, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("팔로우한 기록이 없습니다");
+    }
 }

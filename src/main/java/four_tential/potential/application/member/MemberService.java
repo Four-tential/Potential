@@ -289,6 +289,22 @@ public class MemberService {
         return FollowResponse.register(instructorMemberId, true);
     }
 
+    @Transactional
+    public FollowResponse unfollowInstructor(UUID followerId, UUID instructorMemberId) {
+        // 승인된 강사 존재 확인
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        // 팔로우 기록 조회
+        Follow follow = followRepository.findByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_FOLLOW));
+
+        followRepository.delete(follow);
+
+        return FollowResponse.register(instructorMemberId, false);
+    }
+
     private String getProfileImageUrlOrDefault(Member member) {
         return member.getProfileImageUrl() != null ? member.getProfileImageUrl() : defaultProfileImageUrl;
     }

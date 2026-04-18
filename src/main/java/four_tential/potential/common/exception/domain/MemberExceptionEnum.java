@@ -36,7 +36,8 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_HAS_ACTIVE_INSTRUCTOR_COURSES(HttpStatus.CONFLICT, "진행 중인 코스가 있어 탈퇴가 불가합니다"),
     ERR_NOT_FOUND_INSTRUCTOR(HttpStatus.NOT_FOUND, "존재하지 않는 강사입니다"),
     ERR_CANNOT_FOLLOW_SELF(HttpStatus.BAD_REQUEST, "본인을 팔로우 할 수 없습니다"),
-    ERR_ALREADY_FOLLOWED(HttpStatus.CONFLICT, "이미 팔로우한 강사입니다")
+    ERR_ALREADY_FOLLOWED(HttpStatus.CONFLICT, "이미 팔로우한 강사입니다"),
+    ERR_NOT_FOUND_FOLLOW(HttpStatus.NOT_FOUND, "팔로우한 기록이 없습니다")
     ;
 
     private final HttpStatus httpStatus;
