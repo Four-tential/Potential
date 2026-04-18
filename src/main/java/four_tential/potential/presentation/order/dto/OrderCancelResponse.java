@@ -14,7 +14,7 @@ public record OrderCancelResponse(
         return new OrderCancelResponse(
                 order.getId(),
                 order.getStatus().name(),
-                LocalDateTime.now()
+                order.getCancelledAt()
         );
     }
 }

@@ -114,11 +114,9 @@ public class Order extends BaseTimeEntity {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_CONFIRMED_ORDER);
         }
 
-        // PAID 상태(결제 완료)인 경우에만 7일 전 규칙 적용
-        if (this.status == OrderStatus.PAID) {
-            if (LocalDateTime.now().isAfter(courseStartDate.minusDays(7))) {
-                throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME);
-            }
+        // PAID 또는 PENDING 상태인 경우 7일 전 규칙 적용
+        if (LocalDateTime.now().isAfter(courseStartDate.minusDays(7))) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME);
         }
 
         this.status = OrderStatus.CANCELLED;

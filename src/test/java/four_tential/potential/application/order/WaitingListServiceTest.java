@@ -169,4 +169,18 @@ class WaitingListServiceTest {
         // then
         verify(waitingListSet).add(anyDouble(), eq(memberId.toString()));
     }
+
+    @Test
+    @DisplayName("취소 시 잔여석 수량을 복구하고 점유 정보를 삭제한다")
+    void recoverCapacity_success() {
+        // given
+        int orderCount = 2;
+
+        // when
+        waitingListService.recoverCapacity(courseId, memberId, orderCount);
+
+        // then
+        verify(capacityAtomic).addAndGet(orderCount);
+        verify(occupancyBucket).delete();
+    }
 }

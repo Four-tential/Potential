@@ -114,15 +114,20 @@ public class WaitingListService {
     }
 
     /**
-     * 주문 취소/만료 시 잔여석 수량 복구
+     * 주문 취소/만료 시 잔여석 수량 복구 및 점유 정보 정리
      */
     @DistributedLock(key = "'order:course:' + #courseId")
-    public void recoverCapacity(UUID courseId, int orderCount) {
+    public void recoverCapacity(UUID courseId, UUID memberId, int orderCount) {
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
 
         capacity.addAndGet(orderCount);
-        log.info("잔여석 복구 완료: courseId={}, 복구수량={}", courseId, orderCount);
+        occupancy.delete();
+        
+        log.info("잔여석 복구 및 점유 정보 정리 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, orderCount);
 
         // TODO: 대기열의 다음 순번에게 알림을 보내거나 자동으로 점유 기회를 주는 로직 추가 가능
     }

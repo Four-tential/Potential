@@ -242,4 +242,25 @@ class OrderServiceTest {
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(order).cancel(any());
     }
+
+    @Test
+    @DisplayName("PENDING 상태의 주문이라도 코스 시작 7일 이내라면 취소 시 예외가 발생한다")
+    void cancelOrder_fail_tooLate() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        Order order = Order.register(memberId, courseId, 2, BigInteger.valueOf(20000), "테스트");
+        Course course = mock(Course.class);
+
+        given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(6));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.cancelOrder(orderId, memberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
+    }
 }

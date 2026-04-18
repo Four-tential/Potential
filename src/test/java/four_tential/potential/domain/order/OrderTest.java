@@ -104,11 +104,11 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("PENDING 상태의 주문은 언제든지 취소할 수 있다")
+    @DisplayName("PENDING 상태의 주문은 코스 시작 7일 전까지만 취소할 수 있다")
     void cancelPendingOrderSuccess() {
         // given
         Order order = createPendingOrder();
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(1); // PENDING은 날짜 제약 없음
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(8);
 
         // when
         order.cancel(courseStartAt);
@@ -116,6 +116,19 @@ class OrderTest {
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(order.getCancelledAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PENDING 상태의 주문이 코스 시작 7일 이내라면 취소 시 예외가 발생한다")
+    void cancelPendingOrderFail_TooLate() {
+        // given
+        Order order = createPendingOrder();
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(6);
+
+        // when & then
+        assertThatThrownBy(() -> order.cancel(courseStartAt))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
     }
 
     @Test
