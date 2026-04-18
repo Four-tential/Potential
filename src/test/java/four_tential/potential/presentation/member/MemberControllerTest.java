@@ -1,5 +1,6 @@
 package four_tential.potential.presentation.member;
 
+import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
@@ -12,8 +13,10 @@ import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
+import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
+import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -31,6 +34,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -53,6 +57,9 @@ class MemberControllerTest {
 
     @Mock
     private MemberService memberService;
+
+    @Mock
+    private CourseWishlistService courseWishlistService;
 
     @Mock
     private HttpServletResponse httpServletResponse;
@@ -538,5 +545,47 @@ class MemberControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().currentPage()).isEqualTo(1);
         assertThat(response.getBody().data().size()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("찜 목록 조회 - 200 OK 및 페이지 응답 반환")
+    void getMyWishlistCourses_success() {
+        WishlistCourseItem item = new WishlistCourseItem(
+                UUID.randomUUID(), "소도구 필라테스 입문반", "소강사",
+                "https://example.com/thumb.jpg", "PILATES", "필라테스",
+                BigInteger.valueOf(70000), CourseStatus.OPEN,
+                LocalDateTime.now().plusDays(10), LocalDateTime.now()
+        );
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<WishlistCourseItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
+        given(courseWishlistService.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<WishlistCourseItem>>> response =
+                memberController.getMyWishlistCourses(0, 10, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("찜 목록 조회 성공");
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).title()).isEqualTo("소도구 필라테스 입문반");
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("찜 목록 조회 - 찜한 코스 없으면 빈 페이지 반환")
+    void getMyWishlistCourses_empty() {
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<WishlistCourseItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseWishlistService.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<WishlistCourseItem>>> response =
+                memberController.getMyWishlistCourses(0, 10, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().content()).isEmpty();
+        assertThat(response.getBody().data().totalElements()).isZero();
     }
 }
