@@ -30,7 +30,6 @@ import org.springframework.http.ResponseEntity;
 
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -487,17 +486,17 @@ class MemberControllerTest {
     @Test
     @DisplayName("팔로우 목록 조회 - 200 OK 및 페이지 응답 반환")
     void getMyFollows_success() {
-        Pageable pageable = PageRequest.of(0, 10);
+        PageRequest pageRequest = PageRequest.of(0, 10);
         FollowedInstructorItem item = new FollowedInstructorItem(
                 UUID.randomUUID(), "강사이름", "https://img.url/profile.png",
                 "FITNESS", "피트니스", 3L, 4.5, LocalDateTime.now()
         );
         PageResponse<FollowedInstructorItem> serviceResponse =
-                PageResponse.register(new PageImpl<>(List.of(item), pageable, 1));
-        given(memberService.getMyFollows(MEMBER_ID, pageable)).willReturn(serviceResponse);
+                PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
+        given(memberService.getMyFollows(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> response =
-                memberController.getMyFollows(PRINCIPAL, pageable);
+                memberController.getMyFollows(0, 10, PRINCIPAL);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -510,17 +509,34 @@ class MemberControllerTest {
     @Test
     @DisplayName("팔로우 목록 조회 - 팔로우 없으면 빈 페이지 반환")
     void getMyFollows_empty() {
-        Pageable pageable = PageRequest.of(0, 10);
+        PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<FollowedInstructorItem> serviceResponse =
-                PageResponse.register(new PageImpl<>(List.of(), pageable, 0));
-        given(memberService.getMyFollows(MEMBER_ID, pageable)).willReturn(serviceResponse);
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(memberService.getMyFollows(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> response =
-                memberController.getMyFollows(PRINCIPAL, pageable);
+                memberController.getMyFollows(0, 10, PRINCIPAL);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().content()).isEmpty();
         assertThat(response.getBody().data().totalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 - page=1, size=5 파라미터가 서비스에 올바르게 전달됨")
+    void getMyFollows_customPageParams() {
+        PageRequest pageRequest = PageRequest.of(1, 5);
+        PageResponse<FollowedInstructorItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(memberService.getMyFollows(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> response =
+                memberController.getMyFollows(1, 5, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().currentPage()).isEqualTo(1);
+        assertThat(response.getBody().data().size()).isEqualTo(5);
     }
 }

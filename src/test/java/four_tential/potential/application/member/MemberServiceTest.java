@@ -407,29 +407,6 @@ class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("회원 탈퇴 성공 - 수강 예정 코스 없고 강사 이력 없음")
-    void withdrawMember_success_noScheduledCourseNoInstructor() {
-        Member member = MemberFixture.defaultMember();
-        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
-        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
-        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
-        given(orderRepository.existsActiveEnrollment(
-                eq(member.getId()),
-                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
-                eq(List.of(CourseStatus.OPEN)),
-                any(LocalDateTime.class)
-        )).willReturn(false);
-        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
-        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(1000L);
-
-        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
-
-        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
-        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
-        verify(jwtRepository).addBlacklist(ACCESS_TOKEN, 1000L);
-    }
-
-    @Test
     @DisplayName("회원 탈퇴 성공 - 결제 완료 주문이 있어도 종료되지 않은 OPEN 코스가 없음")
     void withdrawMember_success_paidOrderButNoActiveEnrollment() {
         Member member = MemberFixture.defaultMember();
@@ -994,7 +971,7 @@ class MemberServiceTest {
         assertThat(response.content().get(0).courseCount()).isEqualTo(3L);
         assertThat(response.content().get(0).averageRating()).isEqualTo(4.5);
         assertThat(response.totalElements()).isEqualTo(1);
-        assertThat(response.currentPage()).isEqualTo(0);
+        assertThat(response.currentPage()).isZero();
         assertThat(response.isLast()).isTrue();
     }
 

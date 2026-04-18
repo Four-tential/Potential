@@ -15,6 +15,7 @@ import four_tential.potential.presentation.member.model.response.UpdateMyPageRes
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -144,14 +145,15 @@ public class MemberController {
 
     @GetMapping("/members/me/follows")
     public ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> getMyFollows(
-            @AuthenticationPrincipal MemberPrincipal principal,
-            Pageable pageable
-    ) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal MemberPrincipal principal
+            ) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "팔로우한 강사 목록 조회 성공",
-                        memberService.getMyFollows(principal.memberId(), pageable)
+                        memberService.getMyFollows(principal.memberId(), PageRequest.of(page, size))
                 ));
     }
 

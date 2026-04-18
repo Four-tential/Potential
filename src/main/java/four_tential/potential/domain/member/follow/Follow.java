@@ -18,7 +18,7 @@ import java.util.UUID;
         name = "follows",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_follows_member_instructor",
-                columnNames = {"member_id", "member_instuctor_id"}
+                columnNames = {"member_id", "member_instructor_id"}
         )
 )
 @NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
@@ -32,7 +32,7 @@ public class Follow extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID memberId;
 
-    @Column(name = "member_instuctor_id", nullable = false, columnDefinition = "BINARY(16)")
+    @Column(name = "member_instructor_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID memberInstructorId;
 
     public static Follow register(UUID memberId, UUID memberInstructorId) {
