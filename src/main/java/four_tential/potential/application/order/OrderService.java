@@ -25,6 +25,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final WaitingListService waitingListService;
 
     /**
      * 주문 생성 (DB 저장)
@@ -105,7 +106,8 @@ public class OrderService {
 
         for (Order order : expiredOrdersSlice) {
             order.expire();
-            // TODO: Redis 재고 해제 및 대기열 이관 로직 연동 필요
+            // Redis 재고 해제: 선점 정보가 남아 있다면 복구 시도
+            waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
             log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
         }
         
