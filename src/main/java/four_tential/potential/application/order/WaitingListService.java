@@ -94,7 +94,7 @@ public class WaitingListService {
     }
 
     /**
-     * 대기열 추가
+     * 대기열 진입 완료
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     public void addToWaitingList(UUID courseId, UUID memberId) {
@@ -111,5 +111,19 @@ public class WaitingListService {
 
         waitingList.add(System.currentTimeMillis(), memberId.toString());
         log.info("대기열 진입 완료: courseId={}, memberId={}", courseId, memberId);
+    }
+
+    /**
+     * 주문 취소/만료 시 잔여석 수량 복구
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void recoverCapacity(UUID courseId, int orderCount) {
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+
+        capacity.addAndGet(orderCount);
+        log.info("잔여석 복구 완료: courseId={}, 복구수량={}", courseId, orderCount);
+
+        // TODO: 대기열의 다음 순번에게 알림을 보내거나 자동으로 점유 기회를 주는 로직 추가 가능
     }
 }

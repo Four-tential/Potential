@@ -74,4 +74,17 @@ public class OrderController {
         return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "나의 주문 목록 조회 성공", response));
     }
 
+    /**
+     * 주문 취소
+     */
+    @PatchMapping("/{orderId}/cancel")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<BaseResponse<OrderCancelResponse>> cancelOrder(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID orderId
+    ) {
+        OrderCancelResponse response = orderFacade.cancelOrder(orderId, principal.memberId());
+        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "주문이 성공적으로 취소되었습니다", response));
+    }
+
 }

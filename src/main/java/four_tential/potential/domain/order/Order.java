@@ -99,4 +99,29 @@ public class Order extends BaseTimeEntity {
         }
         this.status = OrderStatus.EXPIRED;
     }
+
+    /**
+     * 주문 취소 처리
+     * @param courseStartDate 코스 시작 일시
+     */
+    public void cancel(LocalDateTime courseStartDate) {
+        if (this.status == OrderStatus.CANCELLED || this.status == OrderStatus.EXPIRED) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_ORDER);
+        }
+
+        // CONFIRMED 상태는 이미 환불 기간이 경과하여 확정된 주문이므로 취소 불가
+        if (this.status == OrderStatus.CONFIRMED) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_CONFIRMED_ORDER);
+        }
+
+        // PAID 상태(결제 완료)인 경우에만 7일 전 규칙 적용
+        if (this.status == OrderStatus.PAID) {
+            if (LocalDateTime.now().isAfter(courseStartDate.minusDays(7))) {
+                throw new ServiceErrorException(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME);
+            }
+        }
+
+        this.status = OrderStatus.CANCELLED;
+        this.cancelledAt = LocalDateTime.now();
+    }
 }

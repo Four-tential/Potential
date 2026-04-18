@@ -66,4 +66,19 @@ public class OrderFacade {
         Page<OrderMyListResponse> responsePage = orders.map(OrderMyListResponse::from);
         return PageResponse.register(responsePage);
     }
+
+    /**
+     * 주문 취소
+     */
+    public OrderCancelResponse cancelOrder(UUID orderId, UUID memberId) {
+        Order order = orderService.cancelOrder(orderId, memberId);
+
+        // Redis 잔여석 복구 (취소된 수량만큼)
+        waitingListService.recoverCapacity(order.getCourseId(), order.getOrderCount());
+
+        // TODO: (결제 도메인 연동) PAID 상태(결제 완료)인 주문이 취소될 경우, 실제 PG사(포트원 등) 환불 API 호출 로직 결합 필요.
+        // PaymentFacade 또는 관련 이벤트를 발행하여 결제 취소가 안전하게 이루어지도록 해야 함.
+
+        return OrderCancelResponse.from(order);
+    }
 }
