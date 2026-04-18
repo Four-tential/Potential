@@ -117,6 +117,7 @@ public class PaymentCustomRepositoryImpl implements PaymentCustomRepository {
         Long total = queryFactory
                 .select(payment.count())
                 .from(payment)
+                .join(order).on(order.id.eq(payment.orderId))
                 .where(
                         payment.memberId.eq(memberId),
                         statusEq(status)
