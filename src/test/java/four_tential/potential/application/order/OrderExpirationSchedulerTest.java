@@ -107,4 +107,25 @@ class OrderExpirationSchedulerTest {
         // then
         verify(lock, never()).unlock();
     }
+
+    @Test
+    @DisplayName("배치 내 모든 주문 처리가 실패하면 무한 루프 방지를 위해 이번 턴을 종료한다")
+    void expireOrders_stop_when_all_items_fail_in_batch() throws InterruptedException {
+        // given
+        given(redissonClient.getLock(anyString())).willReturn(lock);
+        given(lock.tryLock(anyLong(), anyLong(), any())).willReturn(true);
+        given(lock.isHeldByCurrentThread()).willReturn(true);
+
+        // 조회는 10건 되었으나, 처리는 0건 성공한 상황 (예: 모두 낙관적 락 충돌)
+        given(orderService.processExpiredBatch(any(), anyInt()))
+                .willReturn(new OrderBatchResult(10, 0));
+
+        // when
+        scheduler.expireOrders();
+
+        // then
+        // 단 한 번만 호출되고 루프를 탈출해야 함 (무한 루프 방지)
+        verify(orderService, times(1)).processExpiredBatch(any(), anyInt());
+        verify(lock).unlock();
+    }
 }

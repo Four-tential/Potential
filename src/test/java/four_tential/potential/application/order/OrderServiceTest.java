@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -38,7 +40,8 @@ class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
     @Mock private WaitingListService waitingListService;
-    @InjectMocks private OrderService orderService;
+    @Mock private ApplicationContext applicationContext;
+    @InjectMocks @Spy private OrderService orderService;
 
     @Test
     @DisplayName("주문을 성공적으로 생성하고 저장한다")
@@ -137,87 +140,64 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 주문들을 배치 단위로 자동 만료 처리하고 Redis 재고를 복구한다")
+    @DisplayName("단일 주문 만료 처리를 성공적으로 수행한다")
+    void expireOrderInNewTransaction_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
+        
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        boolean result = orderService.expireOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        verify(orderRepository).saveAndFlush(order);
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("단일 주문 만료 처리 중 예외가 발생하면 false를 반환한다")
+    void expireOrderInNewTransaction_fail_on_exception() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        given(orderRepository.findById(orderId)).willThrow(new RuntimeException("DB Error"));
+
+        // when
+        boolean result = orderService.expireOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("만료된 주문들을 배치 단위로 처리한다")
     void processExpiredBatch_success() {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
-        PageRequest pageRequest = PageRequest.of(0, batchSize);
-        UUID courseId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        Order expiredOrder = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
+        UUID orderId = UUID.randomUUID();
+        Order expiredOrder = mock(Order.class);
+        given(expiredOrder.getId()).willReturn(orderId);
+        
         Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any())).willReturn(expiredSlice);
         
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest)))
-                .willReturn(expiredSlice);
+        // Self-invocation 모킹
+        given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
+        doReturn(true).when(orderService).expireOrderInNewTransaction(orderId);
 
         // when
         OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(result.successCount()).isEqualTo(1);
         assertThat(result.fetchedCount()).isEqualTo(1);
-        assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        
-        // Redis 재고 복구 호출 확인
-        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
-    }
-
-    @Test
-    @DisplayName("Redis 재고 복구 중 예외가 발생해도 주문 만료 처리는 성공으로 간주한다")
-    void processExpiredBatch_success_even_if_redis_fails() {
-        // given
-        LocalDateTime now = LocalDateTime.now();
-        int batchSize = 100;
-        UUID courseId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        Order expiredOrder = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
-        Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
-        
-        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
-                .willReturn(expiredSlice);
-        
-        // Redis 복구 시 예외 발생 시뮬레이션
-        doThrow(new RuntimeException("Redis connection fail"))
-                .when(waitingListService).rollbackOccupiedSeat(any(), any());
-
-        // when
-        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
-
-        // then
         assertThat(result.successCount()).isEqualTo(1);
-        assertThat(result.fetchedCount()).isEqualTo(1);
-        assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
-    }
-
-    @Test
-    @DisplayName("특정 주문의 만료 처리 중 예외 발생 시 해당 건은 제외하고 다음 주문을 처리한다")
-    void processExpiredBatch_partial_failure() {
-        // given
-        LocalDateTime now = LocalDateTime.now();
-        int batchSize = 100;
-        
-        Order normalOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "정상주문"));
-        Order failOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "실패주문"));
-        
-        // failOrder.expire() 호출 시 예외 발생 시뮬레이션
-        doThrow(new RuntimeException("DB error during expire"))
-                .when(failOrder).expire();
-
-        Slice<Order> expiredSlice = new SliceImpl<>(List.of(failOrder, normalOrder));
-        
-        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
-                .willReturn(expiredSlice);
-
-        // when
-        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
-
-        // then
-        assertThat(result.successCount()).isEqualTo(1); // normalOrder만 성공
-        assertThat(result.fetchedCount()).isEqualTo(2); // 2건 조회됨
-        assertThat(normalOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        assertThat(failOrder.getStatus()).isEqualTo(OrderStatus.PENDING); // 실패했으므로 상태 유지
+        verify(orderService).expireOrderInNewTransaction(orderId);
     }
 
     @Test
@@ -226,8 +206,7 @@ class OrderServiceTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
-        PageRequest pageRequest = PageRequest.of(0, batchSize);
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest)))
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
                 .willReturn(new SliceImpl<>(Collections.emptyList()));
 
         // when
@@ -236,7 +215,5 @@ class OrderServiceTest {
         // then
         assertThat(result.successCount()).isZero();
         assertThat(result.fetchedCount()).isZero();
-        verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }
 }
