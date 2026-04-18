@@ -16,6 +16,7 @@ import four_tential.potential.presentation.member.model.request.UpdateOnBoardReq
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
+import four_tential.potential.presentation.member.model.response.InstructorProfileResponse;
 import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
@@ -545,6 +546,48 @@ class MemberControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().currentPage()).isEqualTo(1);
         assertThat(response.getBody().data().size()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 - 200 OK 및 프로필 응답 반환")
+    void getInstructorProfile_success() {
+        UUID instructorId = UUID.randomUUID();
+        InstructorProfileResponse serviceResponse = new InstructorProfileResponse(
+                instructorId,
+                "박지현",
+                "https://cdn.example.com/profile.jpg",
+                "FITNESS",
+                "피트니스",
+                "10년 경력의 필라테스 강사입니다.",
+                12L,
+                4.8,
+                234L
+        );
+        given(memberService.getInstructorProfile(instructorId)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<InstructorProfileResponse>> response =
+                memberController.getInstructorProfile(instructorId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("강사 프로필 조회 성공");
+        assertThat(response.getBody().data().memberId()).isEqualTo(instructorId);
+        assertThat(response.getBody().data().categoryCode()).isEqualTo("FITNESS");
+        assertThat(response.getBody().data().courseCount()).isEqualTo(12L);
+        assertThat(response.getBody().data().averageRating()).isEqualTo(4.8);
+        assertThat(response.getBody().data().totalStudentCount()).isEqualTo(234L);
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 - 존재하지 않는 강사면 ServiceErrorException 전파")
+    void getInstructorProfile_instructorNotFound() {
+        UUID instructorId = UUID.randomUUID();
+        given(memberService.getInstructorProfile(instructorId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
     }
 
     @Test
