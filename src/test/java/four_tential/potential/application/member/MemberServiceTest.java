@@ -1075,6 +1075,25 @@ class MemberServiceTest {
     }
 
     @Test
+    @DisplayName("강사 프로필 조회 실패 - 카테고리를 찾을 수 없으면 NOT_FOUND")
+    void getInstructorProfile_categoryNotFound_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 카테고리입니다");
+
+        verify(courseRepository, never()).countByMemberInstructorId(any());
+    }
+
+    @Test
     @DisplayName("강사 프로필 조회 실패 - 미승인 강사는 NOT_FOUND")
     void getInstructorProfile_pendingInstructor_throwsNotFound() {
         UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
