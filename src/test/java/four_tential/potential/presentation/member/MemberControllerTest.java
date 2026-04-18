@@ -591,6 +591,48 @@ class MemberControllerTest {
     }
 
     @Test
+    @DisplayName("강사 프로필 조회 - 카테고리를 찾을 수 없으면 ServiceErrorException 전파")
+    void getInstructorProfile_categoryNotFound() {
+        UUID instructorId = UUID.randomUUID();
+        given(memberService.getInstructorProfile(instructorId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+
+        assertThatThrownBy(() -> memberController.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 카테고리입니다");
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 - 정지·탈퇴 회원의 강사면 ServiceErrorException 전파")
+    void getInstructorProfile_inactiveMember_throwsNotFound() {
+        UUID instructorId = UUID.randomUUID();
+        given(memberService.getInstructorProfile(instructorId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 - 응답 status가 OK이고 message가 '강사 프로필 조회 성공'임")
+    void getInstructorProfile_responseMetadata() {
+        UUID instructorId = UUID.randomUUID();
+        InstructorProfileResponse serviceResponse = new InstructorProfileResponse(
+                instructorId, "김강사", null, "YOGA", "요가", "소개글", 0L, 0.0, 0L
+        );
+        given(memberService.getInstructorProfile(instructorId)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<InstructorProfileResponse>> response =
+                memberController.getInstructorProfile(instructorId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().status()).isEqualTo("OK");
+        assertThat(response.getBody().message()).isEqualTo("강사 프로필 조회 성공");
+        assertThat(response.getBody().success()).isTrue();
+    }
+
+    @Test
     @DisplayName("찜 목록 조회 - 200 OK 및 페이지 응답 반환")
     void getMyWishlistCourses_success() {
         WishlistCourseItem item = new WishlistCourseItem(
