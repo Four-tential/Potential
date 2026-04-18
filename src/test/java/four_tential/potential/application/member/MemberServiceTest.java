@@ -3,7 +3,9 @@ package four_tential.potential.application.member;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
+import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.member.fixture.InstructorMemberFixture;
 import four_tential.potential.domain.member.follow.Follow;
 import four_tential.potential.domain.member.follow.FollowRepository;
@@ -11,6 +13,7 @@ import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
 import four_tential.potential.domain.member.fixture.MemberFixture;
@@ -31,6 +34,7 @@ import four_tential.potential.presentation.member.model.response.ChangeMemberSta
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.domain.member.member.MemberStatus;
+import four_tential.potential.presentation.member.model.response.InstructorProfileResponse;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
@@ -100,6 +104,9 @@ class MemberServiceTest {
 
     @Mock
     private FollowRepository followRepository;
+
+    @Mock
+    private ReviewRepository reviewRepository;
 
     @InjectMocks
     private MemberService memberService;
@@ -1007,6 +1014,161 @@ class MemberServiceTest {
         assertThat(response.totalPages()).isEqualTo(2);
         assertThat(response.totalElements()).isEqualTo(3);
         assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 성공 - 승인된 강사의 기본 정보와 집계 값을 반환")
+    void getInstructorProfile_success() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+        given(courseRepository.countByMemberInstructorId(instructor.getId())).willReturn(12L);
+        given(reviewRepository.findAverageRatingByMemberInstructorId(instructor.getId())).willReturn(4.8);
+        given(orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructor.getId(),
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)
+        )).willReturn(234L);
+
+        InstructorProfileResponse response = memberService.getInstructorProfile(instructorId);
+
+        assertThat(response.memberId()).isEqualTo(instructorId);
+        assertThat(response.name()).isEqualTo(MemberFixture.DEFAULT_NAME);
+        assertThat(response.profileImageUrl()).isEqualTo(InstructorMemberFixture.DEFAULT_IMAGE_URL);
+        assertThat(response.categoryCode()).isEqualTo(InstructorMemberFixture.DEFAULT_CATEGORY_CODE);
+        assertThat(response.categoryName()).isEqualTo(CourseCategoryFixture.DEFAULT_NAME);
+        assertThat(response.content()).isEqualTo(InstructorMemberFixture.DEFAULT_CONTENT);
+        assertThat(response.courseCount()).isEqualTo(12L);
+        assertThat(response.averageRating()).isEqualTo(4.8);
+        assertThat(response.totalStudentCount()).isEqualTo(234L);
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 성공 - 리뷰와 수강생 집계가 없으면 0 반환")
+    void getInstructorProfile_emptyStats() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+        given(courseRepository.countByMemberInstructorId(instructor.getId())).willReturn(0L);
+        given(reviewRepository.findAverageRatingByMemberInstructorId(instructor.getId())).willReturn(null);
+        given(orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructor.getId(),
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)
+        )).willReturn(null);
+
+        InstructorProfileResponse response = memberService.getInstructorProfile(instructorId);
+
+        assertThat(response.courseCount()).isZero();
+        assertThat(response.averageRating()).isZero();
+        assertThat(response.totalStudentCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 카테고리를 찾을 수 없으면 NOT_FOUND")
+    void getInstructorProfile_categoryNotFound_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 카테고리입니다");
+
+        verify(courseRepository, never()).countByMemberInstructorId(any());
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 강사 조회 자체가 없으면 NOT_FOUND")
+    void getInstructorProfile_instructorNotFound_whenInstructorMemberMissing() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(memberRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 미승인 강사는 NOT_FOUND")
+    void getInstructorProfile_pendingInstructor_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 강사 엔티티는 있으나 회원이 없으면 NOT_FOUND")
+    void getInstructorProfile_memberNotFound_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 정지된 회원의 강사는 NOT_FOUND")
+    void getInstructorProfile_suspendedMember_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        member.suspend();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 탈퇴한 회원의 강사는 NOT_FOUND")
+    void getInstructorProfile_withdrawalMember_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        member.withdraw();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
     }
 
 }

@@ -3,6 +3,7 @@ package four_tential.potential.application.member;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.member.follow.Follow;
 import four_tential.potential.domain.member.follow.FollowRepository;
@@ -11,12 +12,14 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoard;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardRepository;
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
@@ -29,6 +32,7 @@ import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
+import four_tential.potential.presentation.member.model.response.InstructorProfileResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -65,6 +69,7 @@ public class MemberService {
     private final CourseRepository courseRepository;
     private final InstructorMemberRepository instructorMemberRepository;
     private final FollowRepository followRepository;
+    private final ReviewRepository reviewRepository;
     private final JwtRepository jwtRepository;
     private final JwtUtil jwtUtil;
 
@@ -279,9 +284,7 @@ public class MemberService {
         }
 
         // 승인된 강사 존재 확인
-        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
-                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+        InstructorMember instructorMember = findApprovedInstructor(instructorMemberId);
 
         // 중복 팔로우 방지
         if (followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())) {
@@ -298,12 +301,53 @@ public class MemberService {
         return PageResponse.register(followRepository.findFollowedInstructors(memberId, pageable));
     }
 
+    @Transactional(readOnly = true)
+    public InstructorProfileResponse getInstructorProfile(UUID instructorId) {
+        // 승인된 강사 존재 확인
+        InstructorMember instructorMember = findApprovedInstructor(instructorId);
+
+        // 활성 회원만 공개 강사 프로필에 노출
+        Member member = memberRepository.findById(instructorId)
+                .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        // 카테고리 조회
+        CourseCategory category = courseCategoryRepository.findByCode(instructorMember.getCategoryCode())
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+
+        // 강사 개설 코스 조회
+        long courseCount = courseRepository.countByMemberInstructorId(instructorMember.getId());
+
+        // 별점 평균 조회
+        double averageRating = Optional.ofNullable(
+                reviewRepository.findAverageRatingByMemberInstructorId(instructorMember.getId())
+        ).orElse(0.0);
+
+        // 총 수강생 조회
+        long totalStudentCount = Optional.ofNullable(
+                orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                        instructorMember.getId(),
+                        List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)
+                )
+        ).orElse(0L);
+
+        return new InstructorProfileResponse(
+                member.getId(),
+                member.getName(),
+                instructorMember.getImageUrl(),
+                instructorMember.getCategoryCode(),
+                category.getName(),
+                instructorMember.getContent(),
+                courseCount,
+                averageRating,
+                totalStudentCount
+        );
+    }
+
     @Transactional
     public FollowResponse unfollowInstructor(UUID followerId, UUID instructorMemberId) {
         // 승인된 강사 존재 확인
-        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
-                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+        InstructorMember instructorMember = findApprovedInstructor(instructorMemberId);
 
         // 팔로우 기록 조회
         Follow follow = followRepository.findByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())
@@ -312,6 +356,12 @@ public class MemberService {
         followRepository.delete(follow);
 
         return FollowResponse.register(instructorMemberId, false);
+    }
+
+    private InstructorMember findApprovedInstructor(UUID memberId) {
+        return instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
     }
 
     private String getProfileImageUrlOrDefault(Member member) {

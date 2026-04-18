@@ -10,6 +10,7 @@ import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
+import four_tential.potential.presentation.member.model.response.InstructorProfileResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -170,6 +171,18 @@ public class MemberController {
                         HttpStatus.OK.name(),
                         "팔로우한 강사 목록 조회 성공",
                         memberService.getMyFollows(principal.memberId(), PageRequest.of(page, size))
+                ));
+    }
+
+    @GetMapping("/instructors/{instructorId}")
+    public ResponseEntity<BaseResponse<InstructorProfileResponse>> getInstructorProfile(
+            @PathVariable UUID instructorId
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "강사 프로필 조회 성공",
+                        memberService.getInstructorProfile(instructorId)
                 ));
     }
 

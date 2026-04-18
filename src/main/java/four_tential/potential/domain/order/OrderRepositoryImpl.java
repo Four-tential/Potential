@@ -70,4 +70,22 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
 
         return exists != null;
     }
+
+    @Override
+    public Long sumStudentCountByMemberInstructorIdAndStatusIn(
+            UUID memberInstructorId,
+            Collection<OrderStatus> statuses
+    ) {
+        Long studentCount = queryFactory
+                .select(order.orderCount.sumLong())
+                .from(order)
+                .join(course).on(course.id.eq(order.courseId))
+                .where(
+                        course.memberInstructorId.eq(memberInstructorId),
+                        order.status.in(statuses)
+                )
+                .fetchOne();
+
+        return studentCount != null ? studentCount : 0L;
+    }
 }

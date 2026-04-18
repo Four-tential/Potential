@@ -12,4 +12,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
             Collection<CourseStatus> statuses,
             LocalDateTime now
     );
+
+    long countByMemberInstructorId(UUID memberInstructorId);
 }

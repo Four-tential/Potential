@@ -12,10 +12,16 @@ import java.util.UUID;
 public interface OrderRepositoryCustom {
     Optional<Order> findOrderDetailsById(UUID orderId, UUID memberId);
     Page<Order> findMyOrders(UUID memberId, Pageable pageable);
+
     boolean existsActiveEnrollment(
             UUID memberId,
             Collection<OrderStatus> orderStatuses,
             Collection<CourseStatus> courseStatuses,
             LocalDateTime now
+    );
+
+    Long sumStudentCountByMemberInstructorIdAndStatusIn(
+            UUID memberInstructorId,
+            Collection<OrderStatus> statuses
     );
 }
