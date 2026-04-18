@@ -5,6 +5,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,5 +32,15 @@ public class PaymentController {
         PaymentCreateResponse response = paymentFacade.createPayment(principal.memberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success(HttpStatus.CREATED.name(), "결제 요청 성공", response));
+    }
+
+    @GetMapping("/{paymentId}")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<BaseResponse<PaymentDetailResponse>> getMyPayment(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID paymentId
+    ) {
+        PaymentDetailResponse response = paymentFacade.getMyPayment(principal.memberId(), paymentId);
+        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "결제 조회 성공", response));
     }
 }

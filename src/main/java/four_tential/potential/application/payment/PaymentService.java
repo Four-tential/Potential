@@ -6,6 +6,7 @@ import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -170,5 +171,13 @@ public class PaymentService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void fail(Payment payment) {
         payment.fail();
+    }
+
+    /**
+     * 결제 단건 조회
+     */
+    public PaymentDetailResponse getMyPayment(UUID paymentId, UUID memberId) {
+        return paymentRepository.findDetailByIdAndMemberId(paymentId, memberId)
+                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
     }
 }

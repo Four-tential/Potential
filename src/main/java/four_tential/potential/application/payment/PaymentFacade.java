@@ -18,6 +18,7 @@ import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.infra.portone.PortOneWebhookHandler;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
@@ -66,6 +67,13 @@ public class PaymentFacade {
         resumePendingPaidWebhook(payment.getPgKey());
         Payment latestPayment = paymentService.getByPgKey(payment.getPgKey());
         return PaymentCreateResponse.from(latestPayment);
+    }
+
+    /**
+     * 결제 단건 조회
+     */
+    public PaymentDetailResponse getMyPayment(UUID memberId, UUID paymentId) {
+        return paymentService.getMyPayment(paymentId, memberId);
     }
 
     /**
