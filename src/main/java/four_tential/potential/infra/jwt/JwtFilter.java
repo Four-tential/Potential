@@ -48,8 +48,8 @@ public class JwtFilter extends OncePerRequestFilter {
 
             // 결제 테스트 관련 추가
             patternParser.parse("/payment-test.html"),
-            patternParser.parse("/api/v1/payments/portone-config"),
-            patternParser.parse("/api/v1/webhooks/portone")
+            patternParser.parse("/v1/payments/portone-config"),
+            patternParser.parse("/v1/webhooks/portone")
     );
 
     @Override

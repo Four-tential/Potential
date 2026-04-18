@@ -3,7 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const envPath = path.join(__dirname, '.env');
-const defaultTarget = 'http://127.0.0.1:8080/api/v1/webhooks/portone';
+const defaultTarget = 'http://127.0.0.1:8080/v1/webhooks/portone';
 
 if (!fs.existsSync(envPath)) {
     console.error('ERROR: .env file was not found.');

@@ -435,7 +435,7 @@
 
     async function loadConfig() {
         try {
-            const response = await fetch('/api/v1/payments/portone-config');
+            const response = await fetch('/v1/payments/portone-config');
             const body = await readJson(response);
 
             if (!response.ok || !body.success) {
@@ -586,7 +586,7 @@
             document.getElementById('portonePaidView').className = 'ok';
             log('PortOne 결제 완료. 이제 서버 결제 생성 API로 검증 요청을 보냅니다.', portoneResponse);
 
-            const serverResponse = await fetch('/api/v1/payments', {
+            const serverResponse = await fetch('/v1/payments', {
                 method: 'POST',
                 headers: {
                     ...authHeaders(),

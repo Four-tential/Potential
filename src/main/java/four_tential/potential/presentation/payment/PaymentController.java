@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping({"/v1/payments", "/api/v1/payments"})
+@RequestMapping("/v1/payments")
 public class PaymentController {
 
     private final PaymentFacade paymentFacade;

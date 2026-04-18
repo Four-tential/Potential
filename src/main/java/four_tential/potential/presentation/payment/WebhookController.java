@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/webhooks")
+@RequestMapping("/v1/webhooks")
 public class WebhookController {
 
     private final PaymentFacade paymentFacade;
