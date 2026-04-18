@@ -35,6 +35,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
+    @Mock private WaitingListService waitingListService;
     @InjectMocks private OrderService orderService;
 
     @Test
@@ -113,13 +114,15 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 주문들을 배치 단위로 자동 만료 처리한다")
+    @DisplayName("만료된 주문들을 배치 단위로 자동 만료 처리하고 Redis 재고를 복구한다")
     void processExpiredBatch_success() {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
         PageRequest pageRequest = PageRequest.of(0, batchSize);
-        Order expiredOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "만료대상"));
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Order expiredOrder = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
         Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
         
         given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest)))
@@ -131,6 +134,9 @@ class OrderServiceTest {
         // then
         assertThat(processedCount).isEqualTo(1);
         assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        
+        // Redis 재고 복구 호출 확인
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
         verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }
 
@@ -149,6 +155,7 @@ class OrderServiceTest {
 
         // then
         assertThat(processedCount).isZero();
+        verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
         verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
     }
 }
