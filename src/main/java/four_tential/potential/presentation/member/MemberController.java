@@ -1,5 +1,6 @@
 package four_tential.potential.presentation.member;
 
+import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
@@ -12,11 +13,11 @@ import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
+import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -38,6 +39,7 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 public class MemberController {
 
     private final MemberService memberService;
+    private final CourseWishlistService courseWishlistService;
 
     // TODO 다른 회원 도메인 API 작업후
     //  POST /members/me/profile-image/presigned-url 관련 버킷에 담는 과정이 필요함
@@ -141,6 +143,20 @@ public class MemberController {
                 .path("/v1/auth")
                 .maxAge(Duration.ZERO)
                 .build();
+    }
+
+    @GetMapping("/members/me/wishlist-courses")
+    public ResponseEntity<BaseResponse<PageResponse<WishlistCourseItem>>> getMyWishlistCourses(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "찜 목록 조회 성공",
+                        courseWishlistService.getMyWishlistCourses(principal.memberId(), page, size)
+                ));
     }
 
     @GetMapping("/members/me/follows")
