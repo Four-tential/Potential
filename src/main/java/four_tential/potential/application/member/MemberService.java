@@ -12,6 +12,7 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoard;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardRepository;
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
@@ -309,8 +310,9 @@ public class MemberService {
                 .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
-        // 회원 조회
+        // 활성 회원만 공개 강사 프로필에 노출
         Member member = memberRepository.findById(instructorId)
+                .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         // 카테고리 조회

@@ -1086,4 +1086,42 @@ class MemberServiceTest {
                 .hasMessage("존재하지 않는 강사입니다");
     }
 
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 정지된 회원의 강사는 NOT_FOUND")
+    void getInstructorProfile_suspendedMember_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        member.suspend();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
+    }
+
+    @Test
+    @DisplayName("강사 프로필 조회 실패 - 탈퇴한 회원의 강사는 NOT_FOUND")
+    void getInstructorProfile_withdrawalMember_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Member member = MemberFixture.defaultMember();
+        member.withdraw();
+        ReflectionTestUtils.setField(member, "id", instructorId);
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
+    }
+
 }
