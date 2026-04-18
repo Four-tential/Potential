@@ -5,13 +5,18 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.member.model.request.*;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
+import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -136,6 +141,46 @@ public class MemberController {
                 .path("/v1/auth")
                 .maxAge(Duration.ZERO)
                 .build();
+    }
+
+    @GetMapping("/members/me/follows")
+    public ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> getMyFollows(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal MemberPrincipal principal
+            ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "팔로우한 강사 목록 조회 성공",
+                        memberService.getMyFollows(principal.memberId(), PageRequest.of(page, size))
+                ));
+    }
+
+    @DeleteMapping("/instructors/{memberId}/follows")
+    public ResponseEntity<BaseResponse<FollowResponse>> unfollowInstructor(
+            @PathVariable UUID memberId,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "팔로우 해제 성공",
+                        memberService.unfollowInstructor(principal.memberId(), memberId)
+                ));
+    }
+
+    @PostMapping("/instructors/{memberId}/follows")
+    public ResponseEntity<BaseResponse<FollowResponse>> followInstructor(
+            @PathVariable UUID memberId,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(
+                        HttpStatus.CREATED.name(),
+                        "팔로우 성공",
+                        memberService.followInstructor(principal.memberId(), memberId)
+                ));
     }
 
     @PatchMapping("/admin/members/{memberId}/status")

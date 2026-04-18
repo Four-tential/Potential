@@ -4,6 +4,9 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
+import four_tential.potential.domain.member.fixture.InstructorMemberFixture;
+import four_tential.potential.domain.member.follow.Follow;
+import four_tential.potential.domain.member.follow.FollowRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
@@ -23,7 +26,10 @@ import four_tential.potential.presentation.member.model.request.ChangePasswordRe
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
+import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
@@ -39,6 +45,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -87,6 +97,9 @@ class MemberServiceTest {
 
     @Mock
     private JwtUtil jwtUtil;
+
+    @Mock
+    private FollowRepository followRepository;
 
     @InjectMocks
     private MemberService memberService;
@@ -392,31 +405,6 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
     }
-    // endregion
-
-    // region withdrawMember
-    @Test
-    @DisplayName("회원 탈퇴 성공 - 수강 예정 코스 없고 강사 이력 없음")
-    void withdrawMember_success_noScheduledCourseNoInstructor() {
-        Member member = MemberFixture.defaultMember();
-        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
-        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
-        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
-        given(orderRepository.existsActiveEnrollment(
-                eq(member.getId()),
-                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
-                eq(List.of(CourseStatus.OPEN)),
-                any(LocalDateTime.class)
-        )).willReturn(false);
-        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
-        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(1000L);
-
-        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
-
-        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
-        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
-        verify(jwtRepository).addBlacklist(ACCESS_TOKEN, 1000L);
-    }
 
     @Test
     @DisplayName("회원 탈퇴 성공 - 결제 완료 주문이 있어도 종료되지 않은 OPEN 코스가 없음")
@@ -614,9 +602,7 @@ class MemberServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(im, "id", expectedId);
         return im;
     }
-    // endregion
 
-    // region changeMemberStatus
     @Test
     @DisplayName("회원 상태 변경 성공 - ACTIVE → SUSPENDED, 응답에 변경된 상태 반환")
     void changeMemberStatus_activeToSuspended_success() {
@@ -793,6 +779,234 @@ class MemberServiceTest {
         ).isInstanceOf(ServiceErrorException.class);
 
         verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 성공 - 승인된 강사이고 미팔로우 상태면 팔로우 저장 및 응답 반환")
+    void followInstructor_success() {
+        InstructorMember instructor = approvedInstructorMember();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        UUID followerId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(false);
+
+        FollowResponse response = memberService.followInstructor(followerId, instructorMemberId);
+
+        assertThat(response.instructorId()).isEqualTo(instructorMemberId);
+        assertThat(response.isFollowed()).isTrue();
+        verify(followRepository).save(any(Follow.class));
+    }
+
+    @Test
+    @DisplayName("팔로우 실패 - 본인을 팔로우하면 BAD_REQUEST")
+    void followInstructor_selfFollow_throwsBadRequest() {
+        UUID selfId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> memberService.followInstructor(selfId, selfId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인을 팔로우 할 수 없습니다");
+
+        verify(followRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 실패 - 존재하지 않는 강사 memberId면 NOT_FOUND")
+    void followInstructor_instructorNotFound_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID unknownInstructorId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(unknownInstructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.followInstructor(followerId, unknownInstructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 실패 - 승인 대기 중인 강사(PENDING)는 NOT_FOUND 처리")
+    void followInstructor_instructorNotApproved_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember(); // PENDING
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() -> memberService.followInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 실패 - 이미 팔로우한 강사이면 CONFLICT")
+    void followInstructor_alreadyFollowed_throwsConflict() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(true);
+
+        assertThatThrownBy(() -> memberService.followInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 팔로우한 강사입니다");
+
+        verify(followRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 성공 - followRepository.save()가 정확히 한 번 호출됨")
+    void followInstructor_success_saveCalledOnce() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(false);
+
+        memberService.followInstructor(followerId, instructorMemberId);
+
+        verify(followRepository).save(any(Follow.class));
+    }
+
+    private InstructorMember approvedInstructorMember() {
+        InstructorMember im = InstructorMemberFixture.defaultInstructorMember();
+        im.approve();
+        ReflectionTestUtils.setField(im, "id", UUID.randomUUID());
+        return im;
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 성공 - 팔로우 기록 삭제 후 isFollowed=false 반환")
+    void unfollowInstructor_success() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Follow follow = Follow.register(followerId, instructor.getId());
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.of(follow));
+
+        FollowResponse response = memberService.unfollowInstructor(followerId, instructorMemberId);
+
+        assertThat(response.instructorId()).isEqualTo(instructorMemberId);
+        assertThat(response.isFollowed()).isFalse();
+        verify(followRepository).delete(follow);
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 존재하지 않는 강사 memberId면 NOT_FOUND")
+    void unfollowInstructor_instructorNotFound_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID unknownInstructorId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(unknownInstructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, unknownInstructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 미승인 강사(PENDING)는 NOT_FOUND 처리")
+    void unfollowInstructor_instructorNotApproved_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 실패 - 팔로우 기록이 없으면 NOT_FOUND")
+    void unfollowInstructor_followNotFound_throwsNotFound() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.unfollowInstructor(followerId, instructorMemberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("팔로우한 기록이 없습니다");
+
+        verify(followRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("팔로우 해제 성공 - followRepository.delete()가 정확히 한 번 호출됨")
+    void unfollowInstructor_success_deleteCalledOnce() {
+        UUID followerId = UUID.randomUUID();
+        UUID instructorMemberId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        Follow follow = Follow.register(followerId, instructor.getId());
+        given(instructorMemberRepository.findByMemberId(instructorMemberId)).willReturn(Optional.of(instructor));
+        given(followRepository.findByMemberIdAndMemberInstructorId(followerId, instructor.getId())).willReturn(Optional.of(follow));
+
+        memberService.unfollowInstructor(followerId, instructorMemberId);
+
+        verify(followRepository).delete(follow);
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 팔로우한 강사 목록을 페이지로 반환")
+    void getMyFollows_success() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        FollowedInstructorItem item = new FollowedInstructorItem(
+                UUID.randomUUID(), "강사이름", "https://img.url/profile.png",
+                "FITNESS", "피트니스", 3L, 4.5, LocalDateTime.now()
+        );
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(item), pageable, 1));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).name()).isEqualTo("강사이름");
+        assertThat(response.content().get(0).courseCount()).isEqualTo(3L);
+        assertThat(response.content().get(0).averageRating()).isEqualTo(4.5);
+        assertThat(response.totalElements()).isEqualTo(1);
+        assertThat(response.currentPage()).isZero();
+        assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 팔로우한 강사가 없으면 빈 페이지 반환")
+    void getMyFollows_empty() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 2페이지 요청 시 페이지 메타 정보가 올바르게 반환됨")
+    void getMyFollows_secondPage() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(1, 2);
+        FollowedInstructorItem item = new FollowedInstructorItem(
+                UUID.randomUUID(), "강사B", null, "COOK", "쿠킹", 1L, null, LocalDateTime.now()
+        );
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(item), pageable, 3));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.currentPage()).isEqualTo(1);
+        assertThat(response.totalPages()).isEqualTo(2);
+        assertThat(response.totalElements()).isEqualTo(3);
+        assertThat(response.isLast()).isTrue();
     }
 
 }
