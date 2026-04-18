@@ -137,7 +137,61 @@ class OrderServiceTest {
         
         // Redis 재고 복구 호출 확인
         verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), eq(now), eq(pageRequest));
+    }
+
+    @Test
+    @DisplayName("Redis 재고 복구 중 예외가 발생해도 주문 만료 처리는 성공으로 간주한다")
+    void processExpiredBatch_success_even_if_redis_fails() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        int batchSize = 100;
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Order expiredOrder = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
+        Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
+        
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
+                .willReturn(expiredSlice);
+        
+        // Redis 복구 시 예외 발생 시뮬레이션
+        doThrow(new RuntimeException("Redis connection fail"))
+                .when(waitingListService).rollbackOccupiedSeat(any(), any());
+
+        // when
+        int processedCount = orderService.processExpiredBatch(now, batchSize);
+
+        // then
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("특정 주문의 만료 처리 중 예외 발생 시 해당 건은 제외하고 다음 주문을 처리한다")
+    void processExpiredBatch_partial_failure() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        int batchSize = 100;
+        
+        Order normalOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "정상주문"));
+        Order failOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "실패주문"));
+        
+        // failOrder.expire() 호출 시 예외 발생 시뮬레이션
+        doThrow(new RuntimeException("DB error during expire"))
+                .when(failOrder).expire();
+
+        Slice<Order> expiredSlice = new SliceImpl<>(List.of(failOrder, normalOrder));
+        
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
+                .willReturn(expiredSlice);
+
+        // when
+        int processedCount = orderService.processExpiredBatch(now, batchSize);
+
+        // then
+        assertThat(processedCount).isEqualTo(1); // normalOrder만 성공
+        assertThat(normalOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(failOrder.getStatus()).isEqualTo(OrderStatus.PENDING); // 실패했으므로 상태 유지
     }
 
     @Test

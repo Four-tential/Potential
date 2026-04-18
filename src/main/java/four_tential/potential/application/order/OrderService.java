@@ -104,21 +104,33 @@ public class OrderService {
             return 0;
         }
 
+        int successCount = 0;
         for (Order order : expiredOrdersSlice) {
-            try {
-                order.expire();
-                // Redis 재고 해제: 선점 정보가 남아 있다면 복구 시도 (실패해도 주문 만료는 유지)
-                try {
-                    waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
-                } catch (Exception e) {
-                    log.error("주문 만료 중 Redis 재고 복구 실패: orderId={}, reason={}", order.getId(), e.getMessage());
-                }
-                log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
-            } catch (Exception e) {
-                log.error("주문 만료 처리 중 알 수 없는 예외 발생: orderId={}, reason={}", order.getId(), e.getMessage());
+            if (expireSingleOrder(order)) {
+                successCount++;
             }
         }
         
-        return expiredOrdersSlice.getNumberOfElements();
+        return successCount;
+    }
+
+    private boolean expireSingleOrder(Order order) {
+        try {
+            order.expire();
+            rollbackRedisSeatQuietly(order);
+            log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
+            return true;
+        } catch (Exception e) {
+            log.error("주문 만료 처리 중 알 수 없는 예외 발생: orderId={}, reason={}", order.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    private void rollbackRedisSeatQuietly(Order order) {
+        try {
+            waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
+        } catch (Exception e) {
+            log.error("주문 만료 중 Redis 재고 복구 실패: orderId={}, reason={}", order.getId(), e.getMessage());
+        }
     }
 }
