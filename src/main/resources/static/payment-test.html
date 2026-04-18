@@ -619,7 +619,7 @@
 
     async function recordFailedPaymentOnServer(orderId, paymentId) {
         try {
-            const serverResponse = await fetch('/api/v1/payments', {
+            const serverResponse = await fetch('/v1/payments', {
                 method: 'POST',
                 headers: {
                     ...authHeaders(),
