@@ -49,6 +49,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -489,6 +490,7 @@ class MemberServiceTest {
     void withdrawMember_wrongPassword() {
         Member member = MemberFixture.defaultMember();
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
         given(passwordEncoder.matches("WrongPass!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
 
         assertThatThrownBy(() ->
@@ -497,6 +499,24 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("비밀번호가 올바르지 않습니다");
         verify(jwtRepository, never()).deleteRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 유효하지 않은 Access Token이면 비밀번호 검증 전 UNAUTHORIZED")
+    void withdrawMember_invalidAccessToken() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
     }
 
     @Test
@@ -556,6 +576,7 @@ class MemberServiceTest {
     void withdrawMember_wrongPassword_withdrawNeverCalled() {
         Member member = MemberFixture.defaultMember();
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
         given(passwordEncoder.matches("WrongPass!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
 
         assertThatThrownBy(() ->
@@ -563,6 +584,29 @@ class MemberServiceTest {
         ).isInstanceOf(ServiceErrorException.class);
 
         assertThat(member.getStatus()).isNotEqualTo(MemberStatus.WITHDRAWAL);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 성공 - Access Token 남은 시간이 0 이하이면 블랙리스트 등록하지 않음")
+    void withdrawMember_success_nonPositiveRemainingTime_doesNotAddBlacklist() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
+        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(0L);
+
+        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
     }
 
     private InstructorMember createInstructorMember(UUID expectedId) {

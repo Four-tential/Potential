@@ -33,11 +33,13 @@ import static four_tential.potential.common.exception.domain.CourseExceptionEnum
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -315,6 +317,45 @@ class MemberControllerTest {
         assertThat(response.getBody().data()).isNull();
         verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("refreshToken="));
         verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Authorization 헤더가 없으면 ServiceErrorException 전파")
+    void withdraw_missingAuthorization() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw(null, request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("인증 정보가 비어있습니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Bearer 형식이 아니면 ServiceErrorException 전파")
+    void withdraw_invalidAuthorizationPrefix() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw("Token invalid.access.token", request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("인증 정보가 비어있습니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Bearer 뒤 토큰이 비어 있으면 ServiceErrorException 전파")
+    void withdraw_blankAccessToken() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw("Bearer   ", request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
     }
 
     @Test

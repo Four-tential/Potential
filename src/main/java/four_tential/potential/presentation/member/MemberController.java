@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Duration;
 import java.util.UUID;
 
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_AUTHORIZE;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_TOKEN_NULL;
 
 
@@ -112,7 +113,11 @@ public class MemberController {
             throw new ServiceErrorException(ERR_TOKEN_NULL);
         }
 
-        String accessToken = authorization.substring("Bearer ".length());
+        String accessToken = authorization.substring("Bearer ".length()).trim();
+        if (accessToken.isEmpty()) {
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
+        }
+
         memberService.withdrawMember(principal.memberId(), principal.email(), accessToken, request);
         response.addHeader(HttpHeaders.SET_COOKIE, expireRefreshTokenCookie().toString());
 

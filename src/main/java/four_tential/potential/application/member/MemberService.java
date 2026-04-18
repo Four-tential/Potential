@@ -44,7 +44,6 @@ import static four_tential.potential.common.exception.domain.CourseExceptionEnum
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 
 
-
 @Service
 @RequiredArgsConstructor
 public class MemberService {
@@ -193,13 +192,14 @@ public class MemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
 
+        // 토큰 검증
+        if (!jwtUtil.validateToken(accessToken)) {
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
+        }
+
         // 비밀번호 검증
         if (!passwordEncoder.matches(request.password(), member.getPassword())) {
             throw new ServiceErrorException(ERR_WRONG_PASSWORD);
-        }
-
-        if (!jwtUtil.validateToken(accessToken)) {
-            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -227,7 +227,11 @@ public class MemberService {
 
         member.withdraw();
         jwtRepository.deleteRefreshToken(email);
-        jwtRepository.addBlacklist(accessToken, jwtUtil.getRemainingTime(accessToken));
+
+        long remainingTime = jwtUtil.getRemainingTime(accessToken);
+        if (remainingTime > 0) {
+            jwtRepository.addBlacklist(accessToken, remainingTime);
+        }
     }
 
     @Transactional
