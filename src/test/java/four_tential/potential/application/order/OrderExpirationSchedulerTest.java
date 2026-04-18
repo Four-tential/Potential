@@ -30,7 +30,7 @@ class OrderExpirationSchedulerTest {
     void expireOrders_success_when_lock_acquired() throws InterruptedException {
         // given
         given(redissonClient.getLock(anyString())).willReturn(lock);
-        given(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).willReturn(true);
+        given(lock.tryLock(eq(0L), eq(50L), eq(TimeUnit.SECONDS))).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
         
         // 첫 번째 호출에서 10건 처리, 두 번째에서 0건 처리 (종료 조건)
@@ -42,7 +42,8 @@ class OrderExpirationSchedulerTest {
         scheduler.expireOrders();
 
         // then
-        verify(orderService, atLeastOnce()).processExpiredBatch(any(LocalDateTime.now().getClass()), anyInt());
+        verify(lock).tryLock(eq(0L), eq(50L), eq(TimeUnit.SECONDS));
+        verify(orderService, times(2)).processExpiredBatch(any(LocalDateTime.class), anyInt());
         verify(lock).unlock();
     }
 
@@ -51,7 +52,7 @@ class OrderExpirationSchedulerTest {
     void expireOrders_skip_when_lock_not_acquired() throws InterruptedException {
         // given
         given(redissonClient.getLock(anyString())).willReturn(lock);
-        given(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).willReturn(false);
+        given(lock.tryLock(eq(0L), eq(50L), eq(TimeUnit.SECONDS))).willReturn(false);
 
         // when
         scheduler.expireOrders();
