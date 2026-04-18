@@ -10,6 +10,7 @@ import four_tential.potential.presentation.member.model.request.ChangePasswordRe
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
+import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -286,6 +287,58 @@ class MemberControllerTest {
         assertThatThrownBy(() -> memberController.changePassword(request, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
+    }
+    // endregion
+
+    // region withdraw
+    @Test
+    @DisplayName("회원 탈퇴 - 200 OK, data는 null, 성공 메시지 반환")
+    void withdraw_success() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doNothing().when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, request);
+
+        ResponseEntity<BaseResponse<Void>> response = memberController.withdraw(request, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("회원 탈퇴 성공");
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 비밀번호 불일치 시 ServiceErrorException 전파")
+    void withdraw_wrongPassword() {
+        WithdrawalRequest request = new WithdrawalRequest("WrongPass!");
+        doThrow(new ServiceErrorException(ERR_WRONG_PASSWORD))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 수강 예정 코스 존재 시 ServiceErrorException 전파")
+    void withdraw_hasScheduledCourse() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doThrow(new ServiceErrorException(ERR_HAS_COURSE))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("수강해야할 코스가 있어 탈퇴가 불가합니다");
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 진행 중인 강사 코스 존재 시 ServiceErrorException 전파")
+    void withdraw_hasActiveInstructorCourses() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doThrow(new ServiceErrorException(ERR_HAS_ACTIVE_INSTRUCTOR_COURSES))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(request, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("진행 중인 코스가 있어 탈퇴가 불가합니다");
     }
     // endregion
 }

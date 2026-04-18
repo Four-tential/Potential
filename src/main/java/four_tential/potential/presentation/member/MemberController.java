@@ -94,6 +94,20 @@ public class MemberController {
                 ));
     }
 
+    @DeleteMapping("/members/me/withdrawals")
+    public ResponseEntity<BaseResponse<Void>> withdraw(
+            @Valid @RequestBody WithdrawalRequest request,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        memberService.withdrawMember(principal.memberId(), principal.email(), request);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "회원 탈퇴 성공",
+                        null
+                ));
+    }
+
     @PatchMapping("/admin/members/{memberId}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BaseResponse<ChangeMemberStatusResponse>> changeMemberStatus(
