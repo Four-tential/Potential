@@ -1087,6 +1087,21 @@ class MemberServiceTest {
     }
 
     @Test
+    @DisplayName("강사 프로필 조회 실패 - 강사 엔티티는 있으나 회원이 없으면 NOT_FOUND")
+    void getInstructorProfile_memberNotFound_throwsNotFound() {
+        UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;
+        InstructorMember instructor = approvedInstructorMember();
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(memberRepository.findById(instructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.getInstructorProfile(instructorId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseCategoryRepository, never()).findByCode(any());
+    }
+
+    @Test
     @DisplayName("강사 프로필 조회 실패 - 정지된 회원의 강사는 NOT_FOUND")
     void getInstructorProfile_suspendedMember_throwsNotFound() {
         UUID instructorId = InstructorMemberFixture.DEFAULT_MEMBER_ID;

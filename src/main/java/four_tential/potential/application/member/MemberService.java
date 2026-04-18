@@ -284,9 +284,7 @@ public class MemberService {
         }
 
         // 승인된 강사 존재 확인
-        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
-                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+        InstructorMember instructorMember = findApprovedInstructor(instructorMemberId);
 
         // 중복 팔로우 방지
         if (followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())) {
@@ -306,9 +304,7 @@ public class MemberService {
     @Transactional(readOnly = true)
     public InstructorProfileResponse getInstructorProfile(UUID instructorId) {
         // 승인된 강사 존재 확인
-        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorId)
-                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+        InstructorMember instructorMember = findApprovedInstructor(instructorId);
 
         // 활성 회원만 공개 강사 프로필에 노출
         Member member = memberRepository.findById(instructorId)
@@ -351,9 +347,7 @@ public class MemberService {
     @Transactional
     public FollowResponse unfollowInstructor(UUID followerId, UUID instructorMemberId) {
         // 승인된 강사 존재 확인
-        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
-                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+        InstructorMember instructorMember = findApprovedInstructor(instructorMemberId);
 
         // 팔로우 기록 조회
         Follow follow = followRepository.findByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())
@@ -362,6 +356,12 @@ public class MemberService {
         followRepository.delete(follow);
 
         return FollowResponse.register(instructorMemberId, false);
+    }
+
+    private InstructorMember findApprovedInstructor(UUID memberId) {
+        return instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
     }
 
     private String getProfileImageUrlOrDefault(Member member) {
