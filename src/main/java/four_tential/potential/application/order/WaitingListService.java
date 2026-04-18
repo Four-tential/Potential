@@ -22,7 +22,7 @@ public class WaitingListService {
     /**
      * 잔여석 점유 시도
      */
-    @DistributedLock(key = "'order:course:' + #p0")
+    @DistributedLock(key = "'order:course:' + #courseId")
     public boolean tryOccupyingSeat(UUID courseId, UUID memberId, int orderCount) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
@@ -53,7 +53,7 @@ public class WaitingListService {
     /**
      * 점유된 잔여석 롤백
      */
-    @DistributedLock(key = "'order:course:' + #p0")
+    @DistributedLock(key = "'order:course:' + #courseId")
     public void rollbackOccupiedSeat(UUID courseId, UUID memberId) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
@@ -61,9 +61,10 @@ public class WaitingListService {
         RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
 
-        if (occupancy.isExists()) {
+        String reservedValue = occupancy.get();
+        if (reservedValue != null) {
             try {
-                int reservedCount = Integer.parseInt(occupancy.get());
+                int reservedCount = Integer.parseInt(reservedValue);
                 occupancy.delete();
                 capacity.addAndGet(reservedCount);
                 log.info("잔여석 롤백 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, reservedCount);
@@ -71,13 +72,31 @@ public class WaitingListService {
                 log.error("잔여석 롤백 실패: 잘못된 점유 데이터 형식. courseId={}, memberId={}", courseId, memberId);
                 occupancy.delete();
             }
+        } else {
+            log.warn("잔여석 롤백 건너뜀: 점유 정보가 이미 없거나 만료됨. courseId={}, memberId={}", courseId, memberId);
+        }
+    }
+
+    /**
+     * 잔여석 점유 확정 (결제 완료 시 호출)
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void completeOccupyingSeat(UUID courseId, UUID memberId) {
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
+
+        if (occupancy.isExists()) {
+            occupancy.delete();
+            log.info("잔여석 점유 확정 및 선점 정보 삭제 완료: courseId={}, memberId={}", courseId, memberId);
+        } else {
+            log.info("잔여석 점유 확정 건너뜀: 선점 정보가 이미 삭제되었거나 만료됨. courseId={}, memberId={}", courseId, memberId);
         }
     }
 
     /**
      * 대기열 추가
      */
-    @DistributedLock(key = "'order:course:' + #p0")
+    @DistributedLock(key = "'order:course:' + #courseId")
     public void addToWaitingList(UUID courseId, UUID memberId) {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
         RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey);
