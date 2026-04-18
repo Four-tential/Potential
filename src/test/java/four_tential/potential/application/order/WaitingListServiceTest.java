@@ -106,7 +106,6 @@ class WaitingListServiceTest {
     @DisplayName("점유된 잔여석을 수량에 맞춰 성공적으로 롤백한다")
     void rollbackOccupiedSeat_success() {
         // given
-        given(occupancyBucket.isExists()).willReturn(true);
         given(occupancyBucket.get()).willReturn("3");
 
         // when
@@ -115,6 +114,46 @@ class WaitingListServiceTest {
         // then
         verify(occupancyBucket).delete();
         verify(capacityAtomic).addAndGet(3);
+    }
+
+    @Test
+    @DisplayName("롤백 시 점유 정보가 없으면 아무 작업도 하지 않는다")
+    void rollbackOccupiedSeat_no_data() {
+        // given
+        given(occupancyBucket.get()).willReturn(null);
+
+        // when
+        waitingListService.rollbackOccupiedSeat(courseId, memberId);
+
+        // then
+        verify(occupancyBucket, never()).delete();
+        verify(capacityAtomic, never()).addAndGet(anyLong());
+    }
+
+    @Test
+    @DisplayName("잔여석 점유 확정 시 선점 정보를 성공적으로 삭제한다")
+    void completeOccupyingSeat_success() {
+        // given
+        given(occupancyBucket.isExists()).willReturn(true);
+
+        // when
+        waitingListService.completeOccupyingSeat(courseId, memberId);
+
+        // then
+        verify(occupancyBucket).delete();
+    }
+
+    @Test
+    @DisplayName("점유 확정 시 선점 정보가 없으면 삭제를 진행하지 않는다")
+    void completeOccupyingSeat_no_data() {
+        // given
+        given(occupancyBucket.isExists()).willReturn(false);
+
+        // when
+        waitingListService.completeOccupyingSeat(courseId, memberId);
+
+        // then
+        verify(occupancyBucket, never()).delete();
     }
 
     @Test
