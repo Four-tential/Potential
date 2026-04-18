@@ -24,6 +24,10 @@ public class WaitingListService {
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     public boolean tryOccupyingSeat(UUID courseId, UUID memberId, int orderCount) {
+        if (orderCount <= 0) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
@@ -118,6 +122,10 @@ public class WaitingListService {
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     public void recoverCapacity(UUID courseId, UUID memberId, int orderCount) {
+        if (orderCount <= 0) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
 

@@ -161,6 +161,21 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("코스 시작 정확히 7일 전인 시점에는 취소가 가능하다 (경계값 테스트)")
+    void cancelOrderSuccess_ExactlySevenDaysBefore() {
+        // given
+        Order order = createPendingOrder();
+        // 정확히 7일 후로 설정
+        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(7);
+
+        // when
+        order.cancel(courseStartAt);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
     @DisplayName("이미 취소되었거나 만료된 주문은 다시 취소할 수 없다")
     void cancelOrderFail_AlreadyCancelledOrExpired() {
         // given
