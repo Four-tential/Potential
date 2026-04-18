@@ -108,14 +108,15 @@ class OrderTest {
     void cancelPendingOrderSuccess() {
         // given
         Order order = createPendingOrder();
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(8);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime courseStartAt = now.plusDays(8);
 
         // when
-        order.cancel(courseStartAt);
+        order.cancel(courseStartAt, now);
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(order.getCancelledAt()).isNotNull();
+        assertThat(order.getCancelledAt()).isEqualTo(now);
     }
 
     @Test
@@ -123,10 +124,11 @@ class OrderTest {
     void cancelPendingOrderFail_TooLate() {
         // given
         Order order = createPendingOrder();
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(6);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime courseStartAt = now.plusDays(6);
 
         // when & then
-        assertThatThrownBy(() -> order.cancel(courseStartAt))
+        assertThatThrownBy(() -> order.cancel(courseStartAt, now))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
     }
@@ -137,10 +139,11 @@ class OrderTest {
         // given
         Order order = createPendingOrder();
         order.completePayment(); // PAID 상태
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(8);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime courseStartAt = now.plusDays(8);
 
         // when
-        order.cancel(courseStartAt);
+        order.cancel(courseStartAt, now);
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
@@ -152,10 +155,11 @@ class OrderTest {
         // given
         Order order = createPendingOrder();
         order.completePayment();
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(6);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime courseStartAt = now.plusDays(6);
 
         // when & then
-        assertThatThrownBy(() -> order.cancel(courseStartAt))
+        assertThatThrownBy(() -> order.cancel(courseStartAt, now))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
     }
@@ -165,25 +169,44 @@ class OrderTest {
     void cancelOrderSuccess_ExactlySevenDaysBefore() {
         // given
         Order order = createPendingOrder();
+        // 기준 시각 설정
+        LocalDateTime now = LocalDateTime.now();
         // 정확히 7일 후로 설정
-        LocalDateTime courseStartAt = LocalDateTime.now().plusDays(7);
+        LocalDateTime courseStartAt = now.plusDays(7);
 
         // when
-        order.cancel(courseStartAt);
+        // now가 courseStartAt.minusDays(7)과 정확히 일치하므로 isAfter()는 false
+        order.cancel(courseStartAt, now);
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
     @Test
-    @DisplayName("이미 취소되었거나 만료된 주문은 다시 취소할 수 없다")
-    void cancelOrderFail_AlreadyCancelledOrExpired() {
+    @DisplayName("이미 만료된 주문은 취소할 수 없다")
+    void cancelOrderFail_AlreadyExpired() {
         // given
         Order order = createPendingOrder();
         order.expire();
+        LocalDateTime now = LocalDateTime.now();
 
         // when & then
-        assertThatThrownBy(() -> order.cancel(LocalDateTime.now().plusDays(10)))
+        assertThatThrownBy(() -> order.cancel(now.plusDays(10), now))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_ORDER.getMessage());
+    }
+
+    @Test
+    @DisplayName("이미 취소된 주문은 다시 취소할 수 없다")
+    void cancelOrderFail_AlreadyCancelled() {
+        // given
+        Order order = createPendingOrder();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime courseStartAt = now.plusDays(10);
+        order.cancel(courseStartAt, now); // 첫 번째 취소
+
+        // when & then
+        assertThatThrownBy(() -> order.cancel(courseStartAt, now))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_ORDER.getMessage());
     }
@@ -194,9 +217,10 @@ class OrderTest {
         // given
         Order order = createPendingOrder();
         ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);
+        LocalDateTime now = LocalDateTime.now();
 
         // when & then
-        assertThatThrownBy(() -> order.cancel(LocalDateTime.now().plusDays(10)))
+        assertThatThrownBy(() -> order.cancel(now.plusDays(10), now))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_CONFIRMED_ORDER.getMessage());
     }

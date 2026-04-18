@@ -108,7 +108,7 @@ public class OrderService {
         Course course = courseRepository.findById(order.getCourseId())
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        order.cancel(course.getStartAt());
+        order.cancel(course.getStartAt(), LocalDateTime.now());
 
         return order;
     }

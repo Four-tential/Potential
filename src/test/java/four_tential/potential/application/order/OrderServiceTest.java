@@ -240,7 +240,7 @@ class OrderServiceTest {
 
         // then
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        verify(order).cancel(any());
+        verify(order).cancel(any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
