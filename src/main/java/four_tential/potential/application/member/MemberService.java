@@ -15,6 +15,7 @@ import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepo
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.infra.jwt.JwtRepository;
+import four_tential.potential.infra.jwt.JwtUtil;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
@@ -57,6 +58,7 @@ public class MemberService {
     private final CourseRepository courseRepository;
     private final InstructorMemberRepository instructorMemberRepository;
     private final JwtRepository jwtRepository;
+    private final JwtUtil jwtUtil;
 
     @Value("${member.default-profile-image-url}")
     private String defaultProfileImageUrl;
@@ -187,13 +189,17 @@ public class MemberService {
     }
 
     @Transactional
-    public void withdrawMember(UUID memberId, String email, WithdrawalRequest request) {
+    public void withdrawMember(UUID memberId, String email, String accessToken, WithdrawalRequest request) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
 
         // 비밀번호 검증
         if (!passwordEncoder.matches(request.password(), member.getPassword())) {
             throw new ServiceErrorException(ERR_WRONG_PASSWORD);
+        }
+
+        if (!jwtUtil.validateToken(accessToken)) {
+            throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -221,6 +227,7 @@ public class MemberService {
 
         member.withdraw();
         jwtRepository.deleteRefreshToken(email);
+        jwtRepository.addBlacklist(accessToken, jwtUtil.getRemainingTime(accessToken));
     }
 
     @Transactional
