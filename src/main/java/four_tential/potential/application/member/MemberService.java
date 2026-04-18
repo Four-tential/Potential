@@ -4,8 +4,11 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
+import four_tential.potential.domain.member.follow.Follow;
+import four_tential.potential.domain.member.follow.FollowRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoard;
@@ -23,6 +26,7 @@ import four_tential.potential.presentation.member.model.request.UpdateMyPageRequ
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -56,6 +60,7 @@ public class MemberService {
     private final OrderRepository orderRepository;
     private final CourseRepository courseRepository;
     private final InstructorMemberRepository instructorMemberRepository;
+    private final FollowRepository followRepository;
     private final JwtRepository jwtRepository;
     private final JwtUtil jwtUtil;
 
@@ -260,6 +265,28 @@ public class MemberService {
         }
 
         member.changePassword(passwordEncoder.encode(request.newPassword()));
+    }
+
+    @Transactional
+    public FollowResponse followInstructor(UUID followerId, UUID instructorMemberId) {
+        // 본인 팔로우 방지
+        if (followerId.equals(instructorMemberId)) {
+            throw new ServiceErrorException(ERR_CANNOT_FOLLOW_SELF);
+        }
+
+        // 승인된 강사 존재 확인
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorMemberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        // 중복 팔로우 방지
+        if (followRepository.existsByMemberIdAndMemberInstructorId(followerId, instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_ALREADY_FOLLOWED);
+        }
+
+        followRepository.save(Follow.register(followerId, instructorMember.getId()));
+
+        return FollowResponse.register(instructorMemberId, true);
     }
 
     private String getProfileImageUrlOrDefault(Member member) {

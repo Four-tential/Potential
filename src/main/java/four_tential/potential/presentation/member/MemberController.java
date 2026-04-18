@@ -6,6 +6,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.member.model.request.*;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -136,6 +137,19 @@ public class MemberController {
                 .path("/v1/auth")
                 .maxAge(Duration.ZERO)
                 .build();
+    }
+
+    @PostMapping("/instructors/{memberId}/follows")
+    public ResponseEntity<BaseResponse<FollowResponse>> followInstructor(
+            @PathVariable UUID memberId,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(
+                        HttpStatus.CREATED.name(),
+                        "팔로우 성공",
+                        memberService.followInstructor(principal.memberId(), memberId)
+                ));
     }
 
     @PatchMapping("/admin/members/{memberId}/status")

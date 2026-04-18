@@ -11,6 +11,7 @@ import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
+import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -59,7 +60,6 @@ class MemberControllerTest {
     private static final String AUTHORIZATION = "Bearer valid.access.token";
     private static final String ACCESS_TOKEN = "valid.access.token";
 
-    // region getMyPageInfo
     @Test
     @DisplayName("마이페이지 조회 - 200 OK 및 회원 정보 반환")
     void getMyPageInfo_success() {
@@ -92,9 +92,7 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
-    // endregion
 
-    // region updateMyPageInfo
     @Test
     @DisplayName("마이페이지 수정 - 200 OK 및 수정된 정보 반환")
     void updateMyPageInfo_success() {
@@ -138,9 +136,7 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
-    // endregion
 
-    // region registerOnBoarding
     @Test
     @DisplayName("온보딩 등록 - 201 CREATED 및 등록 정보 반환")
     void registerOnBoarding_success() {
@@ -180,9 +176,7 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
     }
-    // endregion
 
-    // region updateOnBoarding
     @Test
     @DisplayName("온보딩 수정 - 200 OK 및 변경된 정보 반환 (목표 + 카테고리 모두 수정)")
     void updateOnBoarding_success() {
@@ -248,9 +242,7 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
     }
-    // endregion
 
-    // region changePassword
     @Test
     @DisplayName("비밀번호 변경 - 200 OK, data는 null, 성공 메시지 반환")
     void changePassword_success() {
@@ -300,9 +292,7 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
     }
-    // endregion
 
-    // region withdraw
     @Test
     @DisplayName("회원 탈퇴 - 200 OK, data는 null, 성공 메시지 반환")
     void withdraw_success() {
@@ -393,5 +383,57 @@ class MemberControllerTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("진행 중인 코스가 있어 탈퇴가 불가합니다");
     }
-    // endregion
+
+    @Test
+    @DisplayName("팔로우 - 201 CREATED, 팔로우 응답 반환")
+    void followInstructor_success() {
+        UUID instructorMemberId = UUID.randomUUID();
+        FollowResponse serviceResponse = FollowResponse.register(instructorMemberId, true);
+        given(memberService.followInstructor(MEMBER_ID, instructorMemberId)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<FollowResponse>> response =
+                memberController.followInstructor(instructorMemberId, PRINCIPAL);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("팔로우 성공");
+        assertThat(response.getBody().data().instructorId()).isEqualTo(instructorMemberId);
+        assertThat(response.getBody().data().isFollowed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("팔로우 - 본인 팔로우 시 ServiceErrorException 전파")
+    void followInstructor_selfFollow() {
+        UUID instructorMemberId = UUID.randomUUID();
+        given(memberService.followInstructor(MEMBER_ID, instructorMemberId))
+                .willThrow(new ServiceErrorException(ERR_CANNOT_FOLLOW_SELF));
+
+        assertThatThrownBy(() -> memberController.followInstructor(instructorMemberId, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인을 팔로우 할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("팔로우 - 존재하지 않는 강사면 ServiceErrorException 전파")
+    void followInstructor_instructorNotFound() {
+        UUID instructorMemberId = UUID.randomUUID();
+        given(memberService.followInstructor(MEMBER_ID, instructorMemberId))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.followInstructor(instructorMemberId, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("팔로우 - 이미 팔로우한 강사면 ServiceErrorException 전파")
+    void followInstructor_alreadyFollowed() {
+        UUID instructorMemberId = UUID.randomUUID();
+        given(memberService.followInstructor(MEMBER_ID, instructorMemberId))
+                .willThrow(new ServiceErrorException(ERR_ALREADY_FOLLOWED));
+
+        assertThatThrownBy(() -> memberController.followInstructor(instructorMemberId, PRINCIPAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 팔로우한 강사입니다");
+    }
 }
