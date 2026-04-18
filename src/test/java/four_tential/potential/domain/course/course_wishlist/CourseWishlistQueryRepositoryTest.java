@@ -25,10 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest
 @Transactional
@@ -170,6 +168,23 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
                 .getContent().get(0);
 
         assertThat(item.thumbnail()).isEqualTo("https://example.com/thumb.jpg");
+    }
+
+    @Test
+    @DisplayName("코스 이미지가 여러 개이면 가장 먼저 등록된 이미지(id 최소값)를 thumbnail로 반환")
+    void findWishlistCourses_thumbnail_first_image_when_multiple_images() {
+        Course course = saveCourse("이미지 여러 개인 코스");
+        CourseImage firstImage = CourseImage.register(course, "https://example.com/first-thumb.jpg");
+        CourseImage secondImage = CourseImage.register(course, "https://example.com/second-thumb.jpg");
+        courseImageRepository.save(firstImage);
+        courseImageRepository.save(secondImage);
+        saveWishlist(course);
+
+        WishlistCourseItem item = courseWishlistRepository
+                .findWishlistCourses(student.getId(), PageRequest.of(0, 10))
+                .getContent().get(0);
+
+        assertThat(item.thumbnail()).isEqualTo("https://example.com/first-thumb.jpg");
     }
 
     // ────────────────────────────────────────────────────────────
