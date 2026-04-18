@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
@@ -181,6 +182,133 @@ class OrderRepositoryTest extends RedisTestContainer {
         );
 
         assertThat(exists).isFalse();
+    }
+    
+    @Test
+    @DisplayName("수강생 합산 조회 - PAID 주문의 orderCount 합산 반환")
+    void sumStudentCount_paidOrders_returnsSumOfOrderCount() {
+        UUID instructorId = UUID.randomUUID();
+        Course course = courseRepository.save(courseForInstructor(instructorId));
+        orderRepository.save(paidOrderWithCount(UUID.randomUUID(), course.getId(), 3));
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - CONFIRMED 주문도 합산에 포함")
+    void sumStudentCount_confirmedOrders_included() {
+        UUID instructorId = UUID.randomUUID();
+        Course course = courseRepository.save(courseForInstructor(instructorId));
+        Order order = Order.register(UUID.randomUUID(), course.getId(), 2, BigInteger.valueOf(50000), "테스트");
+        ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - 해당 강사의 주문이 없으면 0 반환")
+    void sumStudentCount_noOrders_returnsZero() {
+        UUID instructorId = UUID.randomUUID();
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isZero();
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - PENDING 주문은 합산에서 제외")
+    void sumStudentCount_pendingOrder_excluded() {
+        UUID instructorId = UUID.randomUUID();
+        Course course = courseRepository.save(courseForInstructor(instructorId));
+        // PENDING 상태 주문 (결제 완료 전)
+        orderRepository.save(Order.register(UUID.randomUUID(), course.getId(), 5, BigInteger.valueOf(50000), "테스트"));
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isZero();
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - 다른 강사의 주문은 합산에서 제외")
+    void sumStudentCount_otherInstructor_excluded() {
+        UUID myInstructorId = UUID.randomUUID();
+        UUID otherInstructorId = UUID.randomUUID();
+        Course otherCourse = courseRepository.save(courseForInstructor(otherInstructorId));
+        orderRepository.save(paidOrderWithCount(UUID.randomUUID(), otherCourse.getId(), 10));
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                myInstructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isZero();
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - PAID·CONFIRMED 여러 주문의 orderCount 합산")
+    void sumStudentCount_multipleOrders_returnsTotalSum() {
+        UUID instructorId = UUID.randomUUID();
+        Course course = courseRepository.save(courseForInstructor(instructorId));
+
+        orderRepository.save(paidOrderWithCount(UUID.randomUUID(), course.getId(), 3));
+        orderRepository.save(paidOrderWithCount(UUID.randomUUID(), course.getId(), 2));
+
+        Order confirmedOrder = Order.register(UUID.randomUUID(), course.getId(), 4, BigInteger.valueOf(50000), "테스트");
+        ReflectionTestUtils.setField(confirmedOrder, "status", OrderStatus.CONFIRMED);
+        orderRepository.save(confirmedOrder);
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("수강생 합산 조회 - PAID와 PENDING이 섞여 있으면 PAID만 합산")
+    void sumStudentCount_mixedStatus_onlyPaidCounted() {
+        UUID instructorId = UUID.randomUUID();
+        Course course = courseRepository.save(courseForInstructor(instructorId));
+
+        orderRepository.save(paidOrderWithCount(UUID.randomUUID(), course.getId(), 4));
+        // PENDING 주문은 제외
+        orderRepository.save(Order.register(UUID.randomUUID(), course.getId(), 10, BigInteger.valueOf(50000), "테스트"));
+
+        Long result = orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
+                instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
+
+        assertThat(result).isEqualTo(4L);
+    }
+
+    private Course courseForInstructor(UUID memberInstructorId) {
+        LocalDateTime now = LocalDateTime.now();
+        return Course.register(
+                UUID.randomUUID(),
+                memberInstructorId,
+                "테스트 강의",
+                "테스트 설명",
+                "서울특별시 강남구",
+                "테헤란로 123",
+                20,
+                BigInteger.valueOf(50000),
+                CourseLevel.BEGINNER,
+                now.plusDays(1),
+                now.plusDays(2),
+                now.plusDays(3),
+                now.plusDays(10)
+        );
+    }
+
+    private Order paidOrderWithCount(UUID memberId, UUID courseId, int orderCount) {
+        Order order = Order.register(memberId, courseId, orderCount, BigInteger.valueOf(50000), "테스트 강의");
+        order.completePayment();
+        return order;
     }
 
     private Course openCourse(LocalDateTime startAt, LocalDateTime endAt) {
