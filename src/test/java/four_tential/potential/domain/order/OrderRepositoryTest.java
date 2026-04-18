@@ -1,5 +1,9 @@
 package four_tential.potential.domain.order;
 
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseLevel;
+import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,6 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +25,9 @@ class OrderRepositoryTest extends RedisTestContainer {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private CourseRepository courseRepository;
 
     @Test
     @DisplayName("주문 ID와 본인 ID로 주문 상세 정보를 성공적으로 조회한다")
@@ -112,5 +121,91 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(result.getContent().get(0).getCourseId()).isEqualTo(courseId2);
         assertThat(result.getContent().get(1).getCourseId()).isEqualTo(courseId1);
         assertThat(result.getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("활성 수강 조회 - PAID 주문과 종료 전 OPEN 코스가 있으면 true")
+    void existsActiveEnrollment_paidOpenFutureCourse_returnsTrue() {
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        Course course = openCourse(now.plusDays(7), now.plusDays(7).plusHours(2));
+        Course savedCourse = courseRepository.save(course);
+        Order order = paidOrder(memberId, savedCourse.getId());
+        orderRepository.save(order);
+
+        boolean exists = orderRepository.existsActiveEnrollment(
+                memberId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                List.of(CourseStatus.OPEN),
+                now
+        );
+
+        assertThat(exists).isTrue();
+    }
+
+    @Test
+    @DisplayName("활성 수강 조회 - 종료된 OPEN 코스만 있으면 false")
+    void existsActiveEnrollment_endedCourse_returnsFalse() {
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        Course course = openCourse(now.minusDays(2), now.minusDays(2).plusHours(2));
+        Course savedCourse = courseRepository.save(course);
+        Order order = paidOrder(memberId, savedCourse.getId());
+        orderRepository.save(order);
+
+        boolean exists = orderRepository.existsActiveEnrollment(
+                memberId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                List.of(CourseStatus.OPEN),
+                now
+        );
+
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("활성 수강 조회 - 주문 상태가 대상 상태가 아니면 false")
+    void existsActiveEnrollment_pendingOrder_returnsFalse() {
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        Course course = openCourse(now.plusDays(7), now.plusDays(7).plusHours(2));
+        Course savedCourse = courseRepository.save(course);
+        Order order = Order.register(memberId, savedCourse.getId(), 1, BigInteger.valueOf(50000), "테스트 강의");
+        orderRepository.save(order);
+
+        boolean exists = orderRepository.existsActiveEnrollment(
+                memberId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                List.of(CourseStatus.OPEN),
+                now
+        );
+
+        assertThat(exists).isFalse();
+    }
+
+    private Course openCourse(LocalDateTime startAt, LocalDateTime endAt) {
+        Course course = Course.register(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "테스트 강의",
+                "테스트 설명",
+                "서울특별시 강남구",
+                "테헤란로 123",
+                20,
+                BigInteger.valueOf(50000),
+                CourseLevel.BEGINNER,
+                startAt.minusDays(10),
+                startAt.minusDays(1),
+                startAt,
+                endAt
+        );
+        course.open();
+        return course;
+    }
+
+    private Order paidOrder(UUID memberId, UUID courseId) {
+        Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(50000), "테스트 강의");
+        order.completePayment();
+        return order;
     }
 }

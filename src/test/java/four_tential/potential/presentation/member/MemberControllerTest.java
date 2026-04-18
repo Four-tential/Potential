@@ -10,15 +10,18 @@ import four_tential.potential.presentation.member.model.request.ChangePasswordRe
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
+import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -30,9 +33,14 @@ import static four_tential.potential.common.exception.domain.CourseExceptionEnum
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class MemberControllerTest {
@@ -40,11 +48,16 @@ class MemberControllerTest {
     @Mock
     private MemberService memberService;
 
+    @Mock
+    private HttpServletResponse httpServletResponse;
+
     @InjectMocks
     private MemberController memberController;
 
     private static final UUID MEMBER_ID = UUID.randomUUID();
     private static final MemberPrincipal PRINCIPAL = new MemberPrincipal(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, "ROLE_STUDENT");
+    private static final String AUTHORIZATION = "Bearer valid.access.token";
+    private static final String ACCESS_TOKEN = "valid.access.token";
 
     // region getMyPageInfo
     @Test
@@ -286,6 +299,99 @@ class MemberControllerTest {
         assertThatThrownBy(() -> memberController.changePassword(request, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다");
+    }
+    // endregion
+
+    // region withdraw
+    @Test
+    @DisplayName("회원 탈퇴 - 200 OK, data는 null, 성공 메시지 반환")
+    void withdraw_success() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doNothing().when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, request);
+
+        ResponseEntity<BaseResponse<Void>> response = memberController.withdraw(AUTHORIZATION, request, PRINCIPAL, httpServletResponse);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("회원 탈퇴 성공");
+        assertThat(response.getBody().data()).isNull();
+        verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("refreshToken="));
+        verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("Max-Age=0"));
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Authorization 헤더가 없으면 ServiceErrorException 전파")
+    void withdraw_missingAuthorization() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw(null, request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("인증 정보가 비어있습니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Bearer 형식이 아니면 ServiceErrorException 전파")
+    void withdraw_invalidAuthorizationPrefix() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw("Token invalid.access.token", request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("인증 정보가 비어있습니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - Bearer 뒤 토큰이 비어 있으면 ServiceErrorException 전파")
+    void withdraw_blankAccessToken() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+
+        assertThatThrownBy(() -> memberController.withdraw("Bearer   ", request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(memberService, never()).withdrawMember(any(), any(), any(), any());
+        verify(httpServletResponse, never()).addHeader(any(), any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 비밀번호 불일치 시 ServiceErrorException 전파")
+    void withdraw_wrongPassword() {
+        WithdrawalRequest request = new WithdrawalRequest("WrongPass!");
+        doThrow(new ServiceErrorException(ERR_WRONG_PASSWORD))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(AUTHORIZATION, request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 수강 예정 코스 존재 시 ServiceErrorException 전파")
+    void withdraw_hasScheduledCourse() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doThrow(new ServiceErrorException(ERR_HAS_COURSE))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(AUTHORIZATION, request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("수강해야할 코스가 있어 탈퇴가 불가합니다");
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 진행 중인 강사 코스 존재 시 ServiceErrorException 전파")
+    void withdraw_hasActiveInstructorCourses() {
+        WithdrawalRequest request = new WithdrawalRequest("P@ssw0rd1!");
+        doThrow(new ServiceErrorException(ERR_HAS_ACTIVE_INSTRUCTOR_COURSES))
+                .when(memberService).withdrawMember(MEMBER_ID, MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, request);
+
+        assertThatThrownBy(() -> memberController.withdraw(AUTHORIZATION, request, PRINCIPAL, httpServletResponse))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("진행 중인 코스가 있어 탈퇴가 불가합니다");
     }
     // endregion
 }

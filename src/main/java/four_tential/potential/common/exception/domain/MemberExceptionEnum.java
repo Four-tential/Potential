@@ -30,7 +30,10 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_ALREADY_PROCESSED_APPLICATION(HttpStatus.CONFLICT, "이미 처리된 강사 신청입니다"),
     ERR_WRONG_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다"),
     ERR_SAME_AS_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호와 동일한 비밀번호로 변경할 수 없습니다"),
-    ERR_INVALID_MEMBER_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다")
+    ERR_INVALID_MEMBER_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다"),
+    ERR_WRONG_PASSWORD(HttpStatus.BAD_REQUEST, "비밀번호가 올바르지 않습니다"),
+    ERR_HAS_COURSE(HttpStatus.CONFLICT, "수강해야할 코스가 있어 탈퇴가 불가합니다"),
+    ERR_HAS_ACTIVE_INSTRUCTOR_COURSES(HttpStatus.CONFLICT, "진행 중인 코스가 있어 탈퇴가 불가합니다")
     ;
 
     private final HttpStatus httpStatus;

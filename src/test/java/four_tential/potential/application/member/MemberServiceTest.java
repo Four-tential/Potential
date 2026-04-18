@@ -1,7 +1,15 @@
 package four_tential.potential.application.member;
 
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
+import four_tential.potential.domain.member.instructor_member.InstructorMember;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
+import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.infra.jwt.JwtRepository;
+import four_tential.potential.infra.jwt.JwtUtil;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.fixture.MemberOnBoardFixture;
 import four_tential.potential.domain.member.member.Member;
@@ -13,6 +21,7 @@ import four_tential.potential.domain.member.onboard_category.MemberOnBoardCatego
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
+import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.domain.member.member.MemberStatus;
@@ -31,6 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -39,6 +49,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -62,11 +73,27 @@ class MemberServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private CourseRepository courseRepository;
+
+    @Mock
+    private InstructorMemberRepository instructorMemberRepository;
+
+    @Mock
+    private JwtRepository jwtRepository;
+
+    @Mock
+    private JwtUtil jwtUtil;
+
     @InjectMocks
     private MemberService memberService;
 
     private static final String DEFAULT_IMAGE_URL = "https://bucketurl/default-profile-image.png";
     private static final String CUSTOM_IMAGE_URL = MemberFixture.DEFAULT_PROFILE_IMAGE_URL;
+    private static final String ACCESS_TOKEN = "valid.access.token";
 
     @BeforeEach
     void setUp() {
@@ -364,6 +391,228 @@ class MemberServiceTest {
         assertThatThrownBy(() -> memberService.updateOnBoarding(member.getId(), request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
+    }
+    // endregion
+
+    // region withdrawMember
+    @Test
+    @DisplayName("회원 탈퇴 성공 - 수강 예정 코스 없고 강사 이력 없음")
+    void withdrawMember_success_noScheduledCourseNoInstructor() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
+        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(1000L);
+
+        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository).addBlacklist(ACCESS_TOKEN, 1000L);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 성공 - 결제 완료 주문이 있어도 종료되지 않은 OPEN 코스가 없음")
+    void withdrawMember_success_paidOrderButNoActiveEnrollment() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
+        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(1000L);
+
+        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository).addBlacklist(ACCESS_TOKEN, 1000L);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 성공 - 강사 이력 있으나 OPEN 코스 없음")
+    void withdrawMember_success_instructorExistsButNoOpenCourse() {
+        Member member = MemberFixture.defaultMember();
+        UUID instructorId = UUID.randomUUID();
+        InstructorMember instructorMember = createInstructorMember(instructorId);
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.of(instructorMember));
+        given(courseRepository.existsByMemberInstructorIdAndStatusInAndEndAtAfter(
+                eq(instructorId),
+                eq(List.of(CourseStatus.PREPARATION, CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(1000L);
+
+        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository).addBlacklist(ACCESS_TOKEN, 1000L);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 존재하지 않는 회원 ID")
+    void withdrawMember_memberNotFound() {
+        UUID unknownId = UUID.randomUUID();
+        given(memberRepository.findById(unknownId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(unknownId, MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 회원입니다");
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 비밀번호 불일치 시 BAD_REQUEST")
+    void withdrawMember_wrongPassword() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(passwordEncoder.matches("WrongPass!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("WrongPass!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 유효하지 않은 Access Token이면 비밀번호 검증 전 UNAUTHORIZED")
+    void withdrawMember_invalidAccessToken() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 수강 예정/진행 중 코스(PAID 또는 CONFIRMED 주문 + 종료 전 OPEN 코스) 존재 시 CONFLICT")
+    void withdrawMember_hasScheduledCourse() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(true);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("수강해야할 코스가 있어 탈퇴가 불가합니다");
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 예정/진행 중 강사 코스(PREPARATION 또는 OPEN + 종료 전 코스) 존재 시 CONFLICT")
+    void withdrawMember_hasOpenInstructorCourse() {
+        Member member = MemberFixture.defaultMember();
+        UUID instructorId = UUID.randomUUID();
+        InstructorMember instructorMember = createInstructorMember(instructorId);
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.of(instructorMember));
+        given(courseRepository.existsByMemberInstructorIdAndStatusInAndEndAtAfter(
+                eq(instructorId),
+                eq(List.of(CourseStatus.PREPARATION, CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(true);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("진행 중인 코스가 있어 탈퇴가 불가합니다");
+        verify(jwtRepository, never()).deleteRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 비밀번호 불일치 시 member.withdraw() 호출되지 않음")
+    void withdrawMember_wrongPassword_withdrawNeverCalled() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(passwordEncoder.matches("WrongPass!", MemberFixture.DEFAULT_PASSWORD)).willReturn(false);
+
+        assertThatThrownBy(() ->
+                memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("WrongPass!"))
+        ).isInstanceOf(ServiceErrorException.class);
+
+        assertThat(member.getStatus()).isNotEqualTo(MemberStatus.WITHDRAWAL);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 성공 - Access Token 남은 시간이 0 이하이면 블랙리스트 등록하지 않음")
+    void withdrawMember_success_nonPositiveRemainingTime_doesNotAddBlacklist() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+        given(jwtUtil.validateToken(ACCESS_TOKEN)).willReturn(true);
+        given(passwordEncoder.matches("P@ssw0rd1!", MemberFixture.DEFAULT_PASSWORD)).willReturn(true);
+        given(orderRepository.existsActiveEnrollment(
+                eq(member.getId()),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(List.of(CourseStatus.OPEN)),
+                any(LocalDateTime.class)
+        )).willReturn(false);
+        given(instructorMemberRepository.findByMemberId(member.getId())).willReturn(Optional.empty());
+        given(jwtUtil.getRemainingTime(ACCESS_TOKEN)).willReturn(0L);
+
+        memberService.withdrawMember(member.getId(), MemberFixture.DEFAULT_EMAIL, ACCESS_TOKEN, new WithdrawalRequest("P@ssw0rd1!"));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
+        verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
+        verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
+
+    private InstructorMember createInstructorMember(UUID expectedId) {
+        InstructorMember im = InstructorMember.register(UUID.randomUUID(), "FITNESS", "소개", "http://img.url");
+        org.springframework.test.util.ReflectionTestUtils.setField(im, "id", expectedId);
+        return im;
     }
     // endregion
 
