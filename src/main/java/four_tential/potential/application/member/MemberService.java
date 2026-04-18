@@ -9,9 +9,11 @@ import four_tential.potential.domain.member.member_onboard.MemberOnBoardReposito
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
+import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
+import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -168,6 +170,16 @@ public class MemberService {
         }
 
         return OnBoardResponse.register(onBoard, resultCategoryCodes);
+    }
+
+    @Transactional
+    public ChangeMemberStatusResponse changeMemberStatus(UUID memberId, ChangeMemberStatusRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
+
+        member.changeStatus(request.status());
+
+        return ChangeMemberStatusResponse.register(member);
     }
 
     @Transactional

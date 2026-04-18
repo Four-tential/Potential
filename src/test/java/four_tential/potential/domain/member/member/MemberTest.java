@@ -1,5 +1,6 @@
 package four_tential.potential.domain.member.member;
 
+import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MemberTest {
 
@@ -65,6 +67,58 @@ class MemberTest {
         LocalDateTime after = LocalDateTime.now();
         assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWAL);
         assertThat(member.getWithdrawalAt()).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    @DisplayName("changeStatus() - ACTIVE → SUSPENDED 전환 성공")
+    void changeStatus_activeToSuspended() {
+        Member member = MemberFixture.defaultMember(); // ACTIVE
+
+        member.changeStatus(MemberStatus.SUSPENDED);
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("changeStatus() - SUSPENDED → ACTIVE 전환 성공")
+    void changeStatus_suspendedToActive() {
+        Member member = MemberFixture.defaultMember();
+        member.suspend(); // SUSPENDED
+
+        member.changeStatus(MemberStatus.ACTIVE);
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("changeStatus() - ACTIVE → ACTIVE 동일 상태 전환 시 예외 발생")
+    void changeStatus_sameStatus_throwsException() {
+        Member member = MemberFixture.defaultMember(); // ACTIVE
+
+        assertThatThrownBy(() -> member.changeStatus(MemberStatus.ACTIVE))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
+    }
+
+    @Test
+    @DisplayName("changeStatus() - WITHDRAWAL로 전환 시 예외 발생")
+    void changeStatus_toWithdrawal_throwsException() {
+        Member member = MemberFixture.defaultMember();
+
+        assertThatThrownBy(() -> member.changeStatus(MemberStatus.WITHDRAWAL))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
+    }
+
+    @Test
+    @DisplayName("changeStatus() - WITHDRAWAL 상태에서 전환 시 예외 발생")
+    void changeStatus_fromWithdrawal_throwsException() {
+        Member member = MemberFixture.defaultMember();
+        member.withdraw(); // WITHDRAWAL
+
+        assertThatThrownBy(() -> member.changeStatus(MemberStatus.ACTIVE))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
     }
 
     @Test

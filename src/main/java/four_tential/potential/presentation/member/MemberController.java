@@ -3,10 +3,8 @@ package four_tential.potential.presentation.member;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
-import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
-import four_tential.potential.presentation.member.model.request.OnBoardRequest;
-import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
-import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
+import four_tential.potential.presentation.member.model.request.*;
+import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
@@ -14,12 +12,15 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 
 @RestController
-@RequestMapping("/v1/members")
+@RequestMapping("/v1")
 @RequiredArgsConstructor
 public class MemberController {
 
@@ -28,7 +29,7 @@ public class MemberController {
     // TODO 다른 회원 도메인 API 작업후
     //  POST /members/me/profile-image/presigned-url 관련 버킷에 담는 과정이 필요함
 
-    @GetMapping("/me")
+    @GetMapping("/members/me")
     public ResponseEntity<BaseResponse<MyPageResponse>> getMyPageInfo(
             @AuthenticationPrincipal MemberPrincipal principal
     ) {
@@ -40,7 +41,7 @@ public class MemberController {
                 ));
     }
 
-    @PatchMapping("/me")
+    @PatchMapping("/members/me")
     public ResponseEntity<BaseResponse<UpdateMyPageResponse>> updateMyPageInfo(
             @Valid @RequestBody UpdateMyPageRequest request,
             @AuthenticationPrincipal MemberPrincipal principal
@@ -53,7 +54,7 @@ public class MemberController {
                 ));
     }
 
-    @PostMapping("/me/onboarding")
+    @PostMapping("/members/me/onboarding")
     public ResponseEntity<BaseResponse<OnBoardResponse>> registerOnBoarding(
             @Valid @RequestBody OnBoardRequest request,
             @AuthenticationPrincipal MemberPrincipal principal
@@ -66,7 +67,7 @@ public class MemberController {
                 ));
     }
 
-    @PatchMapping("/me/onboarding")
+    @PatchMapping("/members/me/onboarding")
     public ResponseEntity<BaseResponse<OnBoardResponse>> updateOnBoarding(
             @RequestBody UpdateOnBoardRequest request,
             @AuthenticationPrincipal MemberPrincipal principal
@@ -79,7 +80,7 @@ public class MemberController {
                 ));
     }
 
-    @PatchMapping("/me/password")
+    @PatchMapping("/members/me/password")
     public ResponseEntity<BaseResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
             @AuthenticationPrincipal MemberPrincipal principal
@@ -90,6 +91,20 @@ public class MemberController {
                         HttpStatus.OK.name(),
                         "비밀번호 변경 성공",
                         null
+                ));
+    }
+
+    @PatchMapping("/admin/members/{memberId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BaseResponse<ChangeMemberStatusResponse>> changeMemberStatus(
+            @PathVariable UUID memberId,
+            @Valid @RequestBody ChangeMemberStatusRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "회원 상태 변경 성공",
+                        memberService.changeMemberStatus(memberId, request)
                 ));
     }
 }

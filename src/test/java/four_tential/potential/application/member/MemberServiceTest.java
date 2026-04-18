@@ -12,7 +12,10 @@ import four_tential.potential.domain.member.member_onboard.MemberOnBoardReposito
 import four_tential.potential.domain.member.onboard_category.MemberOnBoardCategory;
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
+import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
+import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
@@ -70,7 +73,6 @@ class MemberServiceTest {
         ReflectionTestUtils.setField(memberService, "defaultProfileImageUrl", DEFAULT_IMAGE_URL);
     }
 
-    // region getMyPageInfo
     @Test
     @DisplayName("마이페이지 조회 성공 - 프로필 이미지가 있으면 실제 URL 반환")
     void getMyPageInfo_withProfileImage() {
@@ -105,9 +107,7 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
-    // endregion
 
-    // region updateMyPageInfo
     @Test
     @DisplayName("마이페이지 수정 성공 - phone만 전송 시 phone 변경, 이미지 유지")
     void updateMyPageInfo_phoneOnly() {
@@ -170,9 +170,7 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
-    // endregion
 
-    // region createOnBoarding
     @Test
     @DisplayName("온보딩 등록 성공 - 목표와 카테고리가 저장되고 멤버 온보딩 완료 처리")
     void createOnBoarding_success() {
@@ -249,9 +247,7 @@ class MemberServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
     }
-    // endregion
 
-    // region updateOnBoarding
     @Test
     @DisplayName("온보딩 수정 성공 - 기존과 다른 카테고리로 변경 시 삭제 대상은 지우고 추가 대상만 저장")
     void updateOnBoarding_diffUpdate() {
@@ -371,7 +367,88 @@ class MemberServiceTest {
     }
     // endregion
 
-    // region changePassword
+    // region changeMemberStatus
+    @Test
+    @DisplayName("회원 상태 변경 성공 - ACTIVE → SUSPENDED, 응답에 변경된 상태 반환")
+    void changeMemberStatus_activeToSuspended_success() {
+        Member member = MemberFixture.defaultMember(); // ACTIVE
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        ChangeMemberStatusResponse response =
+                memberService.changeMemberStatus(member.getId(), new ChangeMemberStatusRequest(MemberStatus.SUSPENDED));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(response.memberId()).isEqualTo(member.getId());
+        assertThat(response.status()).isEqualTo("SUSPENDED");
+    }
+
+    @Test
+    @DisplayName("회원 상태 변경 성공 - SUSPENDED → ACTIVE, 응답에 변경된 상태 반환")
+    void changeMemberStatus_suspendedToActive_success() {
+        Member member = MemberFixture.defaultMember();
+        member.suspend(); // SUSPENDED
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        ChangeMemberStatusResponse response =
+                memberService.changeMemberStatus(member.getId(), new ChangeMemberStatusRequest(MemberStatus.ACTIVE));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(response.status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("회원 상태 변경 실패 - 존재하지 않는 회원 ID면 NOT_FOUND")
+    void changeMemberStatus_memberNotFound() {
+        UUID unknownId = UUID.randomUUID();
+        given(memberRepository.findById(unknownId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.changeMemberStatus(unknownId, new ChangeMemberStatusRequest(MemberStatus.SUSPENDED))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 회원입니다");
+    }
+
+    @Test
+    @DisplayName("회원 상태 변경 실패 - ACTIVE → ACTIVE 동일 상태 전환 시 BAD_REQUEST")
+    void changeMemberStatus_sameStatus_throwsBadRequest() {
+        Member member = MemberFixture.defaultMember(); // ACTIVE
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                memberService.changeMemberStatus(member.getId(), new ChangeMemberStatusRequest(MemberStatus.ACTIVE))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
+    }
+
+    @Test
+    @DisplayName("회원 상태 변경 실패 - WITHDRAWAL 전환 시도 시 BAD_REQUEST")
+    void changeMemberStatus_toWithdrawal_throwsBadRequest() {
+        Member member = MemberFixture.defaultMember();
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                memberService.changeMemberStatus(member.getId(), new ChangeMemberStatusRequest(MemberStatus.WITHDRAWAL))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
+    }
+
+    @Test
+    @DisplayName("회원 상태 변경 실패 - 이미 탈퇴한 회원의 상태 변경 시 BAD_REQUEST")
+    void changeMemberStatus_fromWithdrawal_throwsBadRequest() {
+        Member member = MemberFixture.defaultMember();
+        member.withdraw(); // WITHDRAWAL
+        given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                memberService.changeMemberStatus(member.getId(), new ChangeMemberStatusRequest(MemberStatus.ACTIVE))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 상태 전환입니다, ACTIVE와 SUSPENDED 간의 전환만 가능합니다");
+    }
+
     @Test
     @DisplayName("비밀번호 변경 성공 - 현재 비밀번호 일치 시 새 비밀번호로 변경")
     void changePassword_success() {
@@ -468,5 +545,5 @@ class MemberServiceTest {
 
         verify(passwordEncoder, never()).encode(any());
     }
-    // endregion
+
 }
