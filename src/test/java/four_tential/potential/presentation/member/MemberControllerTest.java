@@ -2,6 +2,7 @@ package four_tential.potential.presentation.member;
 
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardGoal;
@@ -11,6 +12,7 @@ import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
@@ -25,6 +27,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -476,5 +482,45 @@ class MemberControllerTest {
         assertThatThrownBy(() -> memberController.unfollowInstructor(instructorMemberId, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("팔로우한 기록이 없습니다");
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 - 200 OK 및 페이지 응답 반환")
+    void getMyFollows_success() {
+        Pageable pageable = PageRequest.of(0, 10);
+        FollowedInstructorItem item = new FollowedInstructorItem(
+                UUID.randomUUID(), "강사이름", "https://img.url/profile.png",
+                "FITNESS", "피트니스", 3L, 4.5, LocalDateTime.now()
+        );
+        PageResponse<FollowedInstructorItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(item), pageable, 1));
+        given(memberService.getMyFollows(MEMBER_ID, pageable)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> response =
+                memberController.getMyFollows(PRINCIPAL, pageable);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("팔로우한 강사 목록 조회 성공");
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).name()).isEqualTo("강사이름");
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 - 팔로우 없으면 빈 페이지 반환")
+    void getMyFollows_empty() {
+        Pageable pageable = PageRequest.of(0, 10);
+        PageResponse<FollowedInstructorItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageable, 0));
+        given(memberService.getMyFollows(MEMBER_ID, pageable)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> response =
+                memberController.getMyFollows(PRINCIPAL, pageable);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().content()).isEmpty();
+        assertThat(response.getBody().data().totalElements()).isZero();
     }
 }

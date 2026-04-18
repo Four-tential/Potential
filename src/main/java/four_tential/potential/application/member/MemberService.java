@@ -25,7 +25,9 @@ import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
@@ -35,6 +37,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -287,6 +291,11 @@ public class MemberService {
         followRepository.save(Follow.register(followerId, instructorMember.getId()));
 
         return FollowResponse.register(instructorMemberId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<FollowedInstructorItem> getMyFollows(UUID memberId, Pageable pageable) {
+        return PageResponse.register(followRepository.findFollowedInstructors(memberId, pageable));
     }
 
     @Transactional

@@ -5,7 +5,9 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.member.model.request.*;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
@@ -13,6 +15,7 @@ import four_tential.potential.presentation.member.model.response.UpdateMyPageRes
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -137,6 +140,19 @@ public class MemberController {
                 .path("/v1/auth")
                 .maxAge(Duration.ZERO)
                 .build();
+    }
+
+    @GetMapping("/members/me/follows")
+    public ResponseEntity<BaseResponse<PageResponse<FollowedInstructorItem>>> getMyFollows(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            Pageable pageable
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "팔로우한 강사 목록 조회 성공",
+                        memberService.getMyFollows(principal.memberId(), pageable)
+                ));
     }
 
     @DeleteMapping("/instructors/{memberId}/follows")

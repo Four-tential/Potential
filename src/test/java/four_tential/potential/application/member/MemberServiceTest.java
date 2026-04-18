@@ -26,7 +26,9 @@ import four_tential.potential.presentation.member.model.request.ChangePasswordRe
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
+import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
@@ -43,6 +45,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -967,6 +973,63 @@ class MemberServiceTest {
         memberService.unfollowInstructor(followerId, instructorMemberId);
 
         verify(followRepository).delete(follow);
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 팔로우한 강사 목록을 페이지로 반환")
+    void getMyFollows_success() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        FollowedInstructorItem item = new FollowedInstructorItem(
+                UUID.randomUUID(), "강사이름", "https://img.url/profile.png",
+                "FITNESS", "피트니스", 3L, 4.5, LocalDateTime.now()
+        );
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(item), pageable, 1));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).name()).isEqualTo("강사이름");
+        assertThat(response.content().get(0).courseCount()).isEqualTo(3L);
+        assertThat(response.content().get(0).averageRating()).isEqualTo(4.5);
+        assertThat(response.totalElements()).isEqualTo(1);
+        assertThat(response.currentPage()).isEqualTo(0);
+        assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 팔로우한 강사가 없으면 빈 페이지 반환")
+    void getMyFollows_empty() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("팔로우 목록 조회 성공 - 2페이지 요청 시 페이지 메타 정보가 올바르게 반환됨")
+    void getMyFollows_secondPage() {
+        UUID followerId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(1, 2);
+        FollowedInstructorItem item = new FollowedInstructorItem(
+                UUID.randomUUID(), "강사B", null, "COOK", "쿠킹", 1L, null, LocalDateTime.now()
+        );
+        given(followRepository.findFollowedInstructors(followerId, pageable))
+                .willReturn(new PageImpl<>(List.of(item), pageable, 3));
+
+        PageResponse<FollowedInstructorItem> response = memberService.getMyFollows(followerId, pageable);
+
+        assertThat(response.currentPage()).isEqualTo(1);
+        assertThat(response.totalPages()).isEqualTo(2);
+        assertThat(response.totalElements()).isEqualTo(3);
+        assertThat(response.isLast()).isTrue();
     }
 
 }
