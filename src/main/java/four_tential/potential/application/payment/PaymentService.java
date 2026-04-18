@@ -7,6 +7,7 @@ import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -22,8 +24,8 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
 
     /**
-     * PortOne 결제 식별자인 pgKey로 Payment를 조회한다.
-     * 결제가 반드시 있어야 하는 흐름에서 사용하며, 없으면 결제 없음 예외를 던진다.
+     * pgKey로 Payment를 조회한다
+     * 결제가 꼭 있어야 하는 흐름에서 사용한다
      */
     public Payment getByPgKey(String pgKey) {
         return paymentRepository.findByPgKey(pgKey).orElseThrow(
@@ -31,16 +33,23 @@ public class PaymentService {
     }
 
     /**
-     * PortOne 결제 식별자인 pgKey로 Payment를 Optional 형태로 조회한다.
-     * Paid 웹훅이 결제 생성보다 먼저 도착할 수 있는 흐름처럼, 결제가 없을 수도 있는 경우에 사용한다.
+     * pgKey로 Payment를 조회하되, 없을 수도 있는 흐름에서 사용한다
      */
     public Optional<Payment> findByPgKey(String pgKey) {
         return paymentRepository.findByPgKey(pgKey);
     }
 
     /**
-     * Payment row에 비관적 락을 걸고 조회한다.
-     * 같은 결제에 대한 웹훅이 동시에 처리되어 상태가 중복 변경되는 상황을 방지한다.
+     * 주문 ID로 이미 생성된 Payment를 조회한다
+     * 같은 주문의 중복 결제를 막기 위해 사용한다
+     */
+    public Optional<Payment> findByOrderId(UUID orderId) {
+        return paymentRepository.findByOrderId(orderId);
+    }
+
+    /**
+     * Payment row를 쓰기 락으로 잡고 조회한다
+     * 같은 결제의 웹훅들이 동시에 상태를 바꾸지 못하게 한다
      */
     public Payment getByPgKeyForUpdate(String pgKey) {
         return paymentRepository.findByPgKeyForUpdate(pgKey).orElseThrow(
@@ -48,16 +57,14 @@ public class PaymentService {
     }
 
     /**
-     * Payment row에 비관적 락을 걸고 Optional 형태로 조회한다.
-     * 실패/취소 웹훅처럼 결제 row가 아직 없을 수 있는 흐름에서 사용한다.
+     * 쓰기 락으로 조회하되, 결제가 없을 수도 있는 웹훅 흐름에서 사용한다
      */
     public Optional<Payment> findByPgKeyForUpdate(String pgKey) {
         return paymentRepository.findByPgKeyForUpdate(pgKey);
     }
 
     /**
-     * 하나의 주문에 이미 결제가 생성되어 있는지 확인한다.
-     * 결제가 존재하면 같은 주문으로 결제를 다시 만들 수 없도록 예외를 던진다.
+     * 주문 하나에 결제 흐름이 하나만 생기도록 막는다
      */
     public void validateNoPayment(UUID orderId) {
         if (paymentRepository.existsByOrderId(orderId)) {
@@ -66,8 +73,8 @@ public class PaymentService {
     }
 
     /**
-     * PortOne 실제 결제 정보와 서버가 계산한 결제 정보를 비교한다.
-     * 결제 수단, pgKey, 결제 완료 상태, 결제 금액이 모두 맞아야 결제 생성을 허용한다.
+     * PortOne 조회 결과와 우리 서버의 주문 금액을 대조한다
+     * 클라이언트 값은 믿지 않고, pgKey/상태/수단/금액이 모두 맞을 때만 통과시킨다
      */
     public void validateGatewayPayment(
             PaymentCreateCommand preparation,
@@ -76,25 +83,30 @@ public class PaymentService {
             PaymentGatewayResponse gatewayResponse
     ) {
         if (requestPayWay != PaymentPayWay.CARD) {
+            log.warn("[PAYMENT_VALIDATE] 허용되지 않는 결제 수단 요청. requestPayWay={}", requestPayWay);
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
         }
         if (!pgKey.equals(gatewayResponse.pgKey())) {
+            log.error("[PAYMENT_VALIDATE] pgKey 불일치. request={} gateway={}", pgKey, gatewayResponse.pgKey());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH);
         }
         if (!"PAID".equals(gatewayResponse.status())) {
+            log.warn("[PAYMENT_VALIDATE] PortOne 미결제 상태. pgKey={} status={}", pgKey, gatewayResponse.status());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_NOT_PAID);
         }
         if (!"card".equals(gatewayResponse.payMethod())) {
+            log.warn("[PAYMENT_VALIDATE] PortOne 결제 수단 불일치. pgKey={} payMethod={}", pgKey, gatewayResponse.payMethod());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
         }
         if (!preparation.paidTotalPrice().equals(gatewayResponse.totalAmount())) {
+            log.error("[PAYMENT_VALIDATE] 금액 불일치. pgKey={} expected={} actual={}",
+                    pgKey, preparation.paidTotalPrice(), gatewayResponse.totalAmount());
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH);
         }
     }
 
     /**
-     * Payment 엔티티를 저장한다.
-     * 이미 생성된 Payment 객체를 그대로 저장해야 하는 테스트나 내부 흐름에서 사용한다.
+     * 이미 만들어진 Payment를 그대로 저장한다
      */
     @Transactional
     public Payment save(Payment payment) {
@@ -102,8 +114,8 @@ public class PaymentService {
     }
 
     /**
-     * 검증이 끝난 PaymentCreateCommand 값으로 PENDING 결제를 생성한다.
-     * 결제 완료 확정은 PortOne Paid 웹훅에서 처리되므로 여기서는 결제 요청 기록만 저장한다.
+     * 서버 검증을 통과한 결제 요청을 PENDING으로 저장한다
+     * 최종 PAID 확정은 서명 검증된 Paid 웹훅에서 처리한다
      */
     @Transactional
     public Payment createPendingPayment(PaymentCreateCommand preparation, String pgKey, PaymentPayWay payWay) {
@@ -122,9 +134,29 @@ public class PaymentService {
     }
 
     /**
-     * Payment 엔티티를 PAID 상태로 변경한다.
-     * 상태 전이 가능 여부는 Payment 엔티티 내부의 도메인 규칙이 판단한다.
-     * getByPgKeyForUpdate()로 조회한 managed entity를 기존 트랜잭션 안에서 넘겨야 한다.
+     * 실패한 결제 시도를 FAILED로 저장한다
+     * 운영에서 "시도조차 없던 주문"과 "실패한 결제 시도"를 구분하기 위함이다
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Payment createFailedPayment(PaymentCreateCommand preparation, String pgKey, PaymentPayWay payWay) {
+        Payment payment = Payment.createPending(
+                preparation.orderId(),
+                preparation.memberId(),
+                preparation.memberCouponId(),
+                pgKey,
+                preparation.totalPrice(),
+                preparation.discountPrice(),
+                preparation.paidTotalPrice(),
+                payWay
+        );
+        payment.fail();
+
+        return paymentRepository.save(payment);
+    }
+
+    /**
+     * Payment를 PAID로 확정한다
+     * 락으로 조회한 현재 보고 있는 entity를 기존 트랜잭션 안에서 넘겨야 한다
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void confirmPaid(Payment payment) {
@@ -132,9 +164,8 @@ public class PaymentService {
     }
 
     /**
-     * Payment 엔티티를 FAILED 상태로 변경한다.
-     * PortOne 실패/취소 웹훅 또는 서버 검증 실패 후 결제 실패로 확정해야 할 때 사용한다.
-     * getByPgKeyForUpdate()로 조회한 managed entity를 기존 트랜잭션 안에서 넘겨야 한다.
+     * Payment를 FAILED로 확정한다
+     * confirmPaid와 마찬가지로 기존 트랜잭션 안에서 호출해야 한다
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void fail(Payment payment) {

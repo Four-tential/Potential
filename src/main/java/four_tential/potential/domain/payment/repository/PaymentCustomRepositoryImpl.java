@@ -25,6 +25,15 @@ public class PaymentCustomRepositoryImpl implements PaymentCustomRepository {
     }
 
     @Override
+    public Optional<Payment> findByOrderId(UUID orderId) {
+        return Optional.ofNullable(
+                queryFactory.selectFrom(payment)
+                        .where(payment.orderId.eq(orderId))
+                        .fetchOne()
+        );
+    }
+
+    @Override
     public Optional<Payment> findByPgKeyForUpdate(String pgKey) {
         return Optional.ofNullable(
                 queryFactory.selectFrom(payment)

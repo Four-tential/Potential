@@ -578,6 +578,7 @@
                 document.getElementById('portonePaidView').textContent = '실패';
                 document.getElementById('portonePaidView').className = 'danger';
                 logError('PortOne 결제가 실패하거나 사용자가 결제창을 닫았습니다.', portoneResponse);
+                await recordFailedPaymentOnServer(orderId, paymentId);
                 return;
             }
 
@@ -613,6 +614,39 @@
             logError('결제 테스트 중 오류가 발생했습니다.', error);
         } finally {
             setBusy(false);
+        }
+    }
+
+    async function recordFailedPaymentOnServer(orderId, paymentId) {
+        try {
+            const serverResponse = await fetch('/api/v1/payments', {
+                method: 'POST',
+                headers: {
+                    ...authHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    orderId,
+                    pgKey: paymentId,
+                    payWay: document.getElementById('payWay').value
+                })
+            });
+            const serverBody = await readJson(serverResponse);
+
+            if (!serverResponse.ok || !serverBody.success) {
+                document.getElementById('serverVerifiedView').textContent = '실패';
+                document.getElementById('serverVerifiedView').className = 'danger';
+                logError('PortOne 실패 결제를 payments FAILED로 저장하지 못했습니다.', serverBody);
+                return;
+            }
+
+            document.getElementById('serverVerifiedView').textContent = '완료';
+            document.getElementById('serverVerifiedView').className = 'ok';
+            log('PortOne 실패 결제를 payments FAILED로 저장했습니다.', serverBody);
+        } catch (error) {
+            document.getElementById('serverVerifiedView').textContent = '실패';
+            document.getElementById('serverVerifiedView').className = 'danger';
+            logError('PortOne 실패 결제 저장 중 오류가 발생했습니다.', error);
         }
     }
 

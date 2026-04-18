@@ -11,6 +11,7 @@ import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.Webhook;
+import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
@@ -47,104 +48,152 @@ public class PaymentFacade {
     private final PaymentDistributedLockExecutor paymentLockExecutor;
 
     /**
-     * 결제 생성 API의 전체 흐름을 조율한다.
-     * PortOne 실제 결제 정보와 서버 주문 정보를 검증한 뒤 PENDING 결제를 만들고,
-     * 먼저 도착해 보류 중이던 Paid 웹훅이 있으면 즉시 이어서 확정 처리한다.
+     * 결제 생성 요청을 처리한다
+     * PortOne 결제 결과와 우리 주문 정보를 다시 맞춰 보고, 문제가 없으면 PENDING 결제를 저장한다
+     * 먼저 와서 기다리던 Paid 웹훅이 있으면 이어서 PAID 확정까지 진행한다
      */
     public PaymentCreateResponse createPayment(UUID memberId, PaymentCreateRequest request) {
-        // PortOne 조회는 외부 API 호출이므로 분산락 밖에서 먼저 수행
+        // 외부 API는 락을 잡기 전에 호출해 주문 락 시간을 짧게 둔다
         PaymentGatewayResponse gatewayResponse = paymentGateway.getPayment(request.pgKey());
 
-        // 같은 주문으로 결제 생성 요청이 동시에 들어오는 것을 방지
+        // 같은 주문의 중복 결제 생성을 막기 위해 주문 기준으로 묶는다
         Payment payment = paymentLockExecutor.executeWithOrderLock(
                 request.orderId(),
                 () -> createPaymentInOrderLock(memberId, request, gatewayResponse)
         );
 
-        // 결제 생성 API보다 Paid 웹훅이 먼저 도착해 PENDING으로 대기 중이면 즉시 확정 처리
-        completeAlreadyReceivedPaidWebhook(payment.getPgKey());
+        // 기다리던 Paid 웹훅이 있으면 결제 생성 직후 바로 이어 처리한다
+        resumePendingPaidWebhook(payment.getPgKey());
         Payment latestPayment = paymentService.getByPgKey(payment.getPgKey());
         return PaymentCreateResponse.from(latestPayment);
     }
 
     /**
-     * PortOne 웹훅 수신 API의 전체 흐름을 조율한다.
-     * 수신 기록을 먼저 남긴 뒤 서명을 검증하고, 검증된 이벤트만 결제 상태 변경 로직으로 넘긴다.
+     * PortOne 웹훅을 처리한다
+     * 원본 요청을 먼저 저장한 뒤 서명을 검증하고, 검증된 이벤트만 결제 상태에 반영한다
+     * 다시 받아도 결과가 달라지지 않는 실패는 사유를 남기고 조용히 종료한다
      */
     public void handleWebhook(
             String rawBody,
             String webhookId,
             String webhookTimestamp,
-            String webhookSignature) throws WebhookVerificationException {
+            String webhookSignature) {
 
-        // 이미 성공 처리된 webhook-id는 PortOne 재전송으로 보고 멱등하게 무시
-        if (webhookService.isCompleted(webhookId)) {
-            log.info("[PORTONE_WEBHOOK] completed webhook ignored. id={}", webhookId);
+        // 이미 끝난 webhook-id면 재전송으로 보고 더 처리하지 않는다
+        if (webhookService.isFinished(webhookId)) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored. id={}", webhookId);
             return;
         }
 
-        // 수신 기록은 비즈니스 처리보다 먼저 남김
-        Webhook webhook = webhookService.receive(webhookId, PaymentWebhookConstants.EVENT_STATUS_UNKNOWN);
+        // 처리 중 실패해도 추적할 수 있게 원본 payload부터 저장한다
+        Webhook webhook = webhookService.saveIncomingWebhook(
+                webhookId,
+                PaymentWebhookConstants.EVENT_STATUS_UNKNOWN,
+                rawBody
+        );
 
-        if (webhook.isCompleted()) {
-            log.info("[PORTONE_WEBHOOK] completed webhook ignored after receive. id={}", webhookId);
+        if (webhook.isFinished()) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored after receive. id={}", webhookId);
             return;
         }
 
-        // rawBody와 PortOne 헤더를 SDK로 검증해서 위조 웹훅을 막는다
+        // 서명이 맞는 웹훅만 결제 이벤트로 믿고 처리한다
         io.portone.sdk.server.webhook.Webhook verified;
         try {
             verified = portOneWebhookHandler.verify(rawBody, webhookId, webhookSignature, webhookTimestamp);
         } catch (WebhookVerificationException e) {
-            webhookService.fail(webhook);
-            throw e;
+            log.warn("[PORTONE_WEBHOOK] 서명 검증 실패. id={} reason={}", webhookId, e.getMessage());
+            webhookService.failWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_SIGNATURE_INVALID,
+                    e.getMessage()
+            );
+            return;
         }
 
         PaymentCancelDecision result;
         try {
-            result = processVerifiedWebhook(verified, webhook);
+            result = handleVerifiedWebhook(verified, webhook);
+        } catch (ServiceErrorException e) {
+            webhookService.failWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_BUSINESS_FAILED,
+                    e.getMessage()
+            );
+            log.error("[PORTONE_WEBHOOK] business handling failed. id={} reason={}", webhookId, e.getMessage(), e);
+            return;
         } catch (RuntimeException e) {
-            webhookService.fail(webhook);
+            webhookService.failWebhook(
+                    webhook,
+                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_UNEXPECTED_ERROR,
+                    e.getMessage()
+            );
             log.error("[PORTONE_WEBHOOK] business handling failed. id={}", webhookId, e);
             throw e;
         }
 
-        // DB 기준으로 받을 수 없는 결제라면 DB 트랜잭션 밖에서 PortOne 결제를 취소
+        // 돈은 나갔지만 우리 규칙상 받을 수 없는 결제라면, DB 처리 뒤 PortOne 취소를 시도한다
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
+                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                return;
             } catch (RuntimeException e) {
-                webhookService.fail(webhook);
-                throw e;
+                webhookService.failWebhook(
+                        webhook,
+                        PaymentWebhookConstants.FAIL_REASON_PORTONE_CANCEL_FAILED,
+                        e.getMessage()
+                );
+                log.error("[PORTONE_WEBHOOK] PortOne cancel failed. id={} pgKey={} reason={}",
+                        webhookId, result.pgKey(), result.cancelReason(), e);
+                return;
             }
         }
 
         if (result == null || result.webhookCompletionRequired()) {
-            webhookService.complete(webhook);
+            webhookService.completeWebhook(webhook);
         }
     }
 
     /**
-     * 같은 주문에 대한 결제 생성 요청이 동시에 처리되지 않도록 주문 기준 분산락 안에서 실행된다.
-     * 주문 소유자, 주문 상태, 결제 기한, 빈자리, 중복 결제, PortOne 금액을 검증한 뒤 PENDING 결제를 저장한다.
+     * 주문 락 안에서 결제를 만들 수 있는지 확인한다
+     * 본인 주문인지, 기한과 자리가 괜찮은지, PortOne 금액이 맞는지 본 뒤 PENDING 또는 FAILED로 저장한다
      */
     private Payment createPaymentInOrderLock(
             UUID memberId,
             PaymentCreateRequest request,
             PaymentGatewayResponse gatewayResponse
     ) {
+        PaymentCreateCommand failedPaymentCommand = null;
         try {
             if (request.memberCouponId() != null) {
                 throw new ServiceErrorException(PaymentExceptionEnum.ERR_COUPON_NOT_SUPPORTED);
             }
 
             Order order = getOrder(request.orderId());
-            Course course = getCourse(order.getCourseId());
-
-            // 결제 생성은 PENDING 주문, 본인 주문, 결제 기한 내 주문만 가능
+            // 타인의 주문이면 결제 기록도 남기지 않는다
             if (!order.getMemberId().equals(memberId)) {
                 throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_FORBIDDEN);
             }
+
+            Optional<Payment> existingPayment = paymentService.findByOrderId(order.getId());
+            if (existingPayment.isPresent()) {
+                return getExistingPaymentOrReject(request, existingPayment.get());
+            }
+
+            // 여기부터는 실패하더라도 "결제 시도"로 남길 수 있다
+            Long totalPrice = toLong(order.getTotalPriceSnap());
+            failedPaymentCommand = new PaymentCreateCommand(
+                    order.getId(),
+                    memberId,
+                    null,
+                    totalPrice,
+                    NO_DISCOUNT,
+                    totalPrice
+            );
+
+            Course course = getCourse(order.getCourseId());
+
             if (order.getStatus() != OrderStatus.PENDING) {
                 throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS);
             }
@@ -157,33 +206,122 @@ public class PaymentFacade {
 
             paymentService.validateNoPayment(order.getId());
 
-            Long totalPrice = toLong(order.getTotalPriceSnap());
-            PaymentCreateCommand preparation = new PaymentCreateCommand(
-                    order.getId(),
-                    memberId,
-                    null,
-                    totalPrice,
-                    NO_DISCOUNT,
-                    totalPrice
-            );
+            if (isGatewayNotPaid(gatewayResponse)) {
+                validateFailedGatewayResult(request.pgKey(), request.payWay(), gatewayResponse);
+                return paymentService.createFailedPayment(failedPaymentCommand, request.pgKey(), request.payWay());
+            }
 
-            // 서버 계산 금액과 PortOne 실제 결제 금액이 일치해야 결제 요청을 저장
-            paymentService.validateGatewayPayment(preparation, request.pgKey(), request.payWay(), gatewayResponse);
+            // 성공 결제는 서버 금액과 PortOne 금액이 정확히 같아야 한다
+            paymentService.validateGatewayPayment(failedPaymentCommand, request.pgKey(), request.payWay(), gatewayResponse);
 
-            // 웹훅 전에는 결제를 확정하지 않고 PENDING으로만 저장
-            return paymentService.createPendingPayment(preparation, request.pgKey(), request.payWay());
+            // 결제 확정은 서명 검증된 Paid 웹훅에서 한다
+            return paymentService.createPendingPayment(failedPaymentCommand, request.pgKey(), request.payWay());
         } catch (ServiceErrorException e) {
-            // 락 획득 실패가 아니라, 락 안쪽 비즈니스 검증에서 거절된 결제만 PortOne 취소 요청
-            cancelGatewayPaymentSafely(request.pgKey(), gatewayResponse.totalAmount(), "PAYMENT_CREATE_REJECTED");
+            // PortOne에서는 결제됐지만 우리 서버가 거절한 경우, 취소를 시도하고 FAILED 기록을 남긴다
+            if (cancelRejectedPayment(request, gatewayResponse)) {
+                saveRejectedPayment(failedPaymentCommand, request);
+                webhookService.failDeferredPaidWebhook(
+                        request.pgKey(),
+                        PaymentWebhookConstants.FAIL_REASON_PAYMENT_CREATE_REJECTED,
+                        e.getMessage()
+                );
+            }
             throw e;
         }
     }
 
+    private Payment getExistingPaymentOrReject(PaymentCreateRequest request, Payment existingPayment) {
+        if (request.pgKey().equals(existingPayment.getPgKey())) {
+            log.info("[PORTONE_PAYMENT] duplicate payment create request ignored. orderId={} pgKey={}",
+                    request.orderId(), request.pgKey());
+            return existingPayment;
+        }
+
+        throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_ALREADY_REQUESTED);
+    }
+
     /**
-     * PortOne SDK가 검증한 웹훅 객체를 결제 도메인에서 처리할 수 있는 이벤트 정보로 변환한다.
-     * Paid 웹훅이 payment 저장보다 먼저 도착한 경우에는 실패가 아니라 보류 상태로 남긴다.
+     * PortOne 상태가 PAID가 아니면 성공 결제가 아니라 실패 시도로 다룬다
      */
-    private PaymentCancelDecision processVerifiedWebhook(
+    private boolean isGatewayNotPaid(PaymentGatewayResponse gatewayResponse) {
+        return !"PAID".equals(gatewayResponse.status());
+    }
+
+    /**
+     * 실패 결제도 같은 pgKey와 허용된 결제 수단일 때만 기록한다
+     */
+    private void validateFailedGatewayResult(
+            String pgKey,
+            PaymentPayWay requestPayWay,
+            PaymentGatewayResponse gatewayResponse
+    ) {
+        if (requestPayWay != PaymentPayWay.CARD) {
+            log.warn("[PAYMENT_VALIDATE] unsupported payment method for failed payment. requestPayWay={}", requestPayWay);
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_METHOD_NOT_ALLOWED);
+        }
+        if (!pgKey.equals(gatewayResponse.pgKey())) {
+            log.error("[PAYMENT_VALIDATE] failed payment pgKey mismatch. request={} gateway={}",
+                    pgKey, gatewayResponse.pgKey());
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH);
+        }
+
+        log.warn("[PORTONE_PAYMENT] failed payment recorded. pgKey={} status={} amount={}",
+                pgKey, gatewayResponse.status(), gatewayResponse.totalAmount());
+    }
+
+    /**
+     * PortOne은 결제됐지만 우리 서버가 거절한 건을 FAILED로 남긴다
+     * 이미 같은 주문의 결제가 있거나 저장에 실패해도 원래 거절 흐름은 막지 않는다
+     */
+    private void saveRejectedPayment(
+            PaymentCreateCommand failedPaymentCommand,
+            PaymentCreateRequest request
+    ) {
+        if (failedPaymentCommand == null) {
+            return;
+        }
+        if (paymentService.findByOrderId(failedPaymentCommand.orderId()).isPresent()) {
+            return;
+        }
+
+        try {
+            paymentService.createFailedPayment(failedPaymentCommand, request.pgKey(), request.payWay());
+            log.warn("[PORTONE_PAYMENT] rejected paid payment recorded as FAILED. orderId={} pgKey={}",
+                    failedPaymentCommand.orderId(), request.pgKey());
+        } catch (RuntimeException recordException) {
+            log.error("[PORTONE_PAYMENT] failed to record rejected payment. orderId={} pgKey={}",
+                    failedPaymentCommand.orderId(), request.pgKey(), recordException);
+        }
+    }
+
+    /**
+     * 우리 서버가 받을 수 없는 PAID 결제라면 PortOne 취소를 시도한다
+     * 이미 payment가 있으면 다른 흐름에서 처리 중일 수 있어 여기서는 건드리지 않는다
+     */
+    private boolean cancelRejectedPayment(
+            PaymentCreateRequest request,
+            PaymentGatewayResponse gatewayResponse
+    ) {
+        if (!"PAID".equals(gatewayResponse.status())) {
+            return false;
+        }
+
+        Optional<Payment> existingPayment = paymentService.findByPgKey(request.pgKey());
+        if (existingPayment.isPresent()) {
+            log.warn("[PORTONE_PAYMENT] cancel skipped because payment already exists. orderId={} pgKey={} status={}",
+                    request.orderId(), request.pgKey(), existingPayment.get().getStatus());
+            return false;
+        }
+
+        cancelGatewayPaymentSafely(request.pgKey(), gatewayResponse.totalAmount(), "PAYMENT_CREATE_REJECTED");
+        return true;
+    }
+
+    /**
+     * 서명 검증이 끝난 웹훅을 결제 이벤트로 풀어낸다
+     * Paid 웹훅이 payment보다 먼저 왔다면 실패가 아니라 잠시 보류한다
+     */
+    private PaymentCancelDecision handleVerifiedWebhook(
             io.portone.sdk.server.webhook.Webhook verified,
             Webhook webhook
     ) {
@@ -194,14 +332,11 @@ public class PaymentFacade {
             return PaymentCancelDecision.none();
         }
 
-        webhook.updateEventStatus(event.eventType());
-        webhook.updatePgKey(event.pgKey());
-
         if (PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID.equals(event.eventType())) {
             Optional<Payment> payment = paymentService.findByPgKey(event.pgKey());
             if (payment.isEmpty()) {
                 log.info("[PORTONE_WEBHOOK] payment is not saved yet. webhook deferred. pgKey={}", event.pgKey());
-                webhookService.defer(webhook, event.eventType(), event.pgKey());
+                webhookService.deferPaidWebhook(webhook, event.eventType(), event.pgKey());
                 return PaymentCancelDecision.defer();
             }
 
@@ -209,33 +344,34 @@ public class PaymentFacade {
             return paymentLockExecutor.executeWithPgKeyLock(event.pgKey(), () ->
                     paymentLockExecutor.executeWithCourseLock(
                         courseId,
-                        () -> transactionTemplate.execute(status -> processTransactionWebhook(event, webhook))
+                        () -> transactionTemplate.execute(status -> handleTransactionWebhook(event, webhook))
                     )
             );
         }
 
         return paymentLockExecutor.executeWithPgKeyLock(
                 event.pgKey(),
-                () -> transactionTemplate.execute(status -> processTransactionWebhook(event, webhook))
+                () -> transactionTemplate.execute(status -> handleTransactionWebhook(event, webhook))
         );
     }
 
     /**
-     * 실제 결제 트랜잭션 이벤트를 처리한다.
-     * Paid 이벤트는 결제 확정으로, Failed/Cancelled 이벤트는 결제 실패로 반영한다.
+     * PortOne 결제 이벤트를 실제 Payment 상태 변경으로 연결한다
+     * 같은 pgKey는 분산락 안에서 하나씩 처리된다
      */
-    private PaymentCancelDecision processTransactionWebhook(PortOneWebhookEvent event, Webhook webhook) {
+    private PaymentCancelDecision handleTransactionWebhook(PortOneWebhookEvent event, Webhook webhook) {
         webhook.updateEventStatus(event.eventType());
         webhook.updatePgKey(event.pgKey());
+        webhookService.merge(webhook);
 
         log.info("[PORTONE_WEBHOOK] type={} pgKey={}", event.eventType(), event.pgKey());
 
         switch (event.eventType()) {
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID:
-                return completePaidWebhook(event.pgKey());
+                return confirmPaidWebhook(event.pgKey());
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED,
                  PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
-                return failPaymentIfExists(event.pgKey());
+                return failExistingPayment(event.pgKey());
             default:
                 log.warn("[PORTONE_WEBHOOK] unsupported event type. type={}", event.eventType());
                 return PaymentCancelDecision.none();
@@ -243,75 +379,86 @@ public class PaymentFacade {
     }
 
     /**
-     * 실패/취소 웹훅을 처리한다.
-     * 결제 생성 API가 호출되지 않은 실패 결제일 수 있으므로 payment row가 없으면 예외가 아니라 완료 처리한다.
+     * Failed 또는 Cancelled 웹훅을 기존 Payment에 반영한다
+     * payment가 없으면 orderId를 알 수 없으므로 로그만 남기고 끝낸다
      */
-    private PaymentCancelDecision failPaymentIfExists(String pgKey) {
+    private PaymentCancelDecision failExistingPayment(String pgKey) {
         Optional<Payment> payment = paymentService.findByPgKeyForUpdate(pgKey);
         if (payment.isEmpty()) {
             log.info("[PORTONE_WEBHOOK] payment not found for failed/cancelled event. webhook completed. pgKey={}", pgKey);
             return PaymentCancelDecision.none();
         }
 
+        log.warn("[PORTONE_WEBHOOK] 결제 실패/취소 처리. pgKey={} memberId={}", pgKey, payment.get().getMemberId());
         paymentService.fail(payment.get());
         return PaymentCancelDecision.none();
     }
 
     /**
-     * Paid 웹훅을 최종 결제 확정으로 처리한다.
-     * payment row를 비관적 락으로 잡은 뒤 주문과 코스 상태를 다시 검증하고, 문제가 없을 때만 PAID로 변경한다.
+     * Paid 웹훅으로 결제를 최종 확정한다
+     * 확정 직전에 주문 상태, 결제 기한, 좌석을 다시 확인하고 문제가 있으면 FAILED로 돌린다
      */
-    private PaymentCancelDecision completePaidWebhook(String pgKey) {
+    private PaymentCancelDecision confirmPaidWebhook(String pgKey) {
 
-        // Payment row에 비관적 락
+        // 같은 결제의 웹훅들이 동시에 상태를 바꾸지 못하게 row를 잠근다
         Payment payment = paymentService.getByPgKeyForUpdate(pgKey);
 
-        // 이미 PAID면 멱등 처리
         if (payment.isPaid()) {
+            log.info("[PORTONE_WEBHOOK] 이미 PAID 상태 — 멱등 처리. pgKey={}", pgKey);
             return PaymentCancelDecision.none();
         }
 
         if (!payment.isPending()) {
+            log.warn("[PORTONE_WEBHOOK] PENDING이 아닌 결제에 Paid 웹훅 수신. pgKey={} status={}",
+                    pgKey, payment.getStatus());
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_STATUS_INVALID");
         }
 
         Order order = getOrder(payment.getOrderId());
         Course course = getCourse(order.getCourseId());
 
-        // 웹훅은 최종 확정 지점이므로 결제 생성 때 했던 검증 다시 수행
+        // 웹훅은 최종 확정 지점이라 한 번 더 확인한다
         if (!order.getMemberId().equals(payment.getMemberId())) {
+            log.error("[PORTONE_WEBHOOK] 주문 회원 불일치. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_ORDER_MEMBER_MISMATCH");
         }
         if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn("[PORTONE_WEBHOOK] 주문 상태 불일치. pgKey={} orderStatus={}", pgKey, order.getStatus());
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "ORDER_STATUS_INVALID");
         }
         if (LocalDateTime.now().isAfter(order.getExpireAt())) {
+            log.warn("[PORTONE_WEBHOOK] 결제 기한 초과. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
         }
         if (!hasAvailableSeats(order, course)) {
+            log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음. pgKey={}", pgKey);
             paymentService.fail(payment);
             return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
 
         paymentService.confirmPaid(payment);
         increaseCourseConfirmCount(order, course);
+        log.info("[PORTONE_WEBHOOK] 결제 확정 완료. pgKey={} memberId={}", pgKey, payment.getMemberId());
         return PaymentCancelDecision.none();
     }
 
     /**
-     * 결제 생성 API보다 먼저 도착해 PENDING으로 보류된 Paid 웹훅을 찾아 재처리한다.
-     * 결제 생성 직후 호출되어, 사용자가 웹훅 재발송을 누르지 않아도 결제 확정 흐름이 이어지게 한다.
+     * 결제 생성보다 먼저 와서 보류된 Paid 웹훅을 이어 처리한다
+     * 이 보정으로 payment가 PENDING에 오래 머무는 일을 막는다
      */
-    private void completeAlreadyReceivedPaidWebhook(String pgKey) {
-        Optional<Webhook> paidWebhook = webhookService.findProcessablePaidWebhook(pgKey);
+    private void resumePendingPaidWebhook(String pgKey) {
+        Optional<Webhook> paidWebhook = webhookService.findPendingPaidWebhook(pgKey);
         if (paidWebhook.isEmpty()) {
             return;
         }
 
-        Webhook webhook = webhookService.retry(paidWebhook.get(), PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID);
+        Webhook webhook = webhookService.prepareRetry(
+                paidWebhook.get(),
+                PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID
+        );
         log.info("[PORTONE_WEBHOOK] deferred paid webhook resumed. webhookId={} pgKey={}",
                 webhook.getRecWebhookId(), pgKey);
 
@@ -320,7 +467,7 @@ public class PaymentFacade {
         PaymentCancelDecision result = paymentLockExecutor.executeWithPgKeyLock(pgKey, () ->
                 paymentLockExecutor.executeWithCourseLock(
                         courseId,
-                        () -> transactionTemplate.execute(status -> processTransactionWebhook(
+                        () -> transactionTemplate.execute(status -> handleTransactionWebhook(
                                 new PortOneWebhookEvent(true, PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID, pgKey),
                                 webhook
                         ))
@@ -330,20 +477,27 @@ public class PaymentFacade {
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
+                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                return;
             } catch (RuntimeException e) {
-                webhookService.fail(webhook);
-                throw e;
+                webhookService.failWebhook(
+                        webhook,
+                        PaymentWebhookConstants.FAIL_REASON_PORTONE_CANCEL_FAILED,
+                        e.getMessage()
+                );
+                log.error("[PORTONE_WEBHOOK] PortOne cancel failed. webhookId={} pgKey={} reason={}",
+                        webhook.getRecWebhookId(), result.pgKey(), result.cancelReason(), e);
+                return;
             }
         }
 
         if (result == null || result.webhookCompletionRequired()) {
-            webhookService.complete(webhook);
+            webhookService.completeWebhook(webhook);
         }
     }
 
     /**
-     * 결제에 연결된 주문을 조회해 해당 주문의 courseId를 찾는다.
-     * 코스 기준 분산락 키를 만들기 위해 사용한다.
+     * 코스 기준 분산락을 걸기 위해 payment의 courseId를 찾는다
      */
     private UUID findCourseIdByPayment(Payment payment) {
         Order order = getOrder(payment.getOrderId());
@@ -351,16 +505,14 @@ public class PaymentFacade {
     }
 
     /**
-     * 현재 확정 인원에 이번 주문 수량을 더해도 코스 정원을 넘지 않는지 확인한다.
-     * 결제 생성 시점과 웹훅 확정 시점 모두에서 빈자리 검증에 사용한다.
+     * 이번 주문을 확정해도 코스 정원을 넘지 않는지 확인한다
      */
     private boolean hasAvailableSeats(Order order, Course course) {
         return course.getConfirmCount() + order.getOrderCount() <= course.getCapacity();
     }
 
     /**
-     * 결제가 확정된 주문 수량만큼 코스 확정 인원을 증가시킨다.
-     * 주문 수량이 여러 장일 수 있으므로 orderCount만큼 반복해서 증가시킨다.
+     * 결제된 수량만큼 코스 확정 인원을 늘린다
      */
     private void increaseCourseConfirmCount(Order order, Course course) {
         for (int i = 0; i < order.getOrderCount(); i++) {
@@ -369,8 +521,7 @@ public class PaymentFacade {
     }
 
     /**
-     * 주문 ID로 주문을 조회한다.
-     * 결제 파트에서는 주문 도메인 코드를 직접 수정하지 않고, 조회 결과를 검증에만 사용한다.
+     * 결제 검증에 필요한 주문을 조회한다
      */
     private Order getOrder(UUID orderId) {
         return orderRepository.findById(orderId)
@@ -378,8 +529,7 @@ public class PaymentFacade {
     }
 
     /**
-     * 코스 ID로 코스를 조회한다.
-     * 결제 확정 가능 여부와 confirmCount 증가 처리를 위해 사용한다.
+     * 좌석 검증과 확정 인원 증가에 필요한 코스를 조회한다
      */
     private Course getCourse(UUID courseId) {
         return courseRepository.findById(courseId)
@@ -387,8 +537,7 @@ public class PaymentFacade {
     }
 
     /**
-     * 주문 금액 스냅샷 BigInteger를 결제 도메인에서 사용하는 Long 금액으로 변환한다.
-     * Long 범위를 넘는 비정상 값은 금액 불일치로 보고 결제 생성을 거절한다.
+     * 주문 금액 스냅샷을 결제 금액 타입으로 바꾼다
      */
     private Long toLong(BigInteger value) {
         try {
@@ -399,8 +548,8 @@ public class PaymentFacade {
     }
 
     /**
-     * 결제 생성 검증 실패 시 PortOne 취소를 시도하되, 취소 요청 실패가 원래 예외를 덮지 않도록 로그만 남긴다.
-     * 서버 검증은 이미 실패했으므로 운영자가 확인할 수 있게 pgKey와 금액을 함께 기록한다.
+     * 결제 생성 검증 실패 후 PortOne 취소를 시도한다
+     * 취소 실패가 원래 예외를 덮지 않도록 로그만 남긴다
      */
     private void cancelGatewayPaymentSafely(String pgKey, Long amount, String reason) {
         try {
@@ -412,18 +561,17 @@ public class PaymentFacade {
     }
 
     /**
-     * PortOne 결제 취소 API를 호출한다.
-     * DB 트랜잭션 안에서 외부 API를 직접 호출하지 않도록 별도 메서드로 분리해 사용한다.
+     * PortOne 결제 취소 API를 호출한다
      */
     private void cancelGatewayPayment(String pgKey, Long amount, String reason) {
+        log.warn("[PORTONE_PAYMENT] cancel request. pgKey={} amount={} reason={}", pgKey, amount, reason);
         paymentGateway.cancelPayment(PaymentGatewayRequest.of(pgKey, amount, reason));
     }
 
     private record PortOneWebhookEvent(boolean transaction, String eventType, String pgKey) {
 
         /**
-         * PortOne SDK 웹훅 객체에서 결제 도메인 처리에 필요한 이벤트 타입과 pgKey를 뽑아낸다.
-         * 결제 트랜잭션 웹훅이 아닌 이벤트는 pgKey 없이 별도 처리한다.
+         * PortOne 웹훅에서 결제 처리에 필요한 타입과 pgKey만 꺼낸다
          */
         private static PortOneWebhookEvent from(io.portone.sdk.server.webhook.Webhook verified) {
             String eventType = verified.getClass().getSimpleName();

@@ -38,6 +38,19 @@ public class WebhookCustomRepositoryImpl implements WebhookCustomRepository {
     }
 
     @Override
+    public boolean existsFinishedByRecWebhookId(String recWebhookId) {
+        Integer exists = queryFactory.selectOne()
+                .from(webhook)
+                .where(
+                        webhook.recWebhookId.eq(recWebhookId),
+                        webhook.status.in(WebhookStatus.COMPLETED, WebhookStatus.FAILED)
+                )
+                .fetchFirst();
+
+        return exists != null;
+    }
+
+    @Override
     public Optional<Webhook> findByRecWebhookId(String recWebhookId) {
         return Optional.ofNullable(
                 queryFactory.selectFrom(webhook)
@@ -53,7 +66,7 @@ public class WebhookCustomRepositoryImpl implements WebhookCustomRepository {
                         .where(
                                 webhook.pgKey.eq(pgKey),
                                 webhook.eventStatus.eq(eventStatus),
-                                webhook.status.ne(WebhookStatus.COMPLETED)
+                                webhook.status.eq(WebhookStatus.PENDING)
                         )
                         .orderBy(webhook.receivedAt.desc())
                         .fetchFirst()

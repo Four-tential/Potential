@@ -9,6 +9,8 @@ public interface PaymentCustomRepository {
 
     Optional<Payment> findByPgKey(String pgKey);
 
+    Optional<Payment> findByOrderId(UUID orderId);
+
     Optional<Payment> findByPgKeyForUpdate(String pgKey);
 
     boolean existsByOrderId(UUID orderId);

@@ -24,7 +24,7 @@ class WebhookRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("existsByRecWebhookId 호출 시 같은 webhook-id 가 있으면 true 를 반환한다")
     void existsByRecWebhookId_returns_true_when_exists() {
-        webhookRepository.saveAndFlush(Webhook.receive("webhook-1", "UNKNOWN"));
+        webhookRepository.saveAndFlush(Webhook.createPendingRecord("webhook-1", "UNKNOWN", null));
 
         boolean result = webhookRepository.existsByRecWebhookId("webhook-1");
 
@@ -42,8 +42,8 @@ class WebhookRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("existsCompletedByRecWebhookId 호출 시 완료된 웹훅이면 true 를 반환한다")
     void existsCompletedByRecWebhookId_returns_true_when_completed() {
-        Webhook webhook = Webhook.receive("webhook-completed", "WebhookTransactionPaid");
-        webhook.complete();
+        Webhook webhook = Webhook.createPendingRecord("webhook-completed", "WebhookTransactionPaid", null);
+        webhook.markCompleted();
         webhookRepository.saveAndFlush(webhook);
 
         boolean result = webhookRepository.existsCompletedByRecWebhookId("webhook-completed");
@@ -54,7 +54,7 @@ class WebhookRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("existsCompletedByRecWebhookId 호출 시 완료되지 않은 웹훅이면 false 를 반환한다")
     void existsCompletedByRecWebhookId_returns_false_when_not_completed() {
-        webhookRepository.saveAndFlush(Webhook.receive("webhook-pending", "WebhookTransactionPaid"));
+        webhookRepository.saveAndFlush(Webhook.createPendingRecord("webhook-pending", "WebhookTransactionPaid", null));
 
         boolean result = webhookRepository.existsCompletedByRecWebhookId("webhook-pending");
 
@@ -62,9 +62,43 @@ class WebhookRepositoryTest extends RedisTestContainer {
     }
 
     @Test
+    @DisplayName("existsFinishedByRecWebhookId 호출 시 완료된 웹훅이면 true 를 반환한다")
+    void existsFinishedByRecWebhookId_returns_true_when_completed() {
+        Webhook webhook = Webhook.createPendingRecord("webhook-finished-completed", "WebhookTransactionPaid", null);
+        webhook.markCompleted();
+        webhookRepository.saveAndFlush(webhook);
+
+        boolean result = webhookRepository.existsFinishedByRecWebhookId("webhook-finished-completed");
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("existsFinishedByRecWebhookId 호출 시 실패한 웹훅이면 true 를 반환한다")
+    void existsFinishedByRecWebhookId_returns_true_when_failed() {
+        Webhook webhook = Webhook.createPendingRecord("webhook-finished-failed", "WebhookTransactionPaid", null);
+        webhook.markFailed("PAYMENT_AMOUNT_MISMATCH", "amount mismatch");
+        webhookRepository.saveAndFlush(webhook);
+
+        boolean result = webhookRepository.existsFinishedByRecWebhookId("webhook-finished-failed");
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("existsFinishedByRecWebhookId 호출 시 대기 중인 웹훅이면 false 를 반환한다")
+    void existsFinishedByRecWebhookId_returns_false_when_pending() {
+        webhookRepository.saveAndFlush(Webhook.createPendingRecord("webhook-finished-pending", "WebhookTransactionPaid", null));
+
+        boolean result = webhookRepository.existsFinishedByRecWebhookId("webhook-finished-pending");
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
     @DisplayName("findByRecWebhookId 호출 시 webhook-id 가 일치하는 웹훅을 조회한다")
     void findByRecWebhookId_returns_webhook() {
-        webhookRepository.saveAndFlush(Webhook.receive("webhook-find", "UNKNOWN"));
+        webhookRepository.saveAndFlush(Webhook.createPendingRecord("webhook-find", "UNKNOWN", null));
 
         Optional<Webhook> result = webhookRepository.findByRecWebhookId("webhook-find");
 
@@ -75,20 +109,25 @@ class WebhookRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findLatestProcessableByPgKeyAndEventStatus 호출 시 완료되지 않은 최신 Paid 웹훅을 조회한다")
     void findLatestProcessableByPgKeyAndEventStatus_returns_latest_pending_webhook() {
-        Webhook oldWebhook = Webhook.receive("webhook-old", "WebhookTransactionPaid");
+        Webhook oldWebhook = Webhook.createPendingRecord("webhook-old", "WebhookTransactionPaid", null);
         oldWebhook.updatePgKey("pg-key-1");
         ReflectionTestUtils.setField(oldWebhook, "receivedAt", LocalDateTime.now().minusMinutes(1));
         webhookRepository.saveAndFlush(oldWebhook);
 
-        Webhook latestWebhook = Webhook.receive("webhook-latest", "WebhookTransactionPaid");
+        Webhook latestWebhook = Webhook.createPendingRecord("webhook-latest", "WebhookTransactionPaid", null);
         latestWebhook.updatePgKey("pg-key-1");
         ReflectionTestUtils.setField(latestWebhook, "receivedAt", LocalDateTime.now());
         webhookRepository.saveAndFlush(latestWebhook);
 
-        Webhook completedWebhook = Webhook.receive("webhook-completed-ignore", "WebhookTransactionPaid");
+        Webhook completedWebhook = Webhook.createPendingRecord("webhook-completed-ignore", "WebhookTransactionPaid", null);
         completedWebhook.updatePgKey("pg-key-1");
-        completedWebhook.complete();
+        completedWebhook.markCompleted();
         webhookRepository.saveAndFlush(completedWebhook);
+
+        Webhook failedWebhook = Webhook.createPendingRecord("webhook-failed-ignore", "WebhookTransactionPaid", null);
+        failedWebhook.updatePgKey("pg-key-1");
+        failedWebhook.markFailed("PAYMENT_AMOUNT_MISMATCH", "amount mismatch");
+        webhookRepository.saveAndFlush(failedWebhook);
 
         Optional<Webhook> result = webhookRepository.findLatestProcessableByPgKeyAndEventStatus(
                 "pg-key-1",
