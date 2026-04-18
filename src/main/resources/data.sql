@@ -83,7 +83,7 @@ VALUES (
 );
 
 -- user1 → user2(강사) 팔로우
-INSERT IGNORE INTO follows (id, member_id, member_instuctor_id, created_at, update_at)
+INSERT IGNORE INTO follows (id, member_id, member_instructor_id, created_at, update_at)
 VALUES (
     UUID_TO_BIN('00000000-0000-0000-0000-000000000021'),
     UUID_TO_BIN('00000000-0000-0000-0000-000000000002'),
