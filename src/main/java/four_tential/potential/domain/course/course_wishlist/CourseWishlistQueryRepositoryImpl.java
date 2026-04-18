@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import static four_tential.potential.domain.course.course.QCourse.course;
 import static four_tential.potential.domain.course.course_category.QCourseCategory.courseCategory;
+import static four_tential.potential.domain.course.course_image.QCourseImage.courseImage;
 import static four_tential.potential.domain.course.course_wishlist.QCourseWishlist.courseWishlist;
 import static four_tential.potential.domain.member.instructor_member.QInstructorMember.instructorMember;
 import static four_tential.potential.domain.member.member.QMember.member;
@@ -26,16 +27,15 @@ public class CourseWishlistQueryRepositoryImpl implements CourseWishlistQueryRep
 
     @Override
     public Page<WishlistCourseItem> findWishlistCourses(UUID memberId, Pageable pageable) {
-        // UUID v7 은 시간 정렬(time-ordered) → id.min() = 가장 먼저 등록된 이미지
-        QCourseImage courseImage = new QCourseImage("courseImage");
-        QCourseImage ci = new QCourseImage("ci");
+        // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지
+        QCourseImage courseImageSub = new QCourseImage("courseImageSub"); // 서브쿼리용
 
         List<WishlistCourseItem> content = queryFactory
                 .select(Projections.constructor(WishlistCourseItem.class,
                         course.id,
                         course.title,
                         member.name,
-                        courseImage.imageUrl,   // ON 조건으로 1행 고정 → 집계 불필요
+                        courseImage.imageUrl,   // ON 조건으로 1행 고정 - 집계 불필요
                         courseCategory.code,
                         courseCategory.name,
                         course.price,
@@ -50,9 +50,9 @@ public class CourseWishlistQueryRepositoryImpl implements CourseWishlistQueryRep
                 .join(courseCategory).on(courseCategory.id.eq(course.courseCategoryId))
                 .leftJoin(course.images, courseImage)
                         .on(courseImage.id.eq(
-                                JPAExpressions.select(ci.id.min())
-                                        .from(ci)
-                                        .where(ci.course.id.eq(course.id))
+                                JPAExpressions.select(courseImageSub.id.min())
+                                        .from(courseImageSub)
+                                        .where(courseImageSub.course.id.eq(course.id))
                         ))
                 .where(courseWishlist.memberId.eq(memberId))
                 .orderBy(courseWishlist.createdAt.desc())
