@@ -4,10 +4,12 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.infra.redis.RedisConstants;
 import four_tential.potential.infra.redis.annotation.DistributedLock;
-import lombok.RequiredArgsConstructor;
+import four_tential.potential.infra.sse.SseWaitingEventPublisher;
+import four_tential.potential.presentation.order.dto.WaitingRoomEventResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.*;
 import org.redisson.client.codec.StringCodec;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -15,10 +17,18 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WaitingListService {
 
     private final RedissonClient redissonClient;
+    private final SseWaitingEventPublisher sseWaitingEventPublisher;
+
+    public WaitingListService(
+            RedissonClient redissonClient,
+            @Lazy SseWaitingEventPublisher sseWaitingEventPublisher
+    ) {
+        this.redissonClient = redissonClient;
+        this.sseWaitingEventPublisher = sseWaitingEventPublisher;
+    }
 
     /**
      * 잔여석 점유 시도
@@ -37,19 +47,44 @@ public class WaitingListService {
         RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
 
-        if (occupancy.isExists() || waitingList.contains(memberId.toString())) {
+        // 이미 점유 중인 경우 (승격된 유저나 기존 점유자)
+        if (occupancy.isExists()) {
+            String val = occupancy.get();
+            if (OrderConstants.TOKEN_PROMOTED.equals(val)) {
+                // 승격된 유저가 실제 주문을 시도하는 시점 -> 수량 차감 및 점유 확정
+                long currentCapacity = capacity.get();
+                if (currentCapacity >= orderCount) {
+                    capacity.addAndGet(-orderCount);
+                    occupancy.set(String.valueOf(orderCount), Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES));
+                    log.info("승격 유저의 실제 점유 성공: courseId={}, memberId={}, 수량={}", courseId, memberId, orderCount);
+                    return true;
+                } else {
+                    // 승격되었으나 그사이 재고가 부족해진 경우 (동시성 방어)
+                    log.warn("승격 유저 점유 실패: 재고 부족. courseId={}, memberId={}", courseId, memberId);
+                    occupancy.delete();
+                    return false;
+                }
+            }
+            // 이미 수량이 세팅된 일반 점유 상태
+            return true;
+        }
+
+        // 대기열에 본인이 들어있는 경우 (아직 대기 중)
+        if (waitingList.contains(memberId.toString())) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
         }
 
+        // 대기열에 다른 사람이 있는 경우 (무조건 대기열로)
         if (!waitingList.isEmpty()) {
             log.info("대기열 존재로 인해 대기열 진입 유도: courseId={}, memberId={}", courseId, memberId);
             return false;
         }
 
+        // 대기열이 비어있으면 즉시 점유 시도
         long currentCapacity = capacity.get();
         if (currentCapacity >= orderCount) {
             capacity.addAndGet(-orderCount);
-            occupancy.set(String.valueOf(orderCount), Duration.ofSeconds(600));
+            occupancy.set(String.valueOf(orderCount), Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES));
             return true;
         }
         return false;
@@ -69,16 +104,50 @@ public class WaitingListService {
         String reservedValue = occupancy.get();
         if (reservedValue != null) {
             try {
-                int reservedCount = Integer.parseInt(reservedValue);
+                if (!OrderConstants.TOKEN_PROMOTED.equals(reservedValue)) {
+                    int reservedCount = Integer.parseInt(reservedValue);
+                    capacity.addAndGet(reservedCount);
+                }
                 occupancy.delete();
-                capacity.addAndGet(reservedCount);
-                log.info("잔여석 롤백 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, reservedCount);
+                log.info("잔여석 롤백 완료: courseId={}, memberId={}", courseId, memberId);
+                
+                // 자리가 났으므로 승격 시도
+                promoteNextInWaitingList(courseId);
             } catch (NumberFormatException e) {
-                log.error("잔여석 롤백 실패: 잘못된 점유 데이터 형식. courseId={}, memberId={}", courseId, memberId);
                 occupancy.delete();
             }
-        } else {
-            log.warn("잔여석 롤백 건너뜀: 점유 정보가 이미 없거나 만료됨. courseId={}, memberId={}", courseId, memberId);
+        }
+    }
+
+    /**
+     * 대기열 다음 순번 승격 처리
+     */
+    private void promoteNextInWaitingList(UUID courseId) {
+        String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        
+        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
+        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+
+        // 대기자가 있고, 최소 1개 이상의 자리가 있을 때만 승격
+        if (waitingList.isEmpty() || capacity.get() <= 0) {
+            return;
+        }
+
+        String nextMemberIdStr = waitingList.pollFirst();
+        if (nextMemberIdStr != null) {
+            UUID nextMemberId = UUID.fromString(nextMemberIdStr);
+            String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + nextMemberId;
+            RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
+            
+            // 승격 우선권 부여
+            occupancy.set(OrderConstants.TOKEN_PROMOTED, Duration.ofMinutes(OrderConstants.PROMOTION_EXPIRATION_MINUTES));
+            
+            log.info("대기열 유저 승격: courseId={}, memberId={}", courseId, nextMemberId);
+            
+            // SSE 전송
+            sseWaitingEventPublisher.publish(courseId, nextMemberId, 
+                    WaitingRoomEventResponse.promoted(courseId, nextMemberId));
         }
     }
 
@@ -92,9 +161,7 @@ public class WaitingListService {
 
         if (occupancy.isExists()) {
             occupancy.delete();
-            log.info("잔여석 점유 확정 및 선점 정보 삭제 완료: courseId={}, memberId={}", courseId, memberId);
-        } else {
-            log.info("잔여석 점유 확정 건너뜀: 선점 정보가 이미 삭제되었거나 만료됨. courseId={}, memberId={}", courseId, memberId);
+            log.info("잔여석 점유 확정 완료: courseId={}, memberId={}", courseId, memberId);
         }
     }
 
@@ -115,7 +182,7 @@ public class WaitingListService {
         }
 
         waitingList.add(System.currentTimeMillis(), memberId.toString());
-        log.info("대기열 진입 완료 (StringCodec): courseId={}, memberId={}", courseId, memberId);
+        log.info("대기열 진입 완료: courseId={}, memberId={}", courseId, memberId);
     }
 
     /**
@@ -169,5 +236,8 @@ public class WaitingListService {
         occupancy.delete();
         
         log.info("잔여석 복구 및 점유 정보 정리 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, orderCount);
+        
+        // 자리가 났으므로 승격 시도
+        promoteNextInWaitingList(courseId);
     }
 }
