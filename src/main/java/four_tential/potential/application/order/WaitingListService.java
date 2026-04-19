@@ -7,6 +7,7 @@ import four_tential.potential.infra.redis.annotation.DistributedLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.*;
+import org.redisson.client.codec.StringCodec;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -32,8 +33,8 @@ public class WaitingListService {
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
 
-        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
-        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
+        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
 
         if (occupancy.isExists() || waitingList.contains(memberId.toString())) {
@@ -62,7 +63,7 @@ public class WaitingListService {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
 
-        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
 
         String reservedValue = occupancy.get();
@@ -87,7 +88,7 @@ public class WaitingListService {
     @DistributedLock(key = "'order:course:' + #courseId")
     public void completeOccupyingSeat(UUID courseId, UUID memberId) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
-        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
 
         if (occupancy.isExists()) {
             occupancy.delete();
@@ -103,7 +104,7 @@ public class WaitingListService {
     @DistributedLock(key = "'order:course:' + #courseId")
     public void addToWaitingList(UUID courseId, UUID memberId) {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
-        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey);
+        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
 
         if (waitingList.contains(memberId.toString())) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
@@ -114,7 +115,39 @@ public class WaitingListService {
         }
 
         waitingList.add(System.currentTimeMillis(), memberId.toString());
-        log.info("대기열 진입 완료: courseId={}, memberId={}", courseId, memberId);
+        log.info("대기열 진입 완료 (StringCodec): courseId={}, memberId={}", courseId, memberId);
+    }
+
+    /**
+     * 대기열 순번 조회
+     */
+    public Long getWaitingRank(UUID courseId, UUID memberId) {
+        String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
+        Integer rank = waitingList.rank(memberId.toString());
+        log.debug("[DEBUG] 대기열 순번 조회: key={}, memberId={}, rank={}", waitingKey, memberId, rank);
+        return (rank != null) ? rank + 1L : null;
+    }
+
+    /**
+     * 대기열 총 인원 조회
+     */
+    public int getWaitingListSize(UUID courseId) {
+        String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        return redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE).size();
+    }
+
+    /**
+     * 대기열에서 수동 이탈
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void removeFromWaitingList(UUID courseId, UUID memberId) {
+        String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
+        boolean removed = waitingList.remove(memberId.toString());
+        if (removed) {
+            log.info("대기열 이탈 완료: courseId={}, memberId={}", courseId, memberId);
+        }
     }
 
     /**
@@ -130,13 +163,11 @@ public class WaitingListService {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
 
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
-        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
 
         capacity.addAndGet(orderCount);
         occupancy.delete();
         
         log.info("잔여석 복구 및 점유 정보 정리 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, orderCount);
-
-        // TODO: 대기열의 다음 순번에게 알림을 보내거나 자동으로 점유 기회를 주는 로직 추가 가능
     }
 }

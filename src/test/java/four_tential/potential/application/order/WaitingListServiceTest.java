@@ -209,4 +209,56 @@ class WaitingListServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
     }
+
+    @Test
+    @DisplayName("대기열 순번을 조회하면 1부터 시작하는 순번을 반환한다")
+    void getWaitingRank_success() {
+        // given
+        given(waitingListSet.rank(memberId.toString())).willReturn(0); // Redis rank는 0부터 시작
+
+        // when
+        Long rank = waitingListService.getWaitingRank(courseId, memberId);
+
+        // then
+        assertThat(rank).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("대기열에 없으면 순번 조회 시 null을 반환한다")
+    void getWaitingRank_null() {
+        // given
+        given(waitingListSet.rank(memberId.toString())).willReturn(null);
+
+        // when
+        Long rank = waitingListService.getWaitingRank(courseId, memberId);
+
+        // then
+        assertThat(rank).isNull();
+    }
+
+    @Test
+    @DisplayName("대기열 총 인원을 성공적으로 조회한다")
+    void getWaitingListSize_success() {
+        // given
+        given(waitingListSet.size()).willReturn(10);
+
+        // when
+        int size = waitingListService.getWaitingListSize(courseId);
+
+        // then
+        assertThat(size).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("대기열에서 성공적으로 이탈한다")
+    void removeFromWaitingList_success() {
+        // given
+        given(waitingListSet.remove(memberId.toString())).willReturn(true);
+
+        // when
+        waitingListService.removeFromWaitingList(courseId, memberId);
+
+        // then
+        verify(waitingListSet).remove(memberId.toString());
+    }
 }
