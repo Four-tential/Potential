@@ -104,6 +104,65 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("관리자는 주문 상태를 임의로 변경할 수 있다")
+    void updateStatusByAdmin_Success() {
+        // given
+        Order order = createPendingOrder();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.PAID);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("관리자가 주문을 취소 상태로 변경하면 취소 시각이 기록된다")
+    void updateStatusByAdmin_Cancelled_At_Success() {
+        // given
+        Order order = createPendingOrder();
+        LocalDateTime beforeUpdate = LocalDateTime.now();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.CANCELLED);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isAfterOrEqualTo(beforeUpdate);
+    }
+
+    @Test
+    @DisplayName("이미 취소된 주문의 상태를 관리자가 다시 취소로 변경해도 취소 시각은 갱신되지 않는다")
+    void updateStatusByAdmin_Already_Cancelled_Not_Update_Time() {
+        // given
+        Order order = createPendingOrder();
+        order.updateStatusByAdmin(OrderStatus.CANCELLED);
+        LocalDateTime firstCancelledAt = order.getCancelledAt();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.CANCELLED);
+
+        // then
+        assertThat(order.getCancelledAt()).isEqualTo(firstCancelledAt);
+    }
+
+    @Test
+    @DisplayName("취소된 주문을 관리자가 다른 상태로 변경하면 취소 시각이 초기화된다")
+    void updateStatusByAdmin_From_Cancelled_To_Other_Clear_Time() {
+        // given
+        Order order = createPendingOrder();
+        order.updateStatusByAdmin(OrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isNotNull();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.PAID);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getCancelledAt()).isNull();
+    }
+
+    @Test
     @DisplayName("PENDING 상태의 주문은 코스 시작 7일 전까지만 취소할 수 있다")
     void cancelPendingOrderSuccess() {
         // given

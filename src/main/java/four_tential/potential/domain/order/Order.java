@@ -101,6 +101,22 @@ public class Order extends BaseTimeEntity {
     }
 
     /**
+     * 관리자에 의한 주문 상태 강제 변경
+     */
+    public void updateStatusByAdmin(OrderStatus nextStatus) {
+        // 취소(CANCELLED) 상태로 새로 진입하는 경우만 시각 기록
+        if (nextStatus == OrderStatus.CANCELLED && this.status != OrderStatus.CANCELLED) {
+            this.cancelledAt = LocalDateTime.now();
+        }
+        // 취소 상태에서 다른 상태로 벗어나는 경우 시각 초기화
+        else if (nextStatus != OrderStatus.CANCELLED && this.status == OrderStatus.CANCELLED) {
+            this.cancelledAt = null;
+        }
+
+        this.status = nextStatus;
+    }
+
+    /**
      * 주문 취소 처리
      * @param courseStartDate 코스 시작 일시
      * @param now 현재 일시
