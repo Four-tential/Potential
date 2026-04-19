@@ -6,7 +6,6 @@ import four_tential.potential.infra.redis.RedisConstants;
 import four_tential.potential.infra.redis.annotation.DistributedLock;
 import four_tential.potential.infra.sse.SseWaitingEventPublisher;
 import four_tential.potential.presentation.order.dto.WaitingRoomEventResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.*;
 import org.redisson.client.codec.StringCodec;
@@ -18,13 +17,18 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WaitingListService {
 
     private final RedissonClient redissonClient;
-    
-    @Lazy
     private final SseWaitingEventPublisher sseWaitingEventPublisher;
+
+    public WaitingListService(
+            RedissonClient redissonClient,
+            @Lazy SseWaitingEventPublisher sseWaitingEventPublisher
+    ) {
+        this.redissonClient = redissonClient;
+        this.sseWaitingEventPublisher = sseWaitingEventPublisher;
+    }
 
     /**
      * 잔여석 점유 시도

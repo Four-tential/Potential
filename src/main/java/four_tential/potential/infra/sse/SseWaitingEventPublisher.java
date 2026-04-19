@@ -3,7 +3,6 @@ package four_tential.potential.infra.sse;
 import four_tential.potential.application.order.WaitingListService;
 import four_tential.potential.domain.order.WaitingStatus;
 import four_tential.potential.presentation.order.dto.WaitingRoomEventResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -14,13 +13,18 @@ import java.util.UUID;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SseWaitingEventPublisher {
 
     private final SseWaitingRoomRepository sseWaitingRoomRepository;
-    
-    @Lazy
     private final WaitingListService waitingListService;
+
+    public SseWaitingEventPublisher(
+            SseWaitingRoomRepository sseWaitingRoomRepository,
+            @Lazy WaitingListService waitingListService
+    ) {
+        this.sseWaitingRoomRepository = sseWaitingRoomRepository;
+        this.waitingListService = waitingListService;
+    }
 
     /**
      * 특정 사용자에게 대기열 상태 전송
