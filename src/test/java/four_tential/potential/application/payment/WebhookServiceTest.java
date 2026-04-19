@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -260,4 +261,48 @@ class WebhookServiceTest {
 
         assertThat(result.getReceivedAt()).isNotNull();
     }
+
+    @Test
+    @DisplayName("failDeferredPaidWebhook 호출 시 처리 가능한 Paid 웹훅이 없으면 아무 작업도 하지 않는다")
+    void failDeferredPaidWebhook_noPendingWebhook_doesNothing() {
+        given(webhookRepository.findLatestProcessableByPgKeyAndEventStatus("pg-key-empty", "WebhookTransactionPaid"))
+                .willReturn(Optional.empty());
+
+        webhookService.failDeferredPaidWebhook("pg-key-empty", "PAYMENT_CREATE_REJECTED", "rejected");
+
+        verify(webhookRepository, never()).save(any(Webhook.class));
+    }
+
+    @Test
+    @DisplayName("merge 호출 시 현재 트랜잭션 안에서 웹훅 변경사항을 저장한다")
+    void merge_saves_webhook() {
+        Webhook webhook = createWebhook();
+        webhook.updateEventStatus("WebhookTransactionPaid");
+        given(webhookRepository.save(webhook)).willReturn(webhook);
+
+        Webhook result = webhookService.merge(webhook);
+
+        assertThat(result.getEventStatus()).isEqualTo("WebhookTransactionPaid");
+        verify(webhookRepository).save(webhook);
+    }
+
+    @Test
+    @DisplayName("중복 webhook-id 재조회에도 기존 웹훅이 없으면 원래 저장 예외를 다시 던진다")
+    void saveIncomingWebhook_duplicateKeyButMissing_throwsOriginalException() {
+        DataIntegrityViolationException duplicateException =
+                new DataIntegrityViolationException("duplicate webhook-id");
+
+        given(webhookRepository.saveAndFlush(any(Webhook.class)))
+                .willThrow(duplicateException);
+        given(webhookRepository.findByRecWebhookId("rec_id_missing"))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                webhookService.saveIncomingWebhook("rec_id_missing", "UNKNOWN", "{}"))
+                .isSameAs(duplicateException);
+
+        verify(entityManager).clear();
+        verify(webhookRepository).findByRecWebhookId("rec_id_missing");
+    }
+
 }
