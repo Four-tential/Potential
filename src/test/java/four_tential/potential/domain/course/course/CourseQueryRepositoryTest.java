@@ -9,9 +9,6 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
-import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
-import four_tential.potential.presentation.course.model.request.CourseSort;
-import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -87,7 +84,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("테스트카테고리 코스");
         saveOpenCourseWithCategory("다른카테고리 코스", otherCategory);
 
-        CourseSearchRequest condition = new CourseSearchRequest("TEST_CAT", null, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition("TEST_CAT", null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -99,7 +96,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_categoryCode_no_match() {
         saveOpenCourse("코스 A");
 
-        CourseSearchRequest condition = new CourseSearchRequest("NO_SUCH_CAT", null, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition("NO_SUCH_CAT", null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -111,7 +108,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("OPEN 코스");
         saveClosedCourse("CLOSED 코스");
 
-        CourseSearchRequest condition = new CourseSearchRequest(null, CourseStatus.OPEN, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.OPEN, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -124,7 +121,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("OPEN 코스");
         saveClosedCourse("CLOSED 코스");
 
-        CourseSearchRequest condition = new CourseSearchRequest(null, CourseStatus.CLOSED, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.CLOSED, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -137,7 +134,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithLevel("입문 코스", CourseLevel.BEGINNER);
         saveOpenCourseWithLevel("중급 코스", CourseLevel.INTERMEDIATE);
 
-        CourseSearchRequest condition = new CourseSearchRequest(null, null, CourseLevel.BEGINNER, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.BEGINNER, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -149,7 +146,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_level_no_match() {
         saveOpenCourseWithLevel("입문 코스", CourseLevel.BEGINNER);
 
-        CourseSearchRequest condition = new CourseSearchRequest(null, null, CourseLevel.ADVANCE, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.ADVANCE, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -161,7 +158,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("필라테스 입문반");
         saveOpenCourse("요가 기초반");
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, "필라테스", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "필라테스", null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -173,7 +170,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_keyword_case_insensitive() {
         saveOpenCourse("Spring Boot 입문");
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, "spring boot", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "spring boot", null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -184,7 +181,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_keyword_no_match() {
         saveOpenCourse("필라테스 입문반");
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, "요가", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "요가", null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -196,7 +193,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저렴한 코스", BigInteger.valueOf(30000));
         saveOpenCourseWithPrice("비싼 코스", BigInteger.valueOf(80000));
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, null, BigInteger.valueOf(50000), null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, BigInteger.valueOf(50000), null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -209,7 +206,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저렴한 코스", BigInteger.valueOf(30000));
         saveOpenCourseWithPrice("비싼 코스", BigInteger.valueOf(80000));
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, null, null, BigInteger.valueOf(50000), null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, BigInteger.valueOf(50000), null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -223,7 +220,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("5만원 코스", BigInteger.valueOf(50000));
         saveOpenCourseWithPrice("10만원 코스", BigInteger.valueOf(100000));
 
-        CourseSearchRequest req = new CourseSearchRequest(
+        CourseSearchCondition req = new CourseSearchCondition(
                 null, null, null, null, BigInteger.valueOf(30000), BigInteger.valueOf(70000), null
         );
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
@@ -239,7 +236,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저가 코스", BigInteger.valueOf(10000));
         saveOpenCourseWithPrice("중가 코스", BigInteger.valueOf(50000));
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, null, null, null, CourseSort.PRICE_ASC);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_ASC);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         List<BigInteger> prices = result.getContent().stream()
@@ -257,7 +254,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저가 코스", BigInteger.valueOf(10000));
         saveOpenCourseWithPrice("중가 코스", BigInteger.valueOf(50000));
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, null, null, null, CourseSort.PRICE_DESC);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_DESC);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         List<BigInteger> prices = result.getContent().stream()
@@ -274,7 +271,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("코스 B");
         saveOpenCourse("코스 C");
 
-        CourseSearchRequest req = new CourseSearchRequest(null, null, null, null, null, null, CourseSort.LATEST);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.LATEST);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(3);
@@ -382,7 +379,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveCourse("중급 코스", category, CourseLevel.INTERMEDIATE, BigInteger.valueOf(50000), true);
         saveCourse("고가 코스", category, CourseLevel.BEGINNER, BigInteger.valueOf(100000), true);
 
-        CourseSearchRequest req = new CourseSearchRequest(
+        CourseSearchCondition req = new CourseSearchCondition(
                 "TEST_CAT", null, CourseLevel.BEGINNER, null, null, BigInteger.valueOf(70000), null
         );
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
@@ -401,7 +398,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         savePreparationCourse("승인 대기 코스");
         saveOpenCourse("공개 코스");
 
-        Page<InstructorCourseListItem> result = courseRepository
+        Page<InstructorCourseQueryResult> result = courseRepository
                 .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -433,7 +430,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         otherCourse.open();
         courseRepository.save(otherCourse);
 
-        Page<InstructorCourseListItem> result = courseRepository
+        Page<InstructorCourseQueryResult> result = courseRepository
                 .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -443,7 +440,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("강사의 코스 목록 - 코스가 없으면 빈 페이지를 반환한다")
     void findCoursesByInstructorMemberId_returns_empty_when_no_courses() {
-        Page<InstructorCourseListItem> result = courseRepository
+        Page<InstructorCourseQueryResult> result = courseRepository
                 .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -455,9 +452,9 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCoursesByInstructorMemberId_fields_mapped_correctly() {
         saveOpenCourseWithLevel("매핑 확인 코스", CourseLevel.INTERMEDIATE);
 
-        Page<InstructorCourseListItem> result = courseRepository
+        Page<InstructorCourseQueryResult> result = courseRepository
                 .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
-        InstructorCourseListItem item = result.getContent().get(0);
+        InstructorCourseQueryResult item = result.getContent().get(0);
 
         assertThat(item.courseId()).isNotNull();
         assertThat(item.title()).isEqualTo("매핑 확인 코스");
@@ -476,7 +473,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("코스 B");
         saveOpenCourse("코스 C");
 
-        Page<InstructorCourseListItem> result = courseRepository
+        Page<InstructorCourseQueryResult> result = courseRepository
                 .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
@@ -486,8 +483,8 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isFalse();
     }
 
-    private CourseSearchRequest emptyCondition() {
-        return new CourseSearchRequest(null, null, null, null, null, null, null);
+    private CourseSearchCondition emptyCondition() {
+        return new CourseSearchCondition(null, null, null, null, null, null, null);
     }
 
     private Course saveOpenCourse(String title) {

@@ -38,11 +38,10 @@ import four_tential.potential.presentation.member.model.response.OnBoardResponse
 import four_tential.potential.presentation.member.model.response.UpdateMyPageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -298,7 +297,10 @@ public class MemberService {
 
     @Transactional(readOnly = true)
     public PageResponse<FollowedInstructorItem> getMyFollows(UUID memberId, Pageable pageable) {
-        return PageResponse.register(followRepository.findFollowedInstructors(memberId, pageable));
+        return PageResponse.register(
+                followRepository.findFollowedInstructors(memberId, pageable)
+                        .map(FollowedInstructorItem::register)
+        );
     }
 
     @Transactional(readOnly = true)

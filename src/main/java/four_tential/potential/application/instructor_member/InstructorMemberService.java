@@ -100,12 +100,14 @@ public class InstructorMemberService {
     @Transactional(readOnly = true)
     public InstructorApplicationDetail getInstructorApplicationDetail(UUID memberId) {
         return instructorMemberRepository.findInstructorApplicationDetail(memberId)
+                .map(InstructorApplicationDetail::register)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR_APPLICATION));
     }
 
     @Transactional(readOnly = true)
     public MyInstructorApplicationResponse getMyInstructorApplication(UUID memberId) {
         return instructorMemberRepository.findMyInstructorApplication(memberId)
+                .map(MyInstructorApplicationResponse::register)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR_APPLICATION));
     }
 
@@ -114,6 +116,9 @@ public class InstructorMemberService {
             InstructorMemberStatus status,
             Pageable pageable
     ) {
-        return PageResponse.register(instructorMemberRepository.findInstructorApplications(status, pageable));
+        return PageResponse.register(
+                instructorMemberRepository.findInstructorApplications(status, pageable)
+                        .map(InstructorApplicationItem::register)
+        );
     }
 }

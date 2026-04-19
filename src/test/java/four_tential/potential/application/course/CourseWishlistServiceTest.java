@@ -3,6 +3,7 @@ package four_tential.potential.application.course;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
+import four_tential.potential.domain.course.course_wishlist.WishlistCourseQueryResult;
 import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class CourseWishlistServiceTest {
     void getMyWishlistCourses_success() {
         UUID memberId = UUID.randomUUID();
         PageRequest pageRequest = PageRequest.of(0, 10);
-        WishlistCourseItem item = new WishlistCourseItem(
+        WishlistCourseQueryResult item = new WishlistCourseQueryResult(
                 UUID.randomUUID(), "소도구 필라테스 입문반", "소강사",
                 "https://example.com/thumb.jpg", "PILATES", "필라테스",
                 BigInteger.valueOf(70000), CourseStatus.OPEN,

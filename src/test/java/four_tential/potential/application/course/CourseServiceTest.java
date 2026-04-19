@@ -20,7 +20,7 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
-import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
+import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import org.junit.jupiter.api.DisplayName;
@@ -358,8 +358,8 @@ class CourseServiceTest {
         verify(reviewRepository, never()).findAverageRatingByCourseId(any());
     }
 
-    private CourseSearchRequest emptyCondition() {
-        return new CourseSearchRequest(null, null, null, null, null, null, null);
+    private CourseSearchCondition emptyCondition() {
+        return new CourseSearchCondition(null, null, null, null, null, null, null);
     }
 
     private CourseListQueryResult sampleQueryResult(UUID courseId) {

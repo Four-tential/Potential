@@ -7,9 +7,6 @@ import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.domain.course.course_image.QCourseImage;
-import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
-import four_tential.potential.presentation.course.model.request.CourseSort;
-import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,7 +27,7 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<CourseListQueryResult> findCourses(CourseSearchRequest condition, Pageable pageable) {
+    public Page<CourseListQueryResult> findCourses(CourseSearchCondition condition, Pageable pageable) {
         // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지 (썸네일)
         QCourseImage courseImageSub = new QCourseImage("courseImageSub");
 
@@ -82,13 +79,13 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
     }
 
     @Override
-    public Page<InstructorCourseListItem> findCoursesByInstructorMemberId(UUID instructorMemberId, Pageable pageable) {
+    public Page<InstructorCourseQueryResult> findCoursesByInstructorMemberId(UUID instructorMemberId, Pageable pageable) {
         BooleanBuilder where = new BooleanBuilder();
         where.and(course.memberInstructorId.eq(instructorMemberId));
         where.and(course.status.ne(CourseStatus.PREPARATION));
 
-        List<InstructorCourseListItem> content = queryFactory
-                .select(Projections.constructor(InstructorCourseListItem.class,
+        List<InstructorCourseQueryResult> content = queryFactory
+                .select(Projections.constructor(InstructorCourseQueryResult.class,
                         course.id,
                         course.title,
                         course.level,
@@ -114,7 +111,7 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
-    private BooleanBuilder buildWhereConditions(CourseSearchRequest condition) {
+    private BooleanBuilder buildWhereConditions(CourseSearchCondition condition) {
         BooleanBuilder builder = new BooleanBuilder();
 
         // PREPARATION(개설 승인 중) 코스는 공개 목록에서 항상 제외

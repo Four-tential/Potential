@@ -20,6 +20,7 @@ public class CourseWishlistService {
     public PageResponse<WishlistCourseItem> getMyWishlistCourses(UUID memberId, int page, int size) {
         return PageResponse.register(
                 courseWishlistRepository.findWishlistCourses(memberId, PageRequest.of(page, size))
+                        .map(WishlistCourseItem::register)
         );
     }
 }

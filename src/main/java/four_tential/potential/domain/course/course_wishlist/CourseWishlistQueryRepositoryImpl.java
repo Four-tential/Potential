@@ -4,7 +4,6 @@ import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.domain.course.course_image.QCourseImage;
-import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -26,12 +25,12 @@ public class CourseWishlistQueryRepositoryImpl implements CourseWishlistQueryRep
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<WishlistCourseItem> findWishlistCourses(UUID memberId, Pageable pageable) {
+    public Page<WishlistCourseQueryResult> findWishlistCourses(UUID memberId, Pageable pageable) {
         // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지
         QCourseImage courseImageSub = new QCourseImage("courseImageSub"); // 서브쿼리용
 
-        List<WishlistCourseItem> content = queryFactory
-                .select(Projections.constructor(WishlistCourseItem.class,
+        List<WishlistCourseQueryResult> content = queryFactory
+                .select(Projections.constructor(WishlistCourseQueryResult.class,
                         course.id,
                         course.title,
                         member.name,

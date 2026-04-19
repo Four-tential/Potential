@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseListQueryResult;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
@@ -15,7 +16,6 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberSt
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
-import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
@@ -45,7 +45,7 @@ public class CourseService {
     private final ReviewRepository reviewRepository;
 
     @Transactional(readOnly = true)
-    public PageResponse<CourseListItem> getCourses(CourseSearchRequest condition, UUID memberId, Pageable pageable) {
+    public PageResponse<CourseListItem> getCourses(CourseSearchCondition condition, UUID memberId, Pageable pageable) {
         Page<CourseListQueryResult> results = courseRepository.findCourses(condition, pageable);
 
         List<UUID> courseIds = results.getContent().stream()
@@ -57,7 +57,7 @@ public class CourseService {
                 : Collections.emptySet();
 
         Page<CourseListItem> mapped = results.map(result ->
-                CourseListItem.from(result, wishlistedIds.contains(result.courseId()))
+                CourseListItem.register(result, wishlistedIds.contains(result.courseId()))
         );
 
         return PageResponse.register(mapped);
@@ -133,7 +133,8 @@ public class CourseService {
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         Page<InstructorCourseListItem> courses =
-                courseRepository.findCoursesByInstructorMemberId(instructorMember.getId(), pageable);
+                courseRepository.findCoursesByInstructorMemberId(instructorMember.getId(), pageable)
+                        .map(InstructorCourseListItem::register);
 
         return PageResponse.register(courses);
     }

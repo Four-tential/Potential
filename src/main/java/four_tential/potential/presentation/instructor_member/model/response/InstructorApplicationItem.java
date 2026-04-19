@@ -1,5 +1,6 @@
 package four_tential.potential.presentation.instructor_member.model.response;
 
+import four_tential.potential.domain.member.instructor_member.InstructorApplicationItemResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 
 import java.time.LocalDateTime;
@@ -14,4 +15,15 @@ public record InstructorApplicationItem(
         InstructorMemberStatus status,
         LocalDateTime appliedAt
 ) {
+    public static InstructorApplicationItem register(InstructorApplicationItemResult result) {
+        return new InstructorApplicationItem(
+                result.memberId(),
+                result.memberName(),
+                result.memberEmail(),
+                result.categoryCode(),
+                result.categoryName(),
+                result.status(),
+                result.appliedAt()
+        );
+    }
 }

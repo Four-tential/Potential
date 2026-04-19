@@ -12,7 +12,6 @@ import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.review.review.Review;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
-import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,7 +72,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         saveFollowedInstructor("ins2@test.com", "강사B");
         saveFollowedInstructor("ins3@test.com", "강사C");
 
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(3);
@@ -83,7 +82,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("팔로우한 강사가 없으면 빈 페이지 반환")
     void findFollowedInstructors_empty() {
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -99,7 +98,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         InstructorMember instructor = approvedInstructor("ins1@test.com", "강사A");
         followRepository.save(Follow.register(otherFollower.getId(), instructor.getId()));
 
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -114,7 +113,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     void findFollowedInstructors_courseCount_zero_when_no_courses() {
         saveFollowedInstructor("ins1@test.com", "강사A");
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -129,7 +128,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         saveCourse(instructor.getId());
         saveCourse(instructor.getId());
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -150,12 +149,12 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
 
         // ins2 = 0개
 
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(0, 10));
 
-        FollowedInstructorItem itemA = result.getContent().stream()
+        FollowQueryResult itemA = result.getContent().stream()
                 .filter(i -> i.name().equals("강사A")).findFirst().orElseThrow();
-        FollowedInstructorItem itemB = result.getContent().stream()
+        FollowQueryResult itemB = result.getContent().stream()
                 .filter(i -> i.name().equals("강사B")).findFirst().orElseThrow();
 
         assertThat(itemA.courseCount()).isEqualTo(3L);
@@ -173,7 +172,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         followRepository.save(Follow.register(follower.getId(), instructor.getId()));
         saveCourse(instructor.getId());
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -191,7 +190,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         reviewRepository.save(Review.register(follower.getId(), course.getId(), orderId, 4, "좋아요"));
         reviewRepository.save(Review.register(follower.getId(), course.getId(), orderId, 5, "최고에요"));
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -203,7 +202,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     void findFollowedInstructors_averageRating_null_when_no_courses() {
         saveFollowedInstructor("ins1@test.com", "강사A");
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -221,7 +220,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         saveFollowedInstructor("ins2@test.com", "강사B");
         saveFollowedInstructor("ins3@test.com", "강사C");
 
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
@@ -238,7 +237,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         saveFollowedInstructor("ins2@test.com", "강사B");
         saveFollowedInstructor("ins3@test.com", "강사C");
 
-        Page<FollowedInstructorItem> result =
+        Page<FollowQueryResult> result =
                 followRepository.findFollowedInstructors(follower.getId(), PageRequest.of(1, 2));
 
         assertThat(result.getContent()).hasSize(1);
@@ -258,7 +257,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         // instructorMember의 memberId(member 테이블의 PK)를 가져옴
         Member instructorMember = memberRepository.findById(instructor.getMemberId()).orElseThrow();
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -274,7 +273,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     void findFollowedInstructors_profileImageUrl_null_when_not_set() {
         saveFollowedInstructor("ins1@test.com", "강사A");
 
-        FollowedInstructorItem item = followRepository
+        FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 

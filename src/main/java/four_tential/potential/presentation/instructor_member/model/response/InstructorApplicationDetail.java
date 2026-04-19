@@ -1,5 +1,6 @@
 package four_tential.potential.presentation.instructor_member.model.response;
 
+import four_tential.potential.domain.member.instructor_member.InstructorApplicationDetailResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 
 import java.time.LocalDateTime;
@@ -19,4 +20,20 @@ public record InstructorApplicationDetail(
         LocalDateTime appliedAt,
         LocalDateTime respondedAt
 ) {
+    public static InstructorApplicationDetail register(InstructorApplicationDetailResult result) {
+        return new InstructorApplicationDetail(
+                result.memberId(),
+                result.memberName(),
+                result.memberEmail(),
+                result.memberPhone(),
+                result.categoryCode(),
+                result.categoryName(),
+                result.content(),
+                result.imageUrl(),
+                result.status(),
+                result.rejectReason(),
+                result.appliedAt(),
+                result.respondedAt()
+        );
+    }
 }
