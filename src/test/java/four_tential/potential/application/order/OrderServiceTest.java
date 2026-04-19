@@ -23,6 +23,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
 
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.mockito.MockedStatic;
+
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -143,22 +148,32 @@ class OrderServiceTest {
     @Test
     @DisplayName("단일 주문 만료 처리를 성공적으로 수행한다")
     void expireOrderInNewTransaction_success() {
-        // given
-        UUID orderId = UUID.randomUUID();
-        UUID courseId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
-        
-        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
+            // given
+            UUID orderId = UUID.randomUUID();
+            UUID courseId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
+            ReflectionTestUtils.setField(order, "id", orderId);
+            
+            given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+            mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
 
-        // when
-        boolean result = orderService.expireOrderInNewTransaction(orderId);
+            // when
+            boolean result = orderService.expireOrderInNewTransaction(orderId);
 
-        // then
-        assertThat(result).isTrue();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        verify(orderRepository).saveAndFlush(order);
-        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+            // then
+            assertThat(result).isTrue();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+            verify(orderRepository).saveAndFlush(order);
+            
+            // afterCommit 실행 유도
+            var captor = org.mockito.ArgumentCaptor.forClass(TransactionSynchronization.class);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
+            captor.getValue().afterCommit();
+
+            verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+        }
     }
 
     @Test
@@ -221,25 +236,36 @@ class OrderServiceTest {
     @Test
     @DisplayName("관리자가 주문 상태를 강제로 변경하면 응답을 반환하고 취소 시 재고를 복구한다")
     void updateOrderStatusByAdmin_Success() {
-        // given
-        UUID orderId = UUID.randomUUID();
-        UUID courseId = UUID.randomUUID();
-        UUID memberId = UUID.randomUUID();
-        Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트"));
-        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
+            // given
+            UUID orderId = UUID.randomUUID();
+            UUID courseId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트"));
+            ReflectionTestUtils.setField(order, "id", orderId);
+            given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+            
+            mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
 
-        OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.CANCELLED, "입금 미확인");
+            OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.CANCELLED, "입금 미확인");
 
-        // when
-        OrderAdminStatusUpdateResponse response = orderService.updateOrderStatusByAdmin(orderId, request);
+            // when
+            OrderAdminStatusUpdateResponse response = orderService.updateOrderStatusByAdmin(orderId, request);
 
-        // then
-        assertThat(response.orderId()).isEqualTo(order.getId());
-        assertThat(response.previousStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(response.currentStatus()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+            // then
+            assertThat(response.orderId()).isEqualTo(orderId);
+            assertThat(response.previousStatus()).isEqualTo(OrderStatus.PENDING);
+            assertThat(response.currentStatus()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
-        verify(orderRepository).findById(orderId);
-        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+            verify(orderRepository).findById(orderId);
+
+            // TransactionSynchronizationManager.registerSynchronization 에 전달된 콜백 실행 유도
+            var captor = org.mockito.ArgumentCaptor.forClass(TransactionSynchronization.class);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
+            captor.getValue().afterCommit();
+
+            verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+        }
     }
 }

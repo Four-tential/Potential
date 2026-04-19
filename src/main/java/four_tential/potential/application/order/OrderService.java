@@ -19,6 +19,8 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
@@ -135,7 +137,14 @@ public class OrderService {
             order.expire();
             orderRepository.saveAndFlush(order); 
 
-            rollbackRedisSeatQuietly(order);
+            // DB 커밋 성공 후에만 Redis 복구 수행
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    rollbackRedisSeatQuietly(order);
+                }
+            });
+
             log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
             return true;
         } catch (Exception e) {
@@ -157,12 +166,29 @@ public class OrderService {
 
         order.updateStatusByAdmin(targetStatus);
 
-        // 상태가 취소(CANCELLED)나 만료(EXPIRED)로 변경된 경우 Redis 재고 복구
-        if (targetStatus == OrderStatus.CANCELLED || targetStatus == OrderStatus.EXPIRED) {
-            rollbackRedisSeatQuietly(order);
+        // 실제로 좌석을 점유하던 상태에서 취소/만료 상태로 변하는 경우만 Redis 복구 예약
+        if (isSeatRestorationRequired(previousStatus, targetStatus)) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    rollbackRedisSeatQuietly(order);
+                }
+            });
         }
 
         return OrderAdminStatusUpdateResponse.of(order, previousStatus);
+    }
+
+    /**
+     * 좌석 복구가 필요한 상태 전이인지 확인
+     */
+    private boolean isSeatRestorationRequired(OrderStatus previous, OrderStatus target) {
+        // 이미 취소나 만료인 상태에서는 복구 불필요
+        if (previous == OrderStatus.CANCELLED || previous == OrderStatus.EXPIRED) {
+            return false;
+        }
+        // 대상 상태가 취소나 만료인 경우에만 복구 필요
+        return target == OrderStatus.CANCELLED || target == OrderStatus.EXPIRED;
     }
 
     public record OrderBatchResult(int fetchedCount, int successCount) {}
@@ -171,7 +197,8 @@ public class OrderService {
         try {
             waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
         } catch (Exception e) {
-            log.error("주문 만료 중 Redis 재고 복구 실패: orderId={}, reason={}", order.getId(), e.getMessage());
+            log.error("Redis 재고 복구 실패: orderId={}, courseId={}, reason={}", 
+                    order.getId(), order.getCourseId(), e.getMessage());
         }
     }
 }

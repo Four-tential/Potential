@@ -17,9 +17,9 @@ import org.springframework.http.ResponseEntity;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AdminOrderControllerTest {
@@ -30,27 +30,55 @@ class AdminOrderControllerTest {
     @InjectMocks
     private AdminOrderController adminOrderController;
 
-    @Test
-    @DisplayName("관리자 주문 상태 강제 변경 성공 시 200 OK와 변경 정보를 반환한다")
-    void updateOrderStatus_Success() {
-        // given
-        UUID orderId = UUID.randomUUID();
-        OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PAID, "입금 확인 후 수동 승인");
-        OrderAdminStatusUpdateResponse expectedResponse = new OrderAdminStatusUpdateResponse(orderId, OrderStatus.PENDING, OrderStatus.PAID);
+    private static final UUID TARGET_ORDER_ID = UUID.randomUUID();
 
-        given(orderService.updateOrderStatusByAdmin(eq(orderId), eq(request)))
-                .willReturn(expectedResponse);
+    @Test
+    @DisplayName("관리자 주문 상태 변경 - 200 OK 및 변경된 정보 반환 (PENDING → PAID)")
+    void updateOrderStatus_pendingToPaid_success() {
+        // given
+        OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PAID, "입금 확인 완료");
+        OrderAdminStatusUpdateResponse serviceResponse = new OrderAdminStatusUpdateResponse(
+                TARGET_ORDER_ID,
+                OrderStatus.PENDING,
+                OrderStatus.PAID
+        );
+        given(orderService.updateOrderStatusByAdmin(eq(TARGET_ORDER_ID), any(OrderAdminStatusUpdateRequest.class)))
+                .willReturn(serviceResponse);
 
         // when
-        ResponseEntity<BaseResponse<OrderAdminStatusUpdateResponse>> response = adminOrderController.updateOrderStatus(orderId, request);
+        ResponseEntity<BaseResponse<OrderAdminStatusUpdateResponse>> response = 
+                adminOrderController.updateOrderStatus(TARGET_ORDER_ID, request);
 
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().status()).isEqualTo(HttpStatus.OK.name());
+        assertThat(response.getBody().status()).isEqualTo("OK");
         assertThat(response.getBody().message()).isEqualTo("관리자 주문 상태 변경 성공");
-        assertThat(response.getBody().data()).isEqualTo(expectedResponse);
+        assertThat(response.getBody().data().orderId()).isEqualTo(TARGET_ORDER_ID);
+        assertThat(response.getBody().data().currentStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(response.getBody().data().previousStatus()).isEqualTo(OrderStatus.PENDING);
+    }
 
-        verify(orderService).updateOrderStatusByAdmin(orderId, request);
+    @Test
+    @DisplayName("관리자 주문 상태 변경 - 200 OK 및 변경된 정보 반환 (PAID → CANCELLED)")
+    void updateOrderStatus_paidToCancelled_success() {
+        // given
+        OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.CANCELLED, "관리자 강제 취소");
+        OrderAdminStatusUpdateResponse serviceResponse = new OrderAdminStatusUpdateResponse(
+                TARGET_ORDER_ID,
+                OrderStatus.PAID,
+                OrderStatus.CANCELLED
+        );
+        given(orderService.updateOrderStatusByAdmin(eq(TARGET_ORDER_ID), any(OrderAdminStatusUpdateRequest.class)))
+                .willReturn(serviceResponse);
+
+        // when
+        ResponseEntity<BaseResponse<OrderAdminStatusUpdateResponse>> response = 
+                adminOrderController.updateOrderStatus(TARGET_ORDER_ID, request);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().data().currentStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(response.getBody().data().previousStatus()).isEqualTo(OrderStatus.PAID);
     }
 }
