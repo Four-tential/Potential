@@ -2,6 +2,8 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -45,6 +47,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
+    @Mock private CourseRepository courseRepository;
     @Mock private WaitingListService waitingListService;
     @Mock private ApplicationContext applicationContext;
     @InjectMocks @Spy private OrderService orderService;
@@ -166,8 +169,8 @@ class OrderServiceTest {
             assertThat(result).isTrue();
             assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
             verify(orderRepository).saveAndFlush(order);
-            
-            // afterCommit 실행 유도
+
+            // TransactionSynchronizationManager.registerSynchronization 에 전달된 콜백 실행 유도
             var captor = org.mockito.ArgumentCaptor.forClass(TransactionSynchronization.class);
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
             captor.getValue().afterCommit();
@@ -234,6 +237,50 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("주문 취소 처리를 성공하고 취소된 주문을 반환한다")
+    void cancelOrder_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        Order order = spy(Order.register(memberId, courseId, 2, BigInteger.valueOf(20000), "테스트"));
+        Course course = mock(Course.class);
+
+        given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(10));
+
+        // when
+        Order result = orderService.cancelOrder(orderId, memberId);
+
+        // then
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(order).cancel(any(LocalDateTime.class), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("PENDING 상태의 주문이라도 코스 시작 7일 이내라면 취소 시 예외가 발생한다")
+    void cancelOrder_fail_tooLate() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        Order order = Order.register(memberId, courseId, 2, BigInteger.valueOf(20000), "테스트");
+        Course course = mock(Course.class);
+
+        given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(6));
+
+        // when & then
+        assertThatThrownBy(() -> orderService.cancelOrder(orderId, memberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_DATETIME.getMessage());
+    }
+
+    @Test
     @DisplayName("관리자가 주문 상태를 강제로 변경하면 응답을 반환하고 취소 시 재고를 복구한다")
     void updateOrderStatusByAdmin_Success() {
         try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
@@ -244,7 +291,7 @@ class OrderServiceTest {
             Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트"));
             ReflectionTestUtils.setField(order, "id", orderId);
             given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-            
+
             mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
 
             OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.CANCELLED, "입금 미확인");
@@ -277,7 +324,7 @@ class OrderServiceTest {
             UUID orderId = UUID.randomUUID();
             Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트"));
             given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-            
+
             OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PAID, "강제 결제완료");
 
             // when
@@ -299,7 +346,7 @@ class OrderServiceTest {
             Order order = Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트");
             ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELLED);
             given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-            
+
             OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PENDING, "오처리 복구");
 
             // when
@@ -323,7 +370,7 @@ class OrderServiceTest {
             Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트");
             ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
             given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-            
+
             mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
             OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.EXPIRED, "기간 만료 처리");
 

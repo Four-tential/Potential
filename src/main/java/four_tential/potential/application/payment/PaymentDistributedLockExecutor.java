@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 public class PaymentDistributedLockExecutor {
 
     // 사용자가 결제 생성 요청을 중복 전송해도 한 번에 하나만 처리되게 함
-    @DistributedLock(key = "'" + RedisConstants.PAYMENT_ORDER_LOCK_PREFIX + "' + #p0")
+    @DistributedLock(key = "'" + RedisConstants.PAYMENT_ORDER_LOCK_PREFIX + "' + #orderId")
     public <T> T executeWithOrderLock(UUID orderId, Supplier<T> action) {
         if (orderId == null) {
             throw new IllegalArgumentException("orderId must not be null");
@@ -24,7 +24,7 @@ public class PaymentDistributedLockExecutor {
     }
 
     // 같은 courseId의 confirmCount 증가가 동시에 일어나는 것 방지
-    @DistributedLock(key = "'" + RedisConstants.PAYMENT_COURSE_LOCK_PREFIX + "' + #p0")
+    @DistributedLock(key = "'" + RedisConstants.PAYMENT_COURSE_LOCK_PREFIX + "' + #courseId")
     public <T> T executeWithCourseLock(UUID courseId, Supplier<T> action) {
         if (courseId == null) {
             throw new IllegalArgumentException("courseId must not be null");
@@ -34,7 +34,7 @@ public class PaymentDistributedLockExecutor {
 
     // 같은 PortOne 결제 식별자(pgKey)에 대한 웹훅 중복 처리 방지
     // 같은 결제에 대해 Paid/Failed 같은 이벤트가 동시에 처리되는 상황 방어
-    @DistributedLock(key = "'" + RedisConstants.PAYMENT_PG_LOCK_PREFIX + "' + #p0")
+    @DistributedLock(key = "'" + RedisConstants.PAYMENT_PG_LOCK_PREFIX + "' + #pgKey")
     public <T> T executeWithPgKeyLock(String pgKey, Supplier<T> action) {
         if (pgKey == null || pgKey.isBlank()) {
             throw new IllegalArgumentException("pgKey must not be blank");

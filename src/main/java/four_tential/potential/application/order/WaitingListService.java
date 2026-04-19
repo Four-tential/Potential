@@ -24,6 +24,10 @@ public class WaitingListService {
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     public boolean tryOccupyingSeat(UUID courseId, UUID memberId, int orderCount) {
+        if (orderCount <= 0) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
@@ -94,7 +98,7 @@ public class WaitingListService {
     }
 
     /**
-     * 대기열 추가
+     * 대기열 진입 완료
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     public void addToWaitingList(UUID courseId, UUID memberId) {
@@ -111,5 +115,28 @@ public class WaitingListService {
 
         waitingList.add(System.currentTimeMillis(), memberId.toString());
         log.info("대기열 진입 완료: courseId={}, memberId={}", courseId, memberId);
+    }
+
+    /**
+     * 주문 취소/만료 시 잔여석 수량 복구 및 점유 정보 정리
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void recoverCapacity(UUID courseId, UUID memberId, int orderCount) {
+        if (orderCount <= 0) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+
+        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey);
+
+        capacity.addAndGet(orderCount);
+        occupancy.delete();
+        
+        log.info("잔여석 복구 및 점유 정보 정리 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, orderCount);
+
+        // TODO: 대기열의 다음 순번에게 알림을 보내거나 자동으로 점유 기회를 주는 로직 추가 가능
     }
 }

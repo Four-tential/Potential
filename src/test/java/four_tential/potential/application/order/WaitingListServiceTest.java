@@ -58,6 +58,19 @@ class WaitingListServiceTest {
     }
 
     @Test
+    @DisplayName("점유 시 수량이 0 이하이면 예외가 발생한다")
+    void tryOccupyingSeat_fail_invalidCount() {
+        // when & then
+        assertThatThrownBy(() -> waitingListService.tryOccupyingSeat(courseId, memberId, 0))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
+
+        assertThatThrownBy(() -> waitingListService.tryOccupyingSeat(courseId, memberId, -1))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
+    }
+
+    @Test
     @DisplayName("대기열에 사람이 있으면 잔여석이 있어도 점유에 실패하고 대기열로 유도한다")
     void tryOccupyingSeat_fail_due_to_existing_waiting_list() {
         // given
@@ -168,5 +181,32 @@ class WaitingListServiceTest {
 
         // then
         verify(waitingListSet).add(anyDouble(), eq(memberId.toString()));
+    }
+
+    @Test
+    @DisplayName("취소 시 잔여석 수량을 복구하고 점유 정보를 삭제한다")
+    void recoverCapacity_success() {
+        // given
+        int orderCount = 2;
+
+        // when
+        waitingListService.recoverCapacity(courseId, memberId, orderCount);
+
+        // then
+        verify(capacityAtomic).addAndGet(orderCount);
+        verify(occupancyBucket).delete();
+    }
+
+    @Test
+    @DisplayName("복구 시 수량이 0 이하이면 예외가 발생한다")
+    void recoverCapacity_fail_invalidCount() {
+        // when & then
+        assertThatThrownBy(() -> waitingListService.recoverCapacity(courseId, memberId, 0))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
+
+        assertThatThrownBy(() -> waitingListService.recoverCapacity(courseId, memberId, -1))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
     }
 }

@@ -1,5 +1,8 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.application.order.OrderService;
+import four_tential.potential.application.order.WaitingListService;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
@@ -12,17 +15,21 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.Webhook;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
+import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.infra.portone.PortOneWebhookHandler;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -46,6 +53,8 @@ public class PaymentFacade {
     private final OrderRepository orderRepository;
     private final CourseRepository courseRepository;
     private final PaymentDistributedLockExecutor paymentLockExecutor;
+    private final OrderService orderService;
+    private final WaitingListService waitingListService;
 
     /**
      * 결제 생성 요청을 처리한다
@@ -66,6 +75,20 @@ public class PaymentFacade {
         resumePendingPaidWebhook(payment.getPgKey());
         Payment latestPayment = paymentService.getByPgKey(payment.getPgKey());
         return PaymentCreateResponse.from(latestPayment);
+    }
+
+    /**
+     * 결제 단건 조회
+     */
+    public PaymentDetailResponse getMyPayment(UUID memberId, UUID paymentId) {
+        return paymentService.getMyPayment(paymentId, memberId);
+    }
+
+    /**
+     * 결제 목록 조회
+     */
+    public PageResponse<PaymentListResponse> getAllMyPayments(UUID memberId, PaymentStatus status, Pageable pageable) {
+        return PageResponse.register(paymentService.getAllMyPayments(memberId, status, pageable));
     }
 
     /**
@@ -440,7 +463,13 @@ public class PaymentFacade {
         }
 
         paymentService.confirmPaid(payment);
+
+        orderService.completePayment(order.getId());
+
         increaseCourseConfirmCount(order, course);
+
+        completeOccupyingSeatQuietly(order);
+
         log.info("[PORTONE_WEBHOOK] 결제 확정 완료. pgKey={} memberId={}", pgKey, payment.getMemberId());
         return PaymentCancelDecision.none();
     }
@@ -566,6 +595,18 @@ public class PaymentFacade {
     private void cancelGatewayPayment(String pgKey, Long amount, String reason) {
         log.warn("[PORTONE_PAYMENT] cancel request. pgKey={} amount={} reason={}", pgKey, amount, reason);
         paymentGateway.cancelPayment(PaymentGatewayRequest.of(pgKey, amount, reason));
+    }
+
+    /**
+     * Redis 선점 삭제가 실패해도 결제 성공은 DB에 확정하고, Redis 정리 실패는 로그로 남긴다
+     */
+    private void completeOccupyingSeatQuietly(Order order) {
+        try {
+            waitingListService.completeOccupyingSeat(order.getCourseId(), order.getMemberId());
+        } catch (RuntimeException e) {
+            log.error("[PORTONE_WEBHOOK] Redis 선점 확정 처리 실패. orderId={} courseId={} memberId={}",
+                    order.getId(), order.getCourseId(), order.getMemberId(), e);
+        }
     }
 
     private record PortOneWebhookEvent(boolean transaction, String eventType, String pgKey) {

@@ -34,7 +34,7 @@ class WebhookControllerTest {
         doNothing().when(paymentFacade)
                 .handleWebhook(rawBody, "webhook-1", "timestamp-1", "signature-1");
 
-        mockMvc.perform(post("/api/v1/webhooks/portone")
+        mockMvc.perform(post("/v1/webhooks/portone")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("webhook-id", "webhook-1")
                         .header("webhook-timestamp", "timestamp-1")
@@ -54,7 +54,7 @@ class WebhookControllerTest {
         doNothing().when(paymentFacade)
                 .handleWebhook(rawBody, "webhook-2", "timestamp-2", "signature-2");
 
-        mockMvc.perform(post("/api/v1/webhooks/portone")
+        mockMvc.perform(post("/v1/webhooks/portone")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("webhook-id", "webhook-2")
                         .header("webhook-timestamp", "timestamp-2")
