@@ -2,6 +2,9 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.common.exception.domain.CourseExceptionEnum;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -27,6 +30,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final CourseRepository courseRepository;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
 
@@ -91,6 +95,22 @@ public class OrderService {
 
         order.completePayment();
         log.info("주문 결제 완료 처리됨: orderId={}", orderId);
+    }
+
+    /**
+     * 주문 취소 처리
+     */
+    @Transactional
+    public Order cancelOrder(UUID orderId, UUID memberId) {
+        Order order = orderRepository.findOrderDetailsById(orderId, memberId)
+                .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+
+        Course course = courseRepository.findById(order.getCourseId())
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        order.cancel(course.getStartAt(), LocalDateTime.now());
+
+        return order;
     }
 
     /**

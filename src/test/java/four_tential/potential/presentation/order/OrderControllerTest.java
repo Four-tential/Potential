@@ -185,4 +185,26 @@ class OrderControllerTest {
 
         verify(orderFacade).getMyOrders(MEMBER_ID, pageable);
     }
+
+    @Test
+    @DisplayName("주문 취소 요청 시 200 OK와 취소 정보를 반환한다")
+    void cancelOrder_success() {
+        // given
+        OrderCancelResponse expectedResponse = new OrderCancelResponse(
+                ORDER_ID,
+                "CANCELLED",
+                LocalDateTime.now()
+        );
+        given(orderFacade.cancelOrder(ORDER_ID, MEMBER_ID)).willReturn(expectedResponse);
+
+        // when
+        ResponseEntity<BaseResponse<OrderCancelResponse>> response = 
+                orderController.cancelOrder(studentPrincipal, ORDER_ID);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().data().orderId()).isEqualTo(ORDER_ID);
+        assertThat(response.getBody().message()).isEqualTo("주문이 성공적으로 취소되었습니다");
+        verify(orderFacade).cancelOrder(ORDER_ID, MEMBER_ID);
+    }
 }

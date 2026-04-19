@@ -171,4 +171,35 @@ class OrderFacadeTest {
         assertThat(result.isLast()).isTrue();
         verify(orderService).getMyOrders(memberId, pageRequest);
     }
+
+    @Test
+    @DisplayName("주문을 취소하면 주문 상태를 변경하고 Redis 재고를 복구한다")
+    void cancelOrder_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        LocalDateTime cancelledAt = LocalDateTime.now();
+        
+        Order order = mock(Order.class);
+        given(order.getId()).willReturn(orderId);
+        given(order.getMemberId()).willReturn(memberId);
+        given(order.getCourseId()).willReturn(courseId);
+        given(order.getOrderCount()).willReturn(2);
+        given(order.getStatus()).willReturn(OrderStatus.CANCELLED);
+        given(order.getCancelledAt()).willReturn(cancelledAt);
+        
+        given(orderService.cancelOrder(orderId, memberId)).willReturn(order);
+
+        // when
+        OrderCancelResponse response = orderFacade.cancelOrder(orderId, memberId);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(response.cancelledAt()).isEqualTo(cancelledAt);
+        verify(orderService).cancelOrder(orderId, memberId);
+        verify(waitingListService).recoverCapacity(courseId, memberId, 2);
+    }
 }
