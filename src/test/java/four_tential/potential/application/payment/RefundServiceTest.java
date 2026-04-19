@@ -44,7 +44,7 @@ class RefundServiceTest {
                 payment, memberId, "소도구 필라테스 입문반", startAt, 5);
 
         assertThat(result.refundable()).isTrue();
-        assertThat(result.refundPolicy()).isEqualTo("7일 전 취소 · 전액 환불");
+        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 전 취소 · 환불 가능");
         assertThat(result.currentOrderCount()).isEqualTo(5);
         assertThat(result.unitPrice()).isEqualTo(25000L);       // 125000 / 5
         assertThat(result.paidTotalPrice()).isEqualTo(125000L);
@@ -84,7 +84,7 @@ class RefundServiceTest {
                 payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(6), 5);
 
         assertThat(result.refundable()).isFalse();
-        assertThat(result.refundPolicy()).isEqualTo("7일 이내 취소 · 환불 불가");
+        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 이내 취소 · 환불 불가");
     }
 
     @Test
@@ -212,7 +212,7 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("refundPolicy — refundable = true 이면 '7일 전 취소 · 전액 환불' 문구를 반환한다")
+    @DisplayName("refundPolicy — refundable = true 이면 '수강 일자 7일 전 취소 · 환불 가능' 문구를 반환한다")
     void getRefundPreview_refundPolicy_is_refundable_text_when_true() {
         UUID memberId  = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
@@ -223,11 +223,11 @@ class RefundServiceTest {
         RefundPreviewResponse result = refundService.getRefundPreview(
                 payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(8), 5);
 
-        assertThat(result.refundPolicy()).isEqualTo("7일 전 취소 · 전액 환불");
+        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 전 취소 · 환불 가능");
     }
 
     @Test
-    @DisplayName("refundPolicy — refundable = false 이면 '7일 이내 취소 · 환불 불가' 문구를 반환한다")
+    @DisplayName("refundPolicy — refundable = false 이면 '수강 일자 7일 이내 취소 · 환불 불가' 문구를 반환한다")
     void getRefundPreview_refundPolicy_is_not_refundable_text_when_false() {
         UUID memberId  = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
@@ -238,7 +238,7 @@ class RefundServiceTest {
         RefundPreviewResponse result = refundService.getRefundPreview(
                 payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(3), 5);
 
-        assertThat(result.refundPolicy()).isEqualTo("7일 이내 취소 · 환불 불가");
+        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 이내 취소 · 환불 불가");
     }
 
     @Test
