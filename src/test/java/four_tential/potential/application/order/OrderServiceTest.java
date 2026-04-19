@@ -268,4 +268,71 @@ class OrderServiceTest {
             verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
         }
     }
+
+    @Test
+    @DisplayName("관리자가 주문 상태를 PAID로 변경하는 경우 재고를 복구하지 않는다")
+    void updateOrderStatusByAdmin_To_Paid_No_Restoration() {
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
+            // given
+            UUID orderId = UUID.randomUUID();
+            Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트"));
+            given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+            
+            OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PAID, "강제 결제완료");
+
+            // when
+            orderService.updateOrderStatusByAdmin(orderId, request);
+
+            // then
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()), never());
+            verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("이미 취소된 주문을 다른 상태로 변경하는 경우 재고를 복구하지 않는다")
+    void updateOrderStatusByAdmin_From_Cancelled_No_Restoration() {
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
+            // given
+            UUID orderId = UUID.randomUUID();
+            Order order = Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트");
+            ReflectionTestUtils.setField(order, "status", OrderStatus.CANCELLED);
+            given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+            
+            OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.PENDING, "오처리 복구");
+
+            // when
+            orderService.updateOrderStatusByAdmin(orderId, request);
+
+            // then
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()), never());
+            verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("PAID 상태인 주문을 EXPIRED로 변경하는 경우 재고를 복구한다")
+    void updateOrderStatusByAdmin_From_Paid_To_Expired_Restoration() {
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
+            // given
+            UUID orderId = UUID.randomUUID();
+            UUID courseId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트");
+            ReflectionTestUtils.setField(order, "status", OrderStatus.PAID);
+            given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+            
+            mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
+            OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.EXPIRED, "기간 만료 처리");
+
+            // when
+            orderService.updateOrderStatusByAdmin(orderId, request);
+
+            // then
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()));
+        }
+    }
 }

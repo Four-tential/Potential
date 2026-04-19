@@ -32,7 +32,6 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final CourseRepository courseRepository;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
 
