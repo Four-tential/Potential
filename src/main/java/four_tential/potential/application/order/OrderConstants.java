@@ -11,4 +11,8 @@ public class OrderConstants {
     // 주문 생성 관련 응답 메시지
     public static final String MESSAGE_ORDER_SUCCESS = "재고 점유 성공. 10분 내 결제 요망";
     public static final String MESSAGE_WAITING_COMPLETED = "대기열 진입 완료";
+
+    // 만료 시간 관련 (분 단위)
+    public static final int PENDING_ORDER_EXPIRATION_MINUTES = 10;
+    public static final int PROMOTION_EXPIRATION_MINUTES = 10;
 }
