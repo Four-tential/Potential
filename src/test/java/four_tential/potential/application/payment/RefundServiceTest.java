@@ -211,6 +211,100 @@ class RefundServiceTest {
                 .isInstanceOf(ServiceErrorException.class);
     }
 
+    @Test
+    @DisplayName("refundPolicy — refundable = true 이면 '7일 전 취소 · 전액 환불' 문구를 반환한다")
+    void getRefundPreview_refundPolicy_is_refundable_text_when_true() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 125000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(8), 5);
+
+        assertThat(result.refundPolicy()).isEqualTo("7일 전 취소 · 전액 환불");
+    }
+
+    @Test
+    @DisplayName("refundPolicy — refundable = false 이면 '7일 이내 취소 · 환불 불가' 문구를 반환한다")
+    void getRefundPreview_refundPolicy_is_not_refundable_text_when_false() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 125000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(3), 5);
+
+        assertThat(result.refundPolicy()).isEqualTo("7일 이내 취소 · 환불 불가");
+    }
+
+    @Test
+    @DisplayName("unitPrice — paidTotalPrice 를 orderCount 로 나눈 값을 반환한다")
+    void getRefundPreview_unitPrice_is_paidTotalPrice_divided_by_orderCount() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 150000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(10), 3);
+
+        // 150000 / 3 = 50000
+        assertThat(result.unitPrice()).isEqualTo(50000L);
+    }
+
+    @Test
+    @DisplayName("startAt — 응답의 startAt 이 전달받은 courseStartAt 과 동일하다")
+    void getRefundPreview_startAt_equals_courseStartAt() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+        LocalDateTime startAt = LocalDateTime.of(2025, 8, 15, 14, 0);
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 125000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "테스트 강좌", startAt, 5);
+
+        assertThat(result.startAt()).isEqualTo(startAt);
+    }
+
+    @Test
+    @DisplayName("courseTitle — 응답의 courseTitle 이 전달받은 값과 동일하다")
+    void getRefundPreview_courseTitle_equals_passed_value() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 125000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "소도구 필라테스 입문반",
+                LocalDateTime.now().plusDays(10), 5);
+
+        assertThat(result.courseTitle()).isEqualTo("소도구 필라테스 입문반");
+    }
+
+    @Test
+    @DisplayName("내일 시작하는 코스는 당일이 아니지만 7일 이하이므로 refundable = false 를 반환한다")
+    void getRefundPreview_returns_false_when_course_starts_tomorrow() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 125000L);
+
+        RefundPreviewResponse result = refundService.getRefundPreview(
+                payment, memberId, "테스트 강좌",
+                LocalDateTime.now().plusDays(1), 5);
+
+        assertThat(result.refundable()).isFalse();
+    }
+
     private Payment createPaidPayment(UUID paymentId, UUID orderId, UUID memberId, Long amount) {
         Payment payment = Payment.createPending(
                 orderId, memberId, null, "pg-key-1",
