@@ -48,6 +48,7 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
                         course.capacity,
                         course.confirmCount,
                         course.status,
+                        course.level,
                         course.orderOpenAt,
                         course.startAt
                 ))
@@ -87,6 +88,9 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
         }
         if (condition.status() != null) {
             builder.and(course.status.eq(condition.status()));
+        }
+        if (condition.level() != null) {
+            builder.and(course.level.eq(condition.level()));
         }
         if (condition.keyword() != null && !condition.keyword().isBlank()) {
             builder.and(course.title.containsIgnoreCase(condition.keyword()));

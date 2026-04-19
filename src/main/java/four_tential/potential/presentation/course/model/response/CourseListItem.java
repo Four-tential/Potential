@@ -1,5 +1,6 @@
 package four_tential.potential.presentation.course.model.response;
 
+import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseListQueryResult;
 import four_tential.potential.domain.course.course.CourseStatus;
 
@@ -18,6 +19,7 @@ public record CourseListItem(
         int capacity,
         int confirmCount,
         CourseStatus status,
+        CourseLevel level,
         LocalDateTime orderOpenAt,
         LocalDateTime startAt,
         boolean isWishlisted
@@ -38,6 +40,7 @@ public record CourseListItem(
                 result.capacity(),
                 result.confirmCount(),
                 result.status(),
+                result.level(),
                 result.orderOpenAt(),
                 result.startAt(),
                 isWishlisted

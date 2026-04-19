@@ -117,6 +117,7 @@ public class CourseService {
                 course.getCapacity(),
                 course.getConfirmCount(),
                 course.getStatus(),
+                course.getLevel(),
                 course.getOrderOpenAt(),
                 course.getOrderCloseAt(),
                 course.getStartAt(),

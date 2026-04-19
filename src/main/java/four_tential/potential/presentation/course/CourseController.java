@@ -3,6 +3,7 @@ package four_tential.potential.presentation.course;
 import four_tential.potential.application.course.CourseService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
@@ -35,6 +36,7 @@ public class CourseController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @RequestParam(required = false) String categoryCode,
             @RequestParam(required = false) CourseStatus status,
+            @RequestParam(required = false) CourseLevel level,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) BigInteger minPrice,
             @RequestParam(required = false) BigInteger maxPrice,
@@ -42,7 +44,7 @@ public class CourseController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        CourseSearchRequest condition = new CourseSearchRequest(categoryCode, status, keyword, minPrice, maxPrice, sort);
+        CourseSearchRequest condition = new CourseSearchRequest(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
         Pageable pageable = PageRequest.of(page, size);
         UUID memberId = principal != null ? principal.memberId() : null;
 

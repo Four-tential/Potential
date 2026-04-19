@@ -17,6 +17,7 @@ public record CourseListQueryResult(
         int capacity,
         int confirmCount,
         CourseStatus status,
+        CourseLevel level,
         LocalDateTime orderOpenAt,
         LocalDateTime startAt
 ) {
