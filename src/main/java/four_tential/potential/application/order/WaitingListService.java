@@ -46,7 +46,7 @@ public class WaitingListService {
         // 이미 점유 중인 경우 (승격된 유저나 기존 점유자)
         if (occupancy.isExists()) {
             String val = occupancy.get();
-            if ("PROMOTED".equals(val)) {
+            if (OrderConstants.TOKEN_PROMOTED.equals(val)) {
                 // 승격된 유저가 실제 주문을 시도하는 시점 -> 수량 차감 및 점유 확정
                 long currentCapacity = capacity.get();
                 if (currentCapacity >= orderCount) {
@@ -100,7 +100,7 @@ public class WaitingListService {
         String reservedValue = occupancy.get();
         if (reservedValue != null) {
             try {
-                if (!"PROMOTED".equals(reservedValue)) {
+                if (!OrderConstants.TOKEN_PROMOTED.equals(reservedValue)) {
                     int reservedCount = Integer.parseInt(reservedValue);
                     capacity.addAndGet(reservedCount);
                 }
@@ -136,8 +136,8 @@ public class WaitingListService {
             String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + nextMemberId;
             RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
             
-            // 승격 우선권 부여 (10분 유효)
-            occupancy.set("PROMOTED", Duration.ofMinutes(10));
+            // 승격 우선권 부여
+            occupancy.set(OrderConstants.TOKEN_PROMOTED, Duration.ofMinutes(OrderConstants.PROMOTION_EXPIRATION_MINUTES));
             
             log.info("대기열 유저 승격: courseId={}, memberId={}", courseId, nextMemberId);
             

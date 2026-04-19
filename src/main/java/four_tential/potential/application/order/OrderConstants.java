@@ -15,4 +15,7 @@ public class OrderConstants {
     // 만료 시간 관련 (분 단위)
     public static final int PENDING_ORDER_EXPIRATION_MINUTES = 10;
     public static final int PROMOTION_EXPIRATION_MINUTES = 10;
+
+    // Redis 저장 값 관련
+    public static final String TOKEN_PROMOTED = "PROMOTED";
 }
