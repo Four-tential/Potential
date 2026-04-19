@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.payment;
 
 import four_tential.potential.application.payment.PaymentFacade;
+import four_tential.potential.application.payment.RefundFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
@@ -12,6 +13,7 @@ import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
+import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +42,9 @@ class PaymentControllerTest {
 
     @Mock
     private PaymentFacade paymentFacade;
+
+    @Mock
+    private RefundFacade refundFacade;
 
     @Test
     @DisplayName("createPayment 호출 시 결제 생성 결과를 201 Created 로 반환한다")
@@ -229,5 +234,85 @@ class PaymentControllerTest {
         assertThat(data.totalElements()).isEqualTo(25L);
         assertThat(data.size()).isEqualTo(10);
         assertThat(data.isLast()).isFalse();
+    }
+
+    @Test
+    @DisplayName("환불 가능이면 200 OK 와 refundable = true 응답을 반환한다")
+    void getRefundPreview_returns_200_when_refundable() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
+        RefundPreviewResponse preview = new RefundPreviewResponse(
+                paymentId, "소도구 필라테스 입문반",
+                LocalDateTime.of(2025, 1, 10, 10, 0),
+                5, 25000L, 125000L,
+                true, "7일 전 취소 · 전액 환불"
+        );
+        given(refundFacade.getRefundPreview(memberId, paymentId)).willReturn(preview);
+
+        ResponseEntity<BaseResponse<RefundPreviewResponse>> response =
+                paymentController.getRefundPreview(principal, paymentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().message()).isEqualTo("환불 가능 여부 조회 성공");
+        RefundPreviewResponse data = response.getBody().data();
+        assertThat(data.paymentId()).isEqualTo(paymentId);
+        assertThat(data.courseTitle()).isEqualTo("소도구 필라테스 입문반");
+        assertThat(data.currentOrderCount()).isEqualTo(5);
+        assertThat(data.unitPrice()).isEqualTo(25000L);
+        assertThat(data.paidTotalPrice()).isEqualTo(125000L);
+        assertThat(data.refundable()).isTrue();
+        assertThat(data.refundPolicy()).isEqualTo("7일 전 취소 · 전액 환불");
+        verify(refundFacade).getRefundPreview(memberId, paymentId);
+    }
+
+    @Test
+    @DisplayName("환불 불가이면 200 OK 와 refundable = false 응답을 반환한다")
+    void getRefundPreview_returns_200_when_not_refundable() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
+        RefundPreviewResponse preview = new RefundPreviewResponse(
+                paymentId, "소도구 필라테스 입문반",
+                LocalDateTime.of(2025, 1, 10, 10, 0),
+                5, 25000L, 125000L,
+                false, "7일 이내 취소 · 환불 불가"
+        );
+        given(refundFacade.getRefundPreview(memberId, paymentId)).willReturn(preview);
+
+        ResponseEntity<BaseResponse<RefundPreviewResponse>> response =
+                paymentController.getRefundPreview(principal, paymentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().data().refundable()).isFalse();
+        assertThat(response.getBody().data().refundPolicy()).isEqualTo("7일 이내 취소 · 환불 불가");
+        verify(refundFacade).getRefundPreview(memberId, paymentId);
+    }
+
+    @Test
+    @DisplayName("결제가 없으면 ServiceErrorException 이 전파된다")
+    void getRefundPreview_propagates_exception_when_not_found() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
+        given(refundFacade.getRefundPreview(memberId, paymentId))
+                .willThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+
+        assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("환불 불가 결제 상태이면 ServiceErrorException 이 전파된다")
+    void getRefundPreview_propagates_exception_when_invalid_status() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
+        given(refundFacade.getRefundPreview(memberId, paymentId))
+                .willThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_REFUND_NOT_ALLOWED));
+
+        assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
+                .isInstanceOf(ServiceErrorException.class);
     }
 }

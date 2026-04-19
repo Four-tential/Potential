@@ -8,11 +8,13 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
@@ -25,6 +27,8 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final WaitingListService waitingListService;
+    private final ApplicationContext applicationContext;
 
     /**
      * 주문 생성 (DB 저장)
@@ -91,24 +95,58 @@ public class OrderService {
 
     /**
      * 만료된 주문 자동 만료 처리 (단일 배치)
-     * Scheduler에서 호출하며, 개별 호출마다 트랜잭션이 커밋됩니다.
+     * 개별 주문 처리는 독립된 트랜잭션에서 수행하여 낙관적 락 충돌 시 배치가 롤백되지 않도록 합니다.
      */
-    @Transactional
-    public int processExpiredBatch(LocalDateTime now, int batchSize) {
-        // PENDING 상태인 주문을 EXPIRED로 바꾸므로 항상 0페이지를 읽으면 새로운 대상이 나옵니다.
+    public OrderBatchResult processExpiredBatch(LocalDateTime now, int batchSize) {
+        // 조구는 트랜잭션 없이 혹은 별도 트랜잭션으로 수행 (영속성 컨텍스트 분리를 위해 ID만 먼저 확보할 수도 있으나 여기서는 단순화)
         Slice<Order> expiredOrdersSlice = orderRepository.findAllByStatusAndExpireAtBefore(
                 OrderStatus.PENDING, now, PageRequest.of(0, batchSize));
 
-        if (expiredOrdersSlice.isEmpty()) {
-            return 0;
+        int fetchedCount = expiredOrdersSlice.getNumberOfElements();
+        if (fetchedCount == 0) {
+            return new OrderBatchResult(0, 0);
         }
 
+        OrderService self = applicationContext.getBean(OrderService.class);
+        int successCount = 0;
+
         for (Order order : expiredOrdersSlice) {
-            order.expire();
-            // TODO: Redis 재고 해제 및 대기열 이관 로직 연동 필요
-            log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
+            if (self.expireOrderInNewTransaction(order.getId())) {
+                successCount++;
+            }
         }
-        
-        return expiredOrdersSlice.getNumberOfElements();
+
+        return new OrderBatchResult(fetchedCount, successCount);
+    }
+
+    /**
+     * 단일 주문을 독립된 트랜잭션(REQUIRES_NEW)으로 만료 처리합니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean expireOrderInNewTransaction(UUID orderId) {
+        try {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+            
+            order.expire();
+            orderRepository.saveAndFlush(order); 
+
+            rollbackRedisSeatQuietly(order);
+            log.info("주문 만료 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
+            return true;
+        } catch (Exception e) {
+            log.error("주문 만료 처리 중 예외 발생 (낙관적 락 등): orderId={}, reason={}", orderId, e.getMessage());
+            return false;
+        }
+    }
+
+    public record OrderBatchResult(int fetchedCount, int successCount) {}
+
+    private void rollbackRedisSeatQuietly(Order order) {
+        try {
+            waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
+        } catch (Exception e) {
+            log.error("주문 만료 중 Redis 재고 복구 실패: orderId={}, reason={}", order.getId(), e.getMessage());
+        }
     }
 }

@@ -1,5 +1,6 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.order.OrderService.OrderBatchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -41,14 +42,20 @@ public class OrderExpirationScheduler {
 
                 while (totalProcessed < MAX_TOTAL_PROCESS) {
                     // 각 배치는 개별 트랜잭션으로 처리됨
-                    int processedCount = orderService.processExpiredBatch(now, BATCH_SIZE);
+                    OrderBatchResult result = orderService.processExpiredBatch(now, BATCH_SIZE);
 
-                    if (processedCount == 0) {
+                    if (result.fetchedCount() == 0) {
                         break;
                     }
 
-                    totalProcessed += processedCount;
-                    log.info("만료 주문 배치 처리 완료 ({}건, 누적 {}건)", processedCount, totalProcessed);
+                    totalProcessed += result.successCount();
+                    log.info("만료 주문 배치 처리 완료 (성공 {}건 / 조회 {}건, 누적 성공 {}건)", 
+                            result.successCount(), result.fetchedCount(), totalProcessed);
+
+                    if (result.successCount() == 0) {
+                        log.warn("배치 내 모든 주문 만료 처리가 실패했습니다. 무한 루프 방지를 위해 이번 턴을 종료합니다.");
+                        break;
+                    }
                 }
 
                 if (totalProcessed > 0) {

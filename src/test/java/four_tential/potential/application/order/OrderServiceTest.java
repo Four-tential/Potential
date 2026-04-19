@@ -11,7 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -35,7 +39,9 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
-    @InjectMocks private OrderService orderService;
+    @Mock private WaitingListService waitingListService;
+    @Mock private ApplicationContext applicationContext;
+    @InjectMocks @Spy private OrderService orderService;
 
     @Test
     @DisplayName("주문을 성공적으로 생성하고 저장한다")
@@ -97,6 +103,27 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("나의 주문 목록을 성공적으로 조회한다")
+    void getMyOrders_success() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Order order = mock(Order.class);
+        Page<Order> orderPage = new PageImpl<>(List.of(order), pageable, 1);
+        
+        given(orderRepository.findMyOrders(memberId, pageable)).willReturn(orderPage);
+
+        // when
+        Page<Order> result = orderService.getMyOrders(memberId, pageable);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(orderRepository).findMyOrders(memberId, pageable);
+    }
+
+    @Test
     @DisplayName("결제 완료 처리를 성공한다")
     void completePayment_success() {
         // given
@@ -113,24 +140,64 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 주문들을 배치 단위로 자동 만료 처리한다")
+    @DisplayName("단일 주문 만료 처리를 성공적으로 수행한다")
+    void expireOrderInNewTransaction_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
+        
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        boolean result = orderService.expireOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        verify(orderRepository).saveAndFlush(order);
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("단일 주문 만료 처리 중 예외가 발생하면 false를 반환한다")
+    void expireOrderInNewTransaction_fail_on_exception() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        given(orderRepository.findById(orderId)).willThrow(new RuntimeException("DB Error"));
+
+        // when
+        boolean result = orderService.expireOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("만료된 주문들을 배치 단위로 처리한다")
     void processExpiredBatch_success() {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
-        Order expiredOrder = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "만료대상"));
-        Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
+        UUID orderId = UUID.randomUUID();
+        Order expiredOrder = mock(Order.class);
+        given(expiredOrder.getId()).willReturn(orderId);
         
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
-                .willReturn(expiredSlice);
+        Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any())).willReturn(expiredSlice);
+        
+        // Self-invocation 모킹
+        given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
+        doReturn(true).when(orderService).expireOrderInNewTransaction(orderId);
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(1);
-        assertThat(expiredOrder.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
+        assertThat(result.fetchedCount()).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        verify(orderService).expireOrderInNewTransaction(orderId);
     }
 
     @Test
@@ -139,14 +206,14 @@ class OrderServiceTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         int batchSize = 100;
-        given(orderRepository.findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class)))
+        given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any()))
                 .willReturn(new SliceImpl<>(Collections.emptyList()));
 
         // when
-        int processedCount = orderService.processExpiredBatch(now, batchSize);
+        OrderService.OrderBatchResult result = orderService.processExpiredBatch(now, batchSize);
 
         // then
-        assertThat(processedCount).isEqualTo(0);
-        verify(orderRepository).findAllByStatusAndExpireAtBefore(eq(OrderStatus.PENDING), any(LocalDateTime.class), any(Pageable.class));
+        assertThat(result.successCount()).isZero();
+        assertThat(result.fetchedCount()).isZero();
     }
 }

@@ -192,4 +192,9 @@ public class PaymentService {
             UUID memberId, PaymentStatus status, Pageable pageable) {
         return paymentRepository.findListByMemberIdAndStatus(memberId, status, pageable);
     }
+
+    public Payment getById(UUID paymentId) {
+        return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+    }
 }

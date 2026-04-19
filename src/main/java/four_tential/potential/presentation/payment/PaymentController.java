@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.payment;
 
 import four_tential.potential.application.payment.PaymentFacade;
+import four_tential.potential.application.payment.RefundFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
@@ -9,6 +10,7 @@ import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
+import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentFacade paymentFacade;
+    private final RefundFacade refundFacade;
 
     @PostMapping
     @PreAuthorize("hasRole('STUDENT')")
@@ -59,5 +62,15 @@ public class PaymentController {
         PageResponse<PaymentListResponse> response = paymentFacade.getAllMyPayments(
                 principal.memberId(), status, pageable);
         return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "결제 목록 조회 성공", response));
+    }
+
+    @GetMapping("/{paymentId}/refund-preview")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<BaseResponse<RefundPreviewResponse>> getRefundPreview(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID paymentId
+    ) {
+        RefundPreviewResponse response = refundFacade.getRefundPreview(principal.memberId(), paymentId);
+        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "환불 가능 여부 조회 성공", response));
     }
 }
