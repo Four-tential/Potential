@@ -2,6 +2,7 @@ package four_tential.potential.application.payment;
 
 import four_tential.potential.application.order.OrderService;
 import four_tential.potential.application.order.WaitingListService;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
@@ -14,17 +15,21 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.Webhook;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
+import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.infra.portone.PortOneWebhookHandler;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -70,6 +75,20 @@ public class PaymentFacade {
         resumePendingPaidWebhook(payment.getPgKey());
         Payment latestPayment = paymentService.getByPgKey(payment.getPgKey());
         return PaymentCreateResponse.from(latestPayment);
+    }
+
+    /**
+     * 결제 단건 조회
+     */
+    public PaymentDetailResponse getMyPayment(UUID memberId, UUID paymentId) {
+        return paymentService.getMyPayment(paymentId, memberId);
+    }
+
+    /**
+     * 결제 목록 조회
+     */
+    public PageResponse<PaymentListResponse> getAllMyPayments(UUID memberId, PaymentStatus status, Pageable pageable) {
+        return PageResponse.register(paymentService.getAllMyPayments(memberId, status, pageable));
     }
 
     /**

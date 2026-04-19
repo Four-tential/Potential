@@ -21,6 +21,8 @@ import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.infra.portone.PortOneWebhookHandler;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
@@ -32,6 +34,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -40,6 +46,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -1481,5 +1488,119 @@ class PaymentFacadeTest {
         private WebhookTransactionUnknown(WebhookTransactionData data) {
             super(data);
         }
+    }
+
+    @Test
+    @DisplayName("본인 결제가 있으면 PaymentDetailResponse 를 반환한다")
+    void getMyPayment_returns_detail_response() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+        PaymentDetailResponse expected = new PaymentDetailResponse(
+                paymentId, orderId, "소도구 필라테스 입문반", 5,
+                125000L, 0L, 125000L,
+                PaymentPayWay.CARD, PaymentStatus.PAID,
+                LocalDateTime.of(2025, 1, 1, 10, 0)
+        );
+        given(paymentService.getMyPayment(paymentId, memberId))
+                .willReturn(expected);
+
+        PaymentDetailResponse result = paymentFacade.getMyPayment(memberId, paymentId);
+
+        assertThat(result).isEqualTo(expected);
+        verify(paymentService).getMyPayment(paymentId, memberId);
+    }
+
+    @Test
+    @DisplayName("결제가 없거나 타인의 결제면 ServiceErrorException 이 전파된다")
+    void getMyPayment_propagates_exception_when_not_found() {
+        UUID memberId  = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        given(paymentService.getMyPayment(paymentId, memberId))
+                .willThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+
+        assertThatThrownBy(() -> paymentFacade.getMyPayment(memberId, paymentId))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("status 가 null 이면 전체 결제 목록 PageResponse 를 반환한다")
+    void getMyPayments_returns_all_when_status_null() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        PaymentListResponse item = new PaymentListResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "소도구 필라테스 입문반", 5,
+                125000L, PaymentStatus.PAID, LocalDateTime.of(2025, 1, 1, 10, 0)
+        );
+        Page<PaymentListResponse> page = new PageImpl<>(List.of(item), pageable, 1);
+        given(paymentService.getAllMyPayments(memberId, null, pageable))
+                .willReturn(page);
+
+        var result = paymentFacade.getAllMyPayments(memberId, null, pageable);
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.currentPage()).isZero();
+        verify(paymentService).getAllMyPayments(memberId, null, pageable);
+    }
+
+    @Test
+    @DisplayName("status 가 PAID 이면 PAID 결제 목록 PageResponse 를 반환한다")
+    void getMyPayments_returns_filtered_when_status_paid() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        PaymentListResponse item = new PaymentListResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "소도구 필라테스 입문반", 5,
+                125000L, PaymentStatus.PAID, LocalDateTime.of(2025, 1, 1, 10, 0)
+        );
+        Page<PaymentListResponse> page = new PageImpl<>(List.of(item), pageable, 1);
+        given(paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable))
+                .willReturn(page);
+
+        var result = paymentFacade.getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).status()).isEqualTo(PaymentStatus.PAID);
+        verify(paymentService).getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
+    }
+
+    @Test
+    @DisplayName("결제 내역이 없으면 빈 PageResponse 를 반환한다")
+    void getMyPayments_returns_empty_page() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<PaymentListResponse> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+        given(paymentService.getAllMyPayments(memberId, null, pageable))
+                .willReturn(emptyPage);
+
+        var result = paymentFacade.getAllMyPayments(memberId, null, pageable);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("페이지네이션 메타 정보가 올바르게 반환된다")
+    void getMyPayments_returns_correct_pagination_meta() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(1, 10);
+        List<PaymentListResponse> items = List.of(
+                new PaymentListResponse(UUID.randomUUID(), UUID.randomUUID(), "강좌A", 1,
+                        50000L, PaymentStatus.PAID, LocalDateTime.now()),
+                new PaymentListResponse(UUID.randomUUID(), UUID.randomUUID(), "강좌B", 2,
+                        100000L, PaymentStatus.PENDING, LocalDateTime.now())
+        );
+        Page<PaymentListResponse> page = new PageImpl<>(items, pageable, 12);
+        given(paymentService.getAllMyPayments(memberId, null, pageable))
+                .willReturn(page);
+
+        var result = paymentFacade.getAllMyPayments(memberId, null, pageable);
+
+        assertThat(result.currentPage()).isEqualTo(1);
+        assertThat(result.size()).isEqualTo(10);
+        assertThat(result.totalElements()).isEqualTo(12);
+        assertThat(result.totalPages()).isEqualTo(2);
+        assertThat(result.isLast()).isTrue();
     }
 }

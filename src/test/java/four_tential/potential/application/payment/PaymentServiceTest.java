@@ -6,13 +6,21 @@ import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
+import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -360,5 +368,103 @@ class PaymentServiceTest {
         paymentService.fail(payment);
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("본인 결제가 존재하면 PaymentDetailResponse 를 반환한다")
+    void getDetailByIdAndMemberId_returns_response_when_found() {
+        UUID paymentId = UUID.randomUUID();
+        UUID memberId  = UUID.randomUUID();
+        UUID orderId   = UUID.randomUUID();
+        PaymentDetailResponse expected = new PaymentDetailResponse(
+                paymentId, orderId, "소도구 필라테스 입문반", 5,
+                125000L, 0L, 125000L,
+                PaymentPayWay.CARD, PaymentStatus.PAID,
+                LocalDateTime.of(2025, 1, 1, 10, 0)
+        );
+        given(paymentRepository.findDetailByIdAndMemberId(paymentId, memberId))
+                .willReturn(Optional.of(expected));
+
+        PaymentDetailResponse result = paymentService.getMyPayment(paymentId, memberId);
+
+        assertThat(result).isEqualTo(expected);
+        verify(paymentRepository).findDetailByIdAndMemberId(paymentId, memberId);
+    }
+
+    @Test
+    @DisplayName("결제가 없거나 타인의 결제면 NOT_FOUND 예외가 발생한다")
+    void getDetailByIdAndMemberId_throws_when_not_found() {
+        UUID paymentId = UUID.randomUUID();
+        UUID memberId  = UUID.randomUUID();
+        given(paymentRepository.findDetailByIdAndMemberId(paymentId, memberId))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentService.getMyPayment(paymentId, memberId))
+                .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("status 가 null 이면 전체 결제 목록을 반환한다")
+    void getListByMemberIdAndStatus_returns_all_when_status_null() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<PaymentListResponse> items = List.of(
+                createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PAID),
+                createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PENDING)
+        );
+        Page<PaymentListResponse> page = new PageImpl<>(items, pageable, 2);
+        given(paymentRepository.findListByMemberIdAndStatus(memberId, null, pageable))
+                .willReturn(page);
+
+        Page<PaymentListResponse> result =
+                paymentService.getAllMyPayments(memberId, null, pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(paymentRepository).findListByMemberIdAndStatus(memberId, null, pageable);
+    }
+
+    @Test
+    @DisplayName("status 가 PAID 이면 PAID 결제 목록만 반환한다")
+    void getListByMemberIdAndStatus_returns_filtered_when_status_given() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<PaymentListResponse> items = List.of(
+                createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PAID)
+        );
+        Page<PaymentListResponse> page = new PageImpl<>(items, pageable, 1);
+        given(paymentRepository.findListByMemberIdAndStatus(memberId, PaymentStatus.PAID, pageable))
+                .willReturn(page);
+
+        Page<PaymentListResponse> result =
+                paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).status()).isEqualTo(PaymentStatus.PAID);
+        verify(paymentRepository).findListByMemberIdAndStatus(memberId, PaymentStatus.PAID, pageable);
+    }
+
+    @Test
+    @DisplayName("결제 내역이 없으면 빈 페이지를 반환한다")
+    void getListByMemberIdAndStatus_returns_empty_page() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<PaymentListResponse> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+        given(paymentRepository.findListByMemberIdAndStatus(memberId, null, pageable))
+                .willReturn(emptyPage);
+
+        Page<PaymentListResponse> result =
+                paymentService.getAllMyPayments(memberId, null, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    private PaymentListResponse createListResponse(
+            UUID paymentId, UUID orderId, PaymentStatus status) {
+        return new PaymentListResponse(
+                paymentId, orderId, "소도구 필라테스 입문반", 5,
+                125000L, status, LocalDateTime.of(2025, 1, 1, 10, 0)
+        );
     }
 }
