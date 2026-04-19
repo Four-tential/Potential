@@ -73,6 +73,8 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
         JPAQuery<Long> countQuery = queryFactory
                 .select(course.count())
                 .from(course)
+                .join(instructorMember).on(instructorMember.id.eq(course.memberInstructorId))
+                .join(member).on(member.id.eq(instructorMember.memberId))
                 .leftJoin(courseCategory).on(courseCategory.id.eq(course.courseCategoryId))
                 .where(whereConditions);
 
