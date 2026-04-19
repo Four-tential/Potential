@@ -171,4 +171,9 @@ public class PaymentService {
     public void fail(Payment payment) {
         payment.fail();
     }
+
+    public Payment getById(UUID paymentId) {
+        return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+    }
 }
