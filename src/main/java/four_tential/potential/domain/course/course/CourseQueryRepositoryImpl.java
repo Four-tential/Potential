@@ -9,12 +9,14 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.domain.course.course_image.QCourseImage;
 import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
 import four_tential.potential.presentation.course.model.request.CourseSort;
+import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.support.PageableExecutionUtils;
 
 import java.util.List;
+import java.util.UUID;
 
 import static four_tential.potential.domain.course.course.QCourse.course;
 import static four_tential.potential.domain.course.course_category.QCourseCategory.courseCategory;
@@ -73,6 +75,39 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
                 .from(course)
                 .leftJoin(courseCategory).on(courseCategory.id.eq(course.courseCategoryId))
                 .where(whereConditions);
+
+        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
+    }
+
+    @Override
+    public Page<InstructorCourseListItem> findCoursesByInstructorMemberId(UUID instructorMemberId, Pageable pageable) {
+        BooleanBuilder where = new BooleanBuilder();
+        where.and(course.memberInstructorId.eq(instructorMemberId));
+        where.and(course.status.ne(CourseStatus.PREPARATION));
+
+        List<InstructorCourseListItem> content = queryFactory
+                .select(Projections.constructor(InstructorCourseListItem.class,
+                        course.id,
+                        course.title,
+                        course.level,
+                        course.status,
+                        course.capacity,
+                        course.confirmCount,
+                        course.price,
+                        course.orderOpenAt,
+                        course.startAt
+                ))
+                .from(course)
+                .where(where)
+                .orderBy(course.createdAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        JPAQuery<Long> countQuery = queryFactory
+                .select(course.count())
+                .from(course)
+                .where(where);
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
