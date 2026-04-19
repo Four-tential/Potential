@@ -254,6 +254,10 @@ class CourseServiceTest {
         Course course = openCourseWithId(courseId);
         CourseImage image1 = CourseImage.register(course, "https://cdn.example.com/img1.jpg");
         CourseImage image2 = CourseImage.register(course, "https://cdn.example.com/img2.jpg");
+
+        // 단위 테스트에서는 JPA가 동작하지 않아 id가 null — 명시적으로 주입 (UUID v7 오름차순 = 등록 순)
+        ReflectionTestUtils.setField(image1, "id", UUID.fromString("00000000-0000-7000-8000-000000000001"));
+        ReflectionTestUtils.setField(image2, "id", UUID.fromString("00000000-0000-7000-8000-000000000002"));
         ReflectionTestUtils.setField(course, "images", List.of(image1, image2));
 
         InstructorMember instructorMember = approvedInstructorMember();

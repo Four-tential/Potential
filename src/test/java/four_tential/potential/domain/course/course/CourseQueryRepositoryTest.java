@@ -11,6 +11,7 @@ import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
 import four_tential.potential.presentation.course.model.request.CourseSort;
+import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -388,6 +389,101 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).title()).isEqualTo("대상 코스");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // findCoursesByInstructorMemberId
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("강사의 코스 목록 - PREPARATION 코스는 제외된다")
+    void findCoursesByInstructorMemberId_excludes_preparation_courses() {
+        savePreparationCourse("승인 대기 코스");
+        saveOpenCourse("공개 코스");
+
+        Page<InstructorCourseListItem> result = courseRepository
+                .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("공개 코스");
+    }
+
+    @Test
+    @DisplayName("강사의 코스 목록 - 다른 강사의 코스는 포함되지 않는다")
+    void findCoursesByInstructorMemberId_excludes_other_instructors_courses() {
+        Member otherMember = memberRepository.save(
+                Member.register("other@test.com", "encodedPwd!", "다른강사", "010-2222-0000")
+        );
+        InstructorMember otherInstructor = InstructorMember.register(
+                otherMember.getId(), "TEST_CAT", "다른 강사 소개", "https://img.url/other.jpg"
+        );
+        otherInstructor.approve();
+        otherInstructor = instructorMemberRepository.save(otherInstructor);
+
+        Course myCourse = buildCourse("내 코스", category, CourseLevel.BEGINNER, BigInteger.valueOf(50000));
+        myCourse.open();
+        courseRepository.save(myCourse);
+
+        Course otherCourse = Course.register(
+                category.getId(), otherInstructor.getId(), "다른 강사 코스", "설명",
+                "서울", "주소", 20, BigInteger.valueOf(50000), CourseLevel.BEGINNER,
+                LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(3),
+                LocalDateTime.now().plusDays(4), LocalDateTime.now().plusDays(5)
+        );
+        otherCourse.open();
+        courseRepository.save(otherCourse);
+
+        Page<InstructorCourseListItem> result = courseRepository
+                .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("내 코스");
+    }
+
+    @Test
+    @DisplayName("강사의 코스 목록 - 코스가 없으면 빈 페이지를 반환한다")
+    void findCoursesByInstructorMemberId_returns_empty_when_no_courses() {
+        Page<InstructorCourseListItem> result = courseRepository
+                .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("강사의 코스 목록 - 응답 필드가 올바르게 매핑된다")
+    void findCoursesByInstructorMemberId_fields_mapped_correctly() {
+        saveOpenCourseWithLevel("매핑 확인 코스", CourseLevel.INTERMEDIATE);
+
+        Page<InstructorCourseListItem> result = courseRepository
+                .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+        InstructorCourseListItem item = result.getContent().get(0);
+
+        assertThat(item.courseId()).isNotNull();
+        assertThat(item.title()).isEqualTo("매핑 확인 코스");
+        assertThat(item.level()).isEqualTo(CourseLevel.INTERMEDIATE);
+        assertThat(item.status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(item.capacity()).isEqualTo(20);
+        assertThat(item.price()).isEqualByComparingTo(BigInteger.valueOf(50000));
+        assertThat(item.orderOpenAt()).isNotNull();
+        assertThat(item.startAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("강사의 코스 목록 - 페이징이 올바르게 동작한다")
+    void findCoursesByInstructorMemberId_paging_works() {
+        saveOpenCourse("코스 A");
+        saveOpenCourse("코스 B");
+        saveOpenCourse("코스 C");
+
+        Page<InstructorCourseListItem> result = courseRepository
+                .findCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 2));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(3);
+        assertThat(result.getTotalPages()).isEqualTo(2);
+        assertThat(result.isFirst()).isTrue();
+        assertThat(result.isLast()).isFalse();
     }
 
     private CourseSearchRequest emptyCondition() {

@@ -11,6 +11,7 @@ import four_tential.potential.domain.course.course_category.CourseCategoryReposi
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
@@ -18,18 +19,14 @@ import four_tential.potential.presentation.course.model.request.CourseSearchRequ
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
+import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
@@ -95,6 +92,7 @@ public class CourseService {
                 && courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId);
 
         List<String> imageUrls = course.getImages().stream()
+                .sorted(Comparator.comparing(image -> image.getId()))
                 .map(image -> image.getImageUrl())
                 .toList();
 
@@ -126,5 +124,17 @@ public class CourseService {
                 reviewCount,
                 isWishlisted
         );
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InstructorCourseListItem> getInstructorCourses(UUID instructorId, Pageable pageable) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(instructorId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Page<InstructorCourseListItem> courses =
+                courseRepository.findCoursesByInstructorMemberId(instructorMember.getId(), pageable);
+
+        return PageResponse.register(courses);
     }
 }
