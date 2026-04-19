@@ -103,6 +103,34 @@ class OrderTest {
                 .hasFieldOrPropertyWithValue("httpStatus", OrderExceptionEnum.ERR_NOT_PENDING_ORDER.getHttpStatus());
     }
 
+    @Test
+    @DisplayName("관리자는 주문 상태를 임의로 변경할 수 있다")
+    void updateStatusByAdmin_Success() {
+        // given
+        Order order = createPendingOrder();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.PAID);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("관리자가 주문을 취소 상태로 변경하면 취소 시각이 기록된다")
+    void updateStatusByAdmin_Cancelled_At_Success() {
+        // given
+        Order order = createPendingOrder();
+        LocalDateTime beforeUpdate = LocalDateTime.now();
+
+        // when
+        order.updateStatusByAdmin(OrderStatus.CANCELLED);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isAfterOrEqualTo(beforeUpdate);
+    }
+
     private Order createPendingOrder() {
         return Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트 코스");
     }

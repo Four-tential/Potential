@@ -5,6 +5,8 @@ import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateRequest;
+import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateResponse;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +33,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -215,5 +216,30 @@ class OrderServiceTest {
         // then
         assertThat(result.successCount()).isZero();
         assertThat(result.fetchedCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("관리자가 주문 상태를 강제로 변경하면 응답을 반환하고 취소 시 재고를 복구한다")
+    void updateOrderStatusByAdmin_Success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "테스트"));
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        OrderAdminStatusUpdateRequest request = new OrderAdminStatusUpdateRequest(OrderStatus.CANCELLED, "입금 미확인");
+
+        // when
+        OrderAdminStatusUpdateResponse response = orderService.updateOrderStatusByAdmin(orderId, request);
+
+        // then
+        assertThat(response.orderId()).isEqualTo(order.getId());
+        assertThat(response.previousStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(response.currentStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        verify(orderRepository).findById(orderId);
+        verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
     }
 }

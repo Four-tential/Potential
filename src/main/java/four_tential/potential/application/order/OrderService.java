@@ -2,9 +2,12 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateRequest;
+import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateResponse;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +30,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final CourseRepository courseRepository;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
 
@@ -138,6 +142,27 @@ public class OrderService {
             log.error("주문 만료 처리 중 예외 발생 (낙관적 락 등): orderId={}, reason={}", orderId, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 관리자에 의한 주문 상태 강제 변경
+     */
+    @Transactional
+    public OrderAdminStatusUpdateResponse updateOrderStatusByAdmin(UUID orderId, OrderAdminStatusUpdateRequest request) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+
+        OrderStatus previousStatus = order.getStatus();
+        OrderStatus targetStatus = request.targetStatus();
+
+        order.updateStatusByAdmin(targetStatus);
+
+        // 상태가 취소(CANCELLED)나 만료(EXPIRED)로 변경된 경우 Redis 재고 복구
+        if (targetStatus == OrderStatus.CANCELLED || targetStatus == OrderStatus.EXPIRED) {
+            rollbackRedisSeatQuietly(order);
+        }
+
+        return OrderAdminStatusUpdateResponse.of(order, previousStatus);
     }
 
     public record OrderBatchResult(int fetchedCount, int successCount) {}

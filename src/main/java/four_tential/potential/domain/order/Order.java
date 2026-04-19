@@ -99,4 +99,14 @@ public class Order extends BaseTimeEntity {
         }
         this.status = OrderStatus.EXPIRED;
     }
+
+    /**
+     * 관리자에 의한 주문 상태 강제 변경
+     */
+    public void updateStatusByAdmin(OrderStatus nextStatus) {
+        this.status = nextStatus;
+        if (nextStatus == OrderStatus.CANCELLED) {
+            this.cancelledAt = LocalDateTime.now();
+        }
+    }
 }
