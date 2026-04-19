@@ -1,5 +1,7 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.application.order.OrderService;
+import four_tential.potential.application.order.WaitingListService;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.CommonExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
@@ -79,6 +81,12 @@ class PaymentFacadeTest {
 
     @Mock
     private PaymentDistributedLockExecutor paymentLockManager;
+
+    @Mock
+    private OrderService orderService;
+
+    @Mock
+    private WaitingListService waitingListService;
 
     @Mock
     private TransactionStatus transactionStatus;
@@ -346,6 +354,8 @@ class PaymentFacadeTest {
 
         assertThat(response.status()).isEqualTo(PaymentStatus.PAID);
         verify(paymentService).confirmPaid(paymentForWebhook);
+        verify(orderService).completePayment(orderId);
+        verify(waitingListService).completeOccupyingSeat(courseId, memberId);
         verify(webhookService).completeWebhook(deferredWebhook);
         verify(webhookService, never()).failWebhook(eq(deferredWebhook), any(), any());
     }
@@ -949,6 +959,8 @@ class PaymentFacadeTest {
                 .doesNotThrowAnyException();
 
         verify(paymentService).confirmPaid(payment);
+        verify(orderService).completePayment(orderId);
+        verify(waitingListService).completeOccupyingSeat(courseId, memberId);
         verify(paymentService, never()).fail(any(Payment.class));
         verify(webhookService).completeWebhook(savedWebhook);
         verify(webhookService, never()).failWebhook(eq(savedWebhook), any(), any());
