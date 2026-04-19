@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.UUID;
 
-public interface CourseRepository extends JpaRepository<Course, UUID> {
+public interface CourseRepository extends JpaRepository<Course, UUID>, CourseQueryRepository {
     boolean existsByMemberInstructorIdAndStatusInAndEndAtAfter(
             UUID memberInstructorId,
             Collection<CourseStatus> statuses,
