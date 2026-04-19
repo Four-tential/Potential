@@ -24,7 +24,7 @@ public record CourseListItem(
         LocalDateTime startAt,
         boolean isWishlisted
 ) {
-    public static CourseListItem from(CourseListQueryResult result, boolean isWishlisted) {
+    public static CourseListItem register(CourseListQueryResult result, boolean isWishlisted) {
         return new CourseListItem(
                 result.courseId(),
                 result.title(),

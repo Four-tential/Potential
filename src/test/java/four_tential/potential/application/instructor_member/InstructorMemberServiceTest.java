@@ -5,9 +5,12 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.member.fixture.InstructorMemberFixture;
 import four_tential.potential.domain.member.fixture.MemberFixture;
+import four_tential.potential.domain.member.instructor_member.InstructorApplicationDetailResult;
+import four_tential.potential.domain.member.instructor_member.InstructorApplicationItemResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
+import four_tential.potential.domain.member.instructor_member.MyInstructorApplicationResult;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.presentation.instructor_member.model.request.ApplyInstructorRequest;
@@ -289,7 +292,7 @@ class InstructorMemberServiceTest {
     @DisplayName("강사 신청 상세 조회 성공 - memberId로 상세 정보 반환")
     void getInstructorApplicationDetail_success() {
         Member member = MemberFixture.defaultMember();
-        InstructorApplicationDetail detail = new InstructorApplicationDetail(
+        InstructorApplicationDetailResult detail = new InstructorApplicationDetailResult(
                 member.getId(), "홍길동", "hong@test.com", "010-1234-5678",
                 "FITNESS", "피트니스",
                 InstructorMemberFixture.DEFAULT_CONTENT,
@@ -327,7 +330,7 @@ class InstructorMemberServiceTest {
     @DisplayName("내 강사 신청 조회 성공 - memberId로 본인 신청 정보 반환")
     void getMyInstructorApplication_success() {
         Member member = MemberFixture.defaultMember();
-        MyInstructorApplicationResponse expected = new MyInstructorApplicationResponse(
+        MyInstructorApplicationResult expected = new MyInstructorApplicationResult(
                 InstructorMemberFixture.DEFAULT_CATEGORY_CODE,
                 "피트니스",
                 InstructorMemberFixture.DEFAULT_CONTENT,
@@ -366,8 +369,8 @@ class InstructorMemberServiceTest {
     @DisplayName("강사 신청 목록 조회 성공 - status 필터 없이 전체 목록 반환")
     void getInstructorApplications_noFilter() {
         Pageable pageable = PageRequest.of(0, 10);
-        List<InstructorApplicationItem> items = List.of(
-                new InstructorApplicationItem(
+        List<InstructorApplicationItemResult> items = List.of(
+                new InstructorApplicationItemResult(
                         UUID.randomUUID(), "홍길동", "hong@test.com",
                         "FITNESS", "피트니스", InstructorMemberStatus.PENDING, null
                 )
@@ -387,8 +390,8 @@ class InstructorMemberServiceTest {
     @DisplayName("강사 신청 목록 조회 성공 - PENDING 상태 필터 적용")
     void getInstructorApplications_withStatusFilter() {
         Pageable pageable = PageRequest.of(0, 10);
-        List<InstructorApplicationItem> items = List.of(
-                new InstructorApplicationItem(
+        List<InstructorApplicationItemResult> items = List.of(
+                new InstructorApplicationItemResult(
                         UUID.randomUUID(), "김철수", "kim@test.com",
                         "YOGA", "요가", InstructorMemberStatus.PENDING, null
                 )

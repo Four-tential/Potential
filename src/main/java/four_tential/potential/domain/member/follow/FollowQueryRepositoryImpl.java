@@ -2,7 +2,6 @@ package four_tential.potential.domain.member.follow;
 
 import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -24,9 +23,9 @@ public class FollowQueryRepositoryImpl implements FollowQueryRepository {
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<FollowedInstructorItem> findFollowedInstructors(UUID followerId, Pageable pageable) {
-        List<FollowedInstructorItem> content = queryFactory
-                .select(Projections.constructor(FollowedInstructorItem.class,
+    public Page<FollowQueryResult> findFollowedInstructors(UUID followerId, Pageable pageable) {
+        List<FollowQueryResult> content = queryFactory
+                .select(Projections.constructor(FollowQueryResult.class,
                         member.id,
                         member.name,
                         member.profileImageUrl,

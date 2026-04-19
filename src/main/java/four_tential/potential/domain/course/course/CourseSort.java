@@ -1,4 +1,4 @@
-package four_tential.potential.presentation.course.model.request;
+package four_tential.potential.domain.course.course;
 
 public enum CourseSort {
     LATEST,

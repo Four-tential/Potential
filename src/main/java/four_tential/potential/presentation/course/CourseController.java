@@ -4,10 +4,10 @@ import four_tential.potential.application.course.CourseService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.course.course.CourseLevel;
+import four_tential.potential.domain.course.course.CourseSearchCondition;
+import four_tential.potential.domain.course.course.CourseSort;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
-import four_tential.potential.presentation.course.model.request.CourseSearchRequest;
-import four_tential.potential.presentation.course.model.request.CourseSort;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +44,7 @@ public class CourseController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        CourseSearchRequest condition = new CourseSearchRequest(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
+        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
         Pageable pageable = PageRequest.of(page, size);
         UUID memberId = principal != null ? principal.memberId() : null;
 

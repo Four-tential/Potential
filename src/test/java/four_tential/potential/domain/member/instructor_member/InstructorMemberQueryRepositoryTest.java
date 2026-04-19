@@ -5,9 +5,6 @@ import four_tential.potential.domain.course.course_category.CourseCategoryReposi
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
-import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
-import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
-import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,13 +55,13 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findInstructorApplications - status 필터 없이 전체 목록 조회")
     void findInstructorApplications_noFilter_returnsAll() {
-        Page<InstructorApplicationItem> result =
+        Page<InstructorApplicationItemResult> result =
                 instructorMemberRepository.findInstructorApplications(null, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getTotalElements()).isEqualTo(1);
 
-        InstructorApplicationItem item = result.getContent().get(0);
+        InstructorApplicationItemResult item = result.getContent().get(0);
         assertThat(item.memberId()).isEqualTo(savedMember.getId());
         assertThat(item.memberName()).isEqualTo("홍길동");
         assertThat(item.categoryCode()).isEqualTo("FITNESS");
@@ -75,7 +72,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findInstructorApplications - PENDING 필터 적용 시 PENDING 목록만 반환")
     void findInstructorApplications_pendingFilter_returnsPendingOnly() {
-        Page<InstructorApplicationItem> result =
+        Page<InstructorApplicationItemResult> result =
                 instructorMemberRepository.findInstructorApplications(InstructorMemberStatus.PENDING, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -85,7 +82,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findInstructorApplications - APPROVED 필터 적용 시 PENDING 데이터는 포함되지 않음")
     void findInstructorApplications_approvedFilter_excludesPending() {
-        Page<InstructorApplicationItem> result =
+        Page<InstructorApplicationItemResult> result =
                 instructorMemberRepository.findInstructorApplications(InstructorMemberStatus.APPROVED, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -97,7 +94,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     void findInstructorApplications_rejectedFilter_returnsRejected() {
         savedInstructorMember.reject("자격 요건 미달");
 
-        Page<InstructorApplicationItem> result =
+        Page<InstructorApplicationItemResult> result =
                 instructorMemberRepository.findInstructorApplications(InstructorMemberStatus.REJECTED, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -115,7 +112,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
                 InstructorMember.register(member2.getId(), "FITNESS", "5년 경력 강사", "https://example.com/cert2.jpg")
         );
 
-        Page<InstructorApplicationItem> result =
+        Page<InstructorApplicationItemResult> result =
                 instructorMemberRepository.findInstructorApplications(null, PageRequest.of(0, 1));
 
         assertThat(result.getContent()).hasSize(1);
@@ -128,11 +125,11 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findInstructorApplicationDetail - memberId로 상세 조회 성공")
     void findInstructorApplicationDetail_success() {
-        Optional<InstructorApplicationDetail> result =
+        Optional<InstructorApplicationDetailResult> result =
                 instructorMemberRepository.findInstructorApplicationDetail(savedMember.getId());
 
         assertThat(result).isPresent();
-        InstructorApplicationDetail detail = result.get();
+        InstructorApplicationDetailResult detail = result.get();
         assertThat(detail.memberId()).isEqualTo(savedMember.getId());
         assertThat(detail.memberName()).isEqualTo("홍길동");
         assertThat(detail.memberEmail()).isEqualTo("instructor@test.com");
@@ -150,7 +147,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     void findInstructorApplicationDetail_rejected_includesRejectReason() {
         savedInstructorMember.reject("자격 요건 미달");
 
-        Optional<InstructorApplicationDetail> result =
+        Optional<InstructorApplicationDetailResult> result =
                 instructorMemberRepository.findInstructorApplicationDetail(savedMember.getId());
 
         assertThat(result).isPresent();
@@ -162,7 +159,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findInstructorApplicationDetail - 존재하지 않는 memberId면 빈 Optional 반환")
     void findInstructorApplicationDetail_notFound_returnsEmpty() {
-        Optional<InstructorApplicationDetail> result =
+        Optional<InstructorApplicationDetailResult> result =
                 instructorMemberRepository.findInstructorApplicationDetail(UUID.randomUUID());
 
         assertThat(result).isEmpty();
@@ -173,11 +170,11 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findMyInstructorApplication - 본인 신청 조회 성공")
     void findMyInstructorApplication_success() {
-        Optional<MyInstructorApplicationResponse> result =
+        Optional<MyInstructorApplicationResult> result =
                 instructorMemberRepository.findMyInstructorApplication(savedMember.getId());
 
         assertThat(result).isPresent();
-        MyInstructorApplicationResponse response = result.get();
+        MyInstructorApplicationResult response = result.get();
         assertThat(response.categoryCode()).isEqualTo("FITNESS");
         assertThat(response.categoryName()).isEqualTo("피트니스");
         assertThat(response.content()).isEqualTo("10년 경력의 피트니스 강사입니다");
@@ -190,7 +187,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     void findMyInstructorApplication_rejected_includesRejectReason() {
         savedInstructorMember.reject("자격 요건 미달");
 
-        Optional<MyInstructorApplicationResponse> result =
+        Optional<MyInstructorApplicationResult> result =
                 instructorMemberRepository.findMyInstructorApplication(savedMember.getId());
 
         assertThat(result).isPresent();
@@ -202,7 +199,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("findMyInstructorApplication - 신청 이력 없으면 빈 Optional 반환")
     void findMyInstructorApplication_notFound_returnsEmpty() {
-        Optional<MyInstructorApplicationResponse> result =
+        Optional<MyInstructorApplicationResult> result =
                 instructorMemberRepository.findMyInstructorApplication(UUID.randomUUID());
 
         assertThat(result).isEmpty();

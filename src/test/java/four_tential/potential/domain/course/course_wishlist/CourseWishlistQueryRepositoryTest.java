@@ -13,7 +13,6 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
-import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,7 +81,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         saveWishlist(saveCourse("코스B"));
         saveWishlist(saveCourse("코스C"));
 
-        Page<WishlistCourseItem> result =
+        Page<WishlistCourseQueryResult> result =
                 courseWishlistRepository.findWishlistCourses(student.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(3);
@@ -92,7 +91,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
     @Test
     @DisplayName("찜한 코스 없으면 빈 페이지 반환")
     void findWishlistCourses_empty() {
-        Page<WishlistCourseItem> result =
+        Page<WishlistCourseQueryResult> result =
                 courseWishlistRepository.findWishlistCourses(student.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -108,7 +107,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         Course course = saveCourse("다른학생 코스");
         courseWishlistRepository.save(CourseWishlist.register(otherStudent.getId(), course.getId()));
 
-        Page<WishlistCourseItem> result =
+        Page<WishlistCourseQueryResult> result =
                 courseWishlistRepository.findWishlistCourses(student.getId(), PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -124,7 +123,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         Course course = saveCourse("소도구 필라테스 입문반");
         saveWishlist(course);
 
-        WishlistCourseItem item = courseWishlistRepository
+        WishlistCourseQueryResult item = courseWishlistRepository
                 .findWishlistCourses(student.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -149,7 +148,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         Course course = saveCourse("이미지 없는 코스");
         saveWishlist(course);
 
-        WishlistCourseItem item = courseWishlistRepository
+        WishlistCourseQueryResult item = courseWishlistRepository
                 .findWishlistCourses(student.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -163,7 +162,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         courseImageRepository.save(CourseImage.register(course, "https://example.com/thumb.jpg"));
         saveWishlist(course);
 
-        WishlistCourseItem item = courseWishlistRepository
+        WishlistCourseQueryResult item = courseWishlistRepository
                 .findWishlistCourses(student.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -180,7 +179,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         courseImageRepository.save(secondImage);
         saveWishlist(course);
 
-        WishlistCourseItem item = courseWishlistRepository
+        WishlistCourseQueryResult item = courseWishlistRepository
                 .findWishlistCourses(student.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
@@ -198,7 +197,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         saveWishlist(saveCourse("코스B"));
         saveWishlist(saveCourse("코스C"));
 
-        Page<WishlistCourseItem> result =
+        Page<WishlistCourseQueryResult> result =
                 courseWishlistRepository.findWishlistCourses(student.getId(), PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
@@ -215,7 +214,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         saveWishlist(saveCourse("코스B"));
         saveWishlist(saveCourse("코스C"));
 
-        Page<WishlistCourseItem> result =
+        Page<WishlistCourseQueryResult> result =
                 courseWishlistRepository.findWishlistCourses(student.getId(), PageRequest.of(1, 2));
 
         assertThat(result.getContent()).hasSize(1);

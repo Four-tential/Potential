@@ -3,9 +3,6 @@ package four_tential.potential.domain.member.instructor_member;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationDetail;
-import four_tential.potential.presentation.instructor_member.model.response.InstructorApplicationItem;
-import four_tential.potential.presentation.instructor_member.model.response.MyInstructorApplicationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -25,9 +22,9 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<InstructorApplicationItem> findInstructorApplications(InstructorMemberStatus status, Pageable pageable) {
-        List<InstructorApplicationItem> content = queryFactory
-                .select(Projections.constructor(InstructorApplicationItem.class,
+    public Page<InstructorApplicationItemResult> findInstructorApplications(InstructorMemberStatus status, Pageable pageable) {
+        List<InstructorApplicationItemResult> content = queryFactory
+                .select(Projections.constructor(InstructorApplicationItemResult.class,
                         member.id,
                         member.name,
                         member.email,
@@ -55,10 +52,10 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
     }
 
     @Override
-    public Optional<InstructorApplicationDetail> findInstructorApplicationDetail(UUID memberId) {
+    public Optional<InstructorApplicationDetailResult> findInstructorApplicationDetail(UUID memberId) {
         return Optional.ofNullable(
                 queryFactory
-                        .select(Projections.constructor(InstructorApplicationDetail.class,
+                        .select(Projections.constructor(InstructorApplicationDetailResult.class,
                                 member.id,
                                 member.name,
                                 member.email,
@@ -81,10 +78,10 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
     }
 
     @Override
-    public Optional<MyInstructorApplicationResponse> findMyInstructorApplication(UUID memberId) {
+    public Optional<MyInstructorApplicationResult> findMyInstructorApplication(UUID memberId) {
         return Optional.ofNullable(
                 queryFactory
-                        .select(Projections.constructor(MyInstructorApplicationResponse.class,
+                        .select(Projections.constructor(MyInstructorApplicationResult.class,
                                 instructorMember.categoryCode,
                                 courseCategory.name,
                                 instructorMember.content,

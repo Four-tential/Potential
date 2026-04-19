@@ -30,6 +30,7 @@ import four_tential.potential.presentation.member.model.request.ChangeMemberStat
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
 import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.domain.member.follow.FollowQueryResult;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
 import four_tential.potential.presentation.member.model.response.FollowResponse;
@@ -964,7 +965,7 @@ class MemberServiceTest {
     void getMyFollows_success() {
         UUID followerId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 10);
-        FollowedInstructorItem item = new FollowedInstructorItem(
+        FollowQueryResult item = new FollowQueryResult(
                 UUID.randomUUID(), "강사이름", "https://img.url/profile.png",
                 "FITNESS", "피트니스", 3L, 4.5, LocalDateTime.now()
         );
@@ -1002,7 +1003,7 @@ class MemberServiceTest {
     void getMyFollows_secondPage() {
         UUID followerId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(1, 2);
-        FollowedInstructorItem item = new FollowedInstructorItem(
+        FollowQueryResult item = new FollowQueryResult(
                 UUID.randomUUID(), "강사B", null, "COOK", "쿠킹", 1L, null, LocalDateTime.now()
         );
         given(followRepository.findFollowedInstructors(followerId, pageable))
