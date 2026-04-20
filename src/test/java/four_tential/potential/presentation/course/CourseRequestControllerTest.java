@@ -220,7 +220,7 @@ class CourseRequestControllerTest {
     @DisplayName("코스 개설 신청 취소 - 본인 코스가 아니면 403 Forbidden")
     void deleteCourseRequest_notOwnCourse() throws Exception {
         UUID courseId = UUID.randomUUID();
-        willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE))
+        willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE_DELETE))
                 .given(courseService).deleteCourseRequest(any(), eq(courseId));
 
         mockMvc.perform(delete("/v1/course-requests/{courseId}", courseId)

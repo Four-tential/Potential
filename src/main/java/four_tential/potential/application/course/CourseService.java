@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_INSTRUCTOR;
@@ -214,8 +215,11 @@ public class CourseService {
         );
         courseRepository.save(course);
 
-        if (request.imageUrls() != null) {
-            request.imageUrls().forEach(url -> courseImageRepository.save(CourseImage.register(course, url)));
+        if (request.imageUrls() != null && !request.imageUrls().isEmpty()) {
+            List<CourseImage> images = request.imageUrls().stream()
+                    .map(url -> CourseImage.register(course, url))
+                    .collect(Collectors.toList());
+            courseImageRepository.saveAll(images);
         }
 
         return CreateCourseRequestResponse.register(course, category.getCode());

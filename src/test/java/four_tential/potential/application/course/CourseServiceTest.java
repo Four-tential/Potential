@@ -607,7 +607,7 @@ class CourseServiceTest {
                 courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
         )
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스만 조회 가능");
+                .hasMessage("본인 코스만 조회 가능합니다");
 
         verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
     }
@@ -645,7 +645,7 @@ class CourseServiceTest {
         given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
         given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
         given(courseRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
-        given(courseImageRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(courseImageRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
 
         CreateCourseRequestResponse response = courseService.createCourseRequest(memberId, request);
 
@@ -653,7 +653,7 @@ class CourseServiceTest {
         assertThat(response.categoryCode()).isEqualTo(CourseCategoryFixture.DEFAULT_CODE);
         assertThat(response.status()).isEqualTo(CourseStatus.PREPARATION);
         verify(courseRepository).save(any(Course.class));
-        verify(courseImageRepository).save(any());
+        verify(courseImageRepository).saveAll(any());
     }
 
     @Test
@@ -788,7 +788,7 @@ class CourseServiceTest {
     }
 
     @Test
-    @DisplayName("코스 개설 신청 취소 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE")
+    @DisplayName("코스 개설 신청 취소 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE_DELETE")
     void deleteCourseRequest_notOwnCourse() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
@@ -801,7 +801,7 @@ class CourseServiceTest {
 
         assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, courseId))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스만 삭제 가능");
+                .hasMessage("본인 코스만 삭제 가능합니다");
 
         verify(courseRepository, never()).delete(any());
     }
