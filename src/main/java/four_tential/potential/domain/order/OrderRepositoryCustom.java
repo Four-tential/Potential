@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,4 +28,9 @@ public interface OrderRepositoryCustom {
             UUID memberInstructorId,
             Collection<OrderStatus> statuses
     );
+
+    /**
+     * 결제 완료(PAID) 상태이면서 환불 가능 기간(코스 시작 7일 전)이 지난 주문 목록 조회
+     */
+    List<Order> findPaidOrdersToConfirm(LocalDateTime now, Pageable pageable);
 }

@@ -126,4 +126,17 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
 
         return PageableExecutionUtils.getPage(content, pageable, () -> countQuery.fetchOne());
     }
+
+    @Override
+    public List<Order> findPaidOrdersToConfirm(LocalDateTime now, Pageable pageable) {
+        return queryFactory.selectFrom(order)
+                .join(course).on(course.id.eq(order.courseId))
+                .where(
+                        order.status.eq(OrderStatus.PAID),
+                        course.startAt.loe(now.plusDays(7))
+                )
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+    }
 }

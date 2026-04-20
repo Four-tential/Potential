@@ -26,6 +26,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -122,7 +123,7 @@ public class OrderService {
      * 개별 주문 처리는 독립된 트랜잭션에서 수행하여 낙관적 락 충돌 시 배치가 롤백되지 않도록 합니다.
      */
     public OrderBatchResult processExpiredBatch(LocalDateTime now, int batchSize) {
-        // 조구는 트랜잭션 없이 혹은 별도 트랜잭션으로 수행 (영속성 컨텍스트 분리를 위해 ID만 먼저 확보할 수도 있으나 여기서는 단순화)
+        // 조회는 트랜잭션 없이 혹은 별도 트랜잭션으로 수행 (영속성 컨텍스트 분리를 위해 ID만 먼저 확보할 수도 있으나 여기서는 단순화)
         Slice<Order> expiredOrdersSlice = orderRepository.findAllByStatusAndExpireAtBefore(
                 OrderStatus.PENDING, now, PageRequest.of(0, batchSize));
 
@@ -167,6 +168,49 @@ public class OrderService {
             return true;
         } catch (Exception e) {
             log.error("주문 만료 처리 중 예외 발생 (낙관적 락 등): orderId={}, reason={}", orderId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 결제 완료된 주문 자동 확정 처리 (단일 배치)
+     */
+    public OrderBatchResult processConfirmedBatch(LocalDateTime now, int batchSize) {
+        List<Order> ordersToConfirm = orderRepository.findPaidOrdersToConfirm(now, PageRequest.of(0, batchSize));
+
+        int fetchedCount = ordersToConfirm.size();
+        if (fetchedCount == 0) {
+            return new OrderBatchResult(0, 0);
+        }
+
+        OrderService self = applicationContext.getBean(OrderService.class);
+        int successCount = 0;
+
+        for (Order order : ordersToConfirm) {
+            if (self.confirmOrderInNewTransaction(order.getId())) {
+                successCount++;
+            }
+        }
+
+        return new OrderBatchResult(fetchedCount, successCount);
+    }
+
+    /**
+     * 단일 주문을 독립된 트랜잭션(REQUIRES_NEW)으로 확정 처리합니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean confirmOrderInNewTransaction(UUID orderId) {
+        try {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+
+            order.confirm();
+            orderRepository.saveAndFlush(order);
+
+            log.info("주문 확정 처리됨: orderId={}, courseId={}", order.getId(), order.getCourseId());
+            return true;
+        } catch (Exception e) {
+            log.error("주문 확정 처리 중 예외 발생: orderId={}, reason={}", orderId, e.getMessage());
             return false;
         }
     }

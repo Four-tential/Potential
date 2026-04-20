@@ -101,6 +101,16 @@ public class Order extends BaseTimeEntity {
     }
 
     /**
+     * 주문 확정 처리
+     */
+    public void confirm() {
+        if (this.status != OrderStatus.PAID) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_NOT_PAID_ORDER);
+        }
+        this.status = OrderStatus.CONFIRMED;
+    }
+
+    /**
      * 관리자에 의한 주문 상태 강제 변경
      */
     public void updateStatusByAdmin(OrderStatus nextStatus) {
