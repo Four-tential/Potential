@@ -33,4 +33,15 @@ class CourseCategoryTest {
         assertThat(category.getCode()).isEqualTo("FRONTEND");
         assertThat(category.getName()).isEqualTo(CourseCategoryFixture.DEFAULT_NAME);
     }
+
+    @Test
+    @DisplayName("updateName() 호출 시 name이 변경됨")
+    void updateName() {
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+
+        category.updateName("새 카테고리 이름");
+
+        assertThat(category.getName()).isEqualTo("새 카테고리 이름");
+        assertThat(category.getCode()).isEqualTo(CourseCategoryFixture.DEFAULT_CODE);
+    }
 }

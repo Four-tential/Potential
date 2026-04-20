@@ -7,4 +7,6 @@ import java.util.UUID;
 
 public interface InstructorMemberRepository extends JpaRepository<InstructorMember, UUID>, InstructorMemberQueryRepository {
     Optional<InstructorMember> findByMemberId(UUID memberId);
+
+    boolean existsByCategoryCode(String categoryCode);
 }

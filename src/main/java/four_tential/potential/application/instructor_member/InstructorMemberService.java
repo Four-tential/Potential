@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 import java.util.UUID;
 
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 
 @Service
@@ -48,7 +48,7 @@ public class InstructorMemberService {
 
         // 카테고리 유효성 검증
         if (!courseCategoryRepository.existsByCode(request.categoryCode())) {
-            throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+            throw new ServiceErrorException(ERR_CATEGORY_NOT_FOUND);
         }
 
         Optional<InstructorMember> existingApplication = instructorMemberRepository.findByMemberId(memberId);
