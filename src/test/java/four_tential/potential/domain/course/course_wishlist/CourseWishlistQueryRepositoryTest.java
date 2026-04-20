@@ -70,9 +70,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         instructor = instructorMemberRepository.save(im);
     }
 
-    // ────────────────────────────────────────────────────────────
     // 기본 조회
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("찜한 코스 3건 조회 - content 3건 반환")
@@ -113,9 +111,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.getContent()).isEmpty();
     }
 
-    // ────────────────────────────────────────────────────────────
     // 응답 필드 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("응답 항목에 courseId, title, memberInstructorName, categoryCode, price, status, startAt, wishedAt 이 올바르게 매핑됨")
@@ -138,9 +134,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         assertThat(item.wishedAt()).isNotNull();
     }
 
-    // ────────────────────────────────────────────────────────────
     // thumbnail 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("코스 이미지 없으면 thumbnail = null")
@@ -186,9 +180,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         assertThat(item.thumbnail()).isEqualTo("https://example.com/first-thumb.jpg");
     }
 
-    // ────────────────────────────────────────────────────────────
     // 페이징 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("찜 3건, size=2 → 첫 페이지 2건, 전체 3건")
@@ -221,9 +213,7 @@ class CourseWishlistQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isTrue();
     }
 
-    // ────────────────────────────────────────────────────────────
     // 헬퍼 메서드
-    // ────────────────────────────────────────────────────────────
 
     private Course saveCourse(String title) {
         LocalDateTime now = LocalDateTime.now();

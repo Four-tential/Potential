@@ -13,6 +13,9 @@ public interface OrderRepositoryCustom {
     Optional<Order> findOrderDetailsById(UUID orderId, UUID memberId);
     Page<Order> findMyOrders(UUID memberId, Pageable pageable);
 
+    // 특정 코스에서 CONFIRMED 상태인 수강생 명단 (출석 정보 포함)
+    Page<CourseStudentQueryResult> findConfirmedStudentsByCourseId(UUID courseId, Pageable pageable);
+
     boolean existsActiveEnrollment(
             UUID memberId,
             Collection<OrderStatus> orderStatuses,

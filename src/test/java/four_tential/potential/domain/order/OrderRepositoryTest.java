@@ -1,14 +1,21 @@
 package four_tential.potential.domain.order;
 
+import four_tential.potential.domain.attendance.Attendance;
+import four_tential.potential.domain.attendance.AttendanceRepository;
+import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.domain.member.member.Member;
+import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +36,12 @@ class OrderRepositoryTest extends RedisTestContainer {
 
     @Autowired
     private CourseRepository courseRepository;
+
+    @Autowired
+    private MemberRepository memberRepository;
+
+    @Autowired
+    private AttendanceRepository attendanceRepository;
 
     @Test
     @DisplayName("주문 ID와 본인 ID로 주문 상세 정보를 성공적으로 조회한다")
@@ -284,6 +297,161 @@ class OrderRepositoryTest extends RedisTestContainer {
                 instructorId, List.of(OrderStatus.PAID, OrderStatus.CONFIRMED));
 
         assertThat(result).isEqualTo(4L);
+    }
+
+    // ── findConfirmedStudentsByCourseId ──────────────────────────────────────
+
+    @Test
+    @DisplayName("수강생 명단 조회 - CONFIRMED 주문과 ATTEND 출석 정보가 있으면 출석 상태 포함 반환")
+    void findConfirmedStudents_withAttendance_returnsAttendStatus() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Member member = memberRepository.save(
+                Member.register("attend@test.com", "pw", "김수강", "010-1111-1111"));
+        Order order = confirmedOrder(member.getId(), courseId);
+        Order saved = orderRepository.save(order);
+
+        Attendance attendance = Attendance.register(saved.getId(), member.getId(), courseId);
+        attendance.attend("qr-token-1");
+        attendanceRepository.save(attendance);
+
+        // when
+        Page<CourseStudentQueryResult> result =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).memberId()).isEqualTo(member.getId());
+        assertThat(result.getContent().get(0).memberName()).isEqualTo("김수강");
+        assertThat(result.getContent().get(0).attendanceStatus()).isEqualTo(AttendanceStatus.ATTEND);
+        assertThat(result.getContent().get(0).attendanceAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - CONFIRMED 주문에 출석 미처리(ABSENT) 상태로 저장된 수강생도 포함")
+    void findConfirmedStudents_withAbsentAttendance_returnsAbsentStatus() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Member member = memberRepository.save(
+                Member.register("absent@test.com", "pw", "이결석", "010-2222-2222"));
+        Order order = confirmedOrder(member.getId(), courseId);
+        Order saved = orderRepository.save(order);
+
+        // Attendance.register 시 기본 status = ABSENT
+        attendanceRepository.save(Attendance.register(saved.getId(), member.getId(), courseId));
+
+        // when
+        Page<CourseStudentQueryResult> result =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).attendanceStatus()).isEqualTo(AttendanceStatus.ABSENT);
+        assertThat(result.getContent().get(0).attendanceAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 출석 레코드가 없어도 수강생은 null 출석 상태로 포함")
+    void findConfirmedStudents_noAttendance_returnsNullStatus() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Member member = memberRepository.save(
+                Member.register("noattend@test.com", "pw", "박미출", "010-3333-3333"));
+        orderRepository.save(confirmedOrder(member.getId(), courseId));
+
+        // when
+        Page<CourseStudentQueryResult> result =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).memberName()).isEqualTo("박미출");
+        assertThat(result.getContent().get(0).attendanceStatus()).isNull();
+        assertThat(result.getContent().get(0).attendanceAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - CONFIRMED 상태가 아닌 주문(PAID, PENDING)은 포함하지 않음")
+    void findConfirmedStudents_excludesNonConfirmedOrders() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Member member1 = memberRepository.save(
+                Member.register("paid@test.com", "pw", "결제완료", "010-4444-4444"));
+        Member member2 = memberRepository.save(
+                Member.register("pending@test.com", "pw", "결제대기", "010-5555-5555"));
+
+        // PAID 주문 (CONFIRMED 아님)
+        Order paidOrder = Order.register(member1.getId(), courseId, 1, BigInteger.valueOf(50000), "테스트");
+        paidOrder.completePayment();
+        orderRepository.save(paidOrder);
+
+        // PENDING 주문
+        orderRepository.save(Order.register(member2.getId(), courseId, 1, BigInteger.valueOf(50000), "테스트"));
+
+        // when
+        Page<CourseStudentQueryResult> result =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 다른 코스의 CONFIRMED 주문은 포함하지 않음")
+    void findConfirmedStudents_excludesOtherCourse() {
+        // given
+        UUID targetCourseId = UUID.randomUUID();
+        UUID otherCourseId = UUID.randomUUID();
+
+        Member member = memberRepository.save(
+                Member.register("other@test.com", "pw", "다른코스", "010-6666-6666"));
+
+        // 다른 코스의 CONFIRMED 주문
+        orderRepository.save(confirmedOrder(member.getId(), otherCourseId));
+
+        // when
+        Page<CourseStudentQueryResult> result =
+                orderRepository.findConfirmedStudentsByCourseId(targetCourseId, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 페이징이 올바르게 동작한다")
+    void findConfirmedStudents_pagination_correct() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        for (int i = 1; i <= 3; i++) {
+            Member m = memberRepository.save(
+                    Member.register("student" + i + "@test.com", "pw", "수강생" + i, "010-000" + i + "-0000"));
+            orderRepository.save(confirmedOrder(m.getId(), courseId));
+        }
+
+        // when: 첫 페이지 (size=2)
+        Page<CourseStudentQueryResult> page0 =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(0, 2));
+
+        // then
+        assertThat(page0.getContent()).hasSize(2);
+        assertThat(page0.getTotalElements()).isEqualTo(3);
+        assertThat(page0.getTotalPages()).isEqualTo(2);
+        assertThat(page0.isLast()).isFalse();
+
+        // when: 두 번째 페이지
+        Page<CourseStudentQueryResult> page1 =
+                orderRepository.findConfirmedStudentsByCourseId(courseId, PageRequest.of(1, 2));
+
+        // then
+        assertThat(page1.getContent()).hasSize(1);
+        assertThat(page1.isLast()).isTrue();
+    }
+
+    private Order confirmedOrder(UUID memberId, UUID courseId) {
+        Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(50000), "테스트 강의");
+        ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);
+        return order;
     }
 
     private Course courseForInstructor(UUID memberInstructorId) {

@@ -388,9 +388,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.getContent().get(0).title()).isEqualTo("대상 코스");
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // findCoursesByInstructorMemberId
-    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("강사의 코스 목록 - PREPARATION 코스는 제외된다")
@@ -483,9 +481,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isFalse();
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
     // findMyCoursesByInstructorMemberId (강사 본인 전용 — PREPARATION 포함)
-    // ──────────────────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("내 코스 목록 - PREPARATION 코스가 포함된다")
