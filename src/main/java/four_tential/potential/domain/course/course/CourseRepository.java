@@ -14,4 +14,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, CourseQue
     );
 
     long countByMemberInstructorId(UUID memberInstructorId);
+
+    boolean existsByCourseCategoryId(UUID courseCategoryId);
 }
