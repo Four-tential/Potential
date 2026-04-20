@@ -72,7 +72,6 @@ public class PaymentCustomRepositoryImpl implements PaymentCustomRepository {
                         order.titleSnap,
                         order.orderCount,
                         payment.totalPrice,
-                        payment.discountPrice,
                         payment.paidTotalPrice,
                         payment.payWay,
                         payment.status,

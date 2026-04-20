@@ -43,10 +43,8 @@ class PaymentServiceTest {
         return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 "portone_key_123",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -151,9 +149,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -172,9 +168,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -195,9 +189,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -219,9 +211,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -242,9 +232,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -265,9 +253,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 100000L,
-                0L,
                 100000L
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
@@ -302,18 +288,14 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 orderId,
                 memberId,
-                null,
                 100000L,
-                0L,
                 100000L
         );
         Payment payment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-1",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -333,9 +315,7 @@ class PaymentServiceTest {
         PaymentCreateCommand preparation = new PaymentCreateCommand(
                 orderId,
                 memberId,
-                null,
                 100000L,
-                0L,
                 100000L
         );
         given(paymentRepository.save(any(Payment.class)))
@@ -371,6 +351,28 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("refund 호출 시 Payment 상태가 REFUNDED 로 변경된다")
+    void refund_changes_status_to_refunded() {
+        Payment payment = createPayment();
+        payment.confirmPaid();
+
+        paymentService.refund(payment);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    @DisplayName("partRefund 호출 시 Payment 상태가 PART_REFUNDED 로 변경된다")
+    void partRefund_changes_status_to_part_refunded() {
+        Payment payment = createPayment();
+        payment.confirmPaid();
+
+        paymentService.partRefund(payment);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PART_REFUNDED);
+    }
+
+    @Test
     @DisplayName("본인 결제가 존재하면 PaymentDetailResponse 를 반환한다")
     void getDetailByIdAndMemberId_returns_response_when_found() {
         UUID paymentId = UUID.randomUUID();
@@ -378,7 +380,7 @@ class PaymentServiceTest {
         UUID orderId   = UUID.randomUUID();
         PaymentDetailResponse expected = new PaymentDetailResponse(
                 paymentId, orderId, "소도구 필라테스 입문반", 5,
-                125000L, 0L, 125000L,
+                125000L, 125000L,
                 PaymentPayWay.CARD, PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );

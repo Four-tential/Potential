@@ -33,17 +33,11 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, columnDefinition = "BINARY(16)")
     private UUID memberId;
 
-    @Column(name = "member_coupon_id", columnDefinition = "BINARY(16)")
-    private UUID memberCouponId;
-
     @Column(name = "pg_key", unique = true, length = 300)
     private String pgKey;
 
     @Column(name = "total_price", nullable = false)
     private Long totalPrice;
-
-    @Column(name = "discount_price", nullable = false)
-    private Long discountPrice;
 
     @Column(name = "paid_total_price", nullable = false)
     private Long paidTotalPrice;
@@ -62,19 +56,15 @@ public class Payment extends BaseTimeEntity {
     public static Payment createPending(
             UUID orderId,
             UUID memberId,
-            UUID memberCouponId,
             String pgKey,
             Long totalPrice,
-            Long discountPrice,
             Long paidTotalPrice,
             PaymentPayWay payWay) {
         Payment payment = new Payment();
         payment.orderId = orderId;
         payment.memberId = memberId;
-        payment.memberCouponId = memberCouponId;
         payment.pgKey = pgKey;
         payment.totalPrice = totalPrice;
-        payment.discountPrice = discountPrice;
         payment.paidTotalPrice = paidTotalPrice;
         payment.payWay = payWay;
         payment.status = PaymentStatus.PENDING;

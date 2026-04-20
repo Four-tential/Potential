@@ -1,5 +1,6 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.payment.RefundFacade;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
@@ -29,6 +30,7 @@ class OrderFacadeTest {
 
     @Mock private OrderService orderService;
     @Mock private WaitingListService waitingListService;
+    @Mock private RefundFacade refundFacade;
 
     @InjectMocks private OrderFacade orderFacade;
 
@@ -173,14 +175,19 @@ class OrderFacadeTest {
     }
 
     @Test
-    @DisplayName("주문을 취소하면 주문 상태를 변경하고 Redis 재고를 복구한다")
+    @DisplayName("결제 전 주문을 취소하면 주문 상태를 변경하고 Redis 재고를 복구한다")
     void cancelOrder_success() {
         // given
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
         LocalDateTime cancelledAt = LocalDateTime.now();
+        OrderCancelRequest request = new OrderCancelRequest(2);
         
+        Order pendingOrder = mock(Order.class);
+        given(pendingOrder.getOrderCount()).willReturn(2);
+        given(pendingOrder.getStatus()).willReturn(OrderStatus.PENDING);
+
         Order order = mock(Order.class);
         given(order.getId()).willReturn(orderId);
         given(order.getMemberId()).willReturn(memberId);
@@ -189,10 +196,11 @@ class OrderFacadeTest {
         given(order.getStatus()).willReturn(OrderStatus.CANCELLED);
         given(order.getCancelledAt()).willReturn(cancelledAt);
         
+        given(orderService.getOrderDetails(orderId, memberId)).willReturn(pendingOrder);
         given(orderService.cancelOrder(orderId, memberId)).willReturn(order);
 
         // when
-        OrderCancelResponse response = orderFacade.cancelOrder(orderId, memberId);
+        OrderCancelResponse response = orderFacade.cancelOrder(orderId, memberId, request);
 
         // then
         assertThat(response).isNotNull();
@@ -201,5 +209,36 @@ class OrderFacadeTest {
         assertThat(response.cancelledAt()).isEqualTo(cancelledAt);
         verify(orderService).cancelOrder(orderId, memberId);
         verify(waitingListService).recoverCapacity(courseId, memberId, 2);
+        verify(refundFacade, never()).refundPaidOrderByStudent(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("결제 완료 주문 취소는 환불 흐름을 먼저 호출한다")
+    void cancelOrder_paid_order_refunds_first() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime cancelledAt = LocalDateTime.now();
+        OrderCancelRequest request = new OrderCancelRequest(1);
+
+        Order paidOrder = mock(Order.class);
+        given(paidOrder.getStatus()).willReturn(OrderStatus.PAID);
+
+        Order refundedOrder = mock(Order.class);
+        given(refundedOrder.getId()).willReturn(orderId);
+        given(refundedOrder.getStatus()).willReturn(OrderStatus.CANCELLED);
+        given(refundedOrder.getCancelledAt()).willReturn(cancelledAt);
+
+        given(orderService.getOrderDetails(orderId, memberId)).willReturn(paidOrder, refundedOrder);
+
+        // when
+        OrderCancelResponse response = orderFacade.cancelOrder(orderId, memberId, request);
+
+        // then
+        assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        verify(refundFacade).refundPaidOrderByStudent(memberId, orderId, 1);
+        verify(orderService, never()).cancelOrder(orderId, memberId);
+        verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
     }
 }

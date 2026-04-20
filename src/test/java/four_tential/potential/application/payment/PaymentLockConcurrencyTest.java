@@ -254,10 +254,8 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 pgKey,
                 1000L,
-                0L,
                 1000L,
                 PaymentPayWay.CARD
         );
@@ -267,10 +265,8 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         return Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 pgKey,
                 1000L,
-                0L,
                 1000L,
                 PaymentPayWay.CARD
         );

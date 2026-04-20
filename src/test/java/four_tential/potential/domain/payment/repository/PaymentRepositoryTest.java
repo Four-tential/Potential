@@ -242,10 +242,8 @@ class PaymentRepositoryTest extends RedisTestContainer {
         return Payment.createPending(
                 orderId,
                 UUID.randomUUID(),
-                null,
                 pgKey,
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -264,8 +262,8 @@ class PaymentRepositoryTest extends RedisTestContainer {
 
     private Payment savePayment(UUID orderId, UUID memberId, String pgKey) {
         Payment payment = Payment.createPending(
-                orderId, memberId, null,
-                pgKey, 125000L, 0L, 125000L, PaymentPayWay.CARD
+                orderId, memberId,
+                pgKey, 125000L, 125000L, PaymentPayWay.CARD
         );
         return paymentRepository.saveAndFlush(payment);
     }

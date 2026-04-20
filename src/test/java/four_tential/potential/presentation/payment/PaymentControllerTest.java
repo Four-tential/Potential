@@ -56,14 +56,12 @@ class PaymentControllerTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-1",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentCreateResponse facadeResponse = new PaymentCreateResponse(
                 paymentId,
                 orderId,
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD,
                 PaymentStatus.PENDING,
@@ -93,7 +91,7 @@ class PaymentControllerTest {
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         PaymentDetailResponse detail = new PaymentDetailResponse(
                 paymentId, orderId, "소도구 필라테스 입문반", 5,
-                125000L, 0L, 125000L,
+                125000L, 125000L,
                 PaymentPayWay.CARD, PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );
@@ -315,4 +313,5 @@ class PaymentControllerTest {
         assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
                 .isInstanceOf(ServiceErrorException.class);
     }
+
 }

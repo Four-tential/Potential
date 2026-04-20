@@ -50,17 +50,17 @@ public class PortOneClient implements PaymentGateway {
         try (io.portone.sdk.server.PortOneClient client = createClient()) {
             client.getPayment()
                     .cancelPayment(
-                            request.pgKey(),
-                            request.amount(),
-                            null,
-                            null,
-                            request.reason(),
-                            CancelRequester.Customer.INSTANCE,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null
+                            request.pgKey(),                      // 1. paymentId
+                            request.amount(),                     // 2. cancellationAmount
+                            null,                                 // 3. taxFreeAmount
+                            null,                                 // 4. vatAmount
+                            request.reason(),                     // 5. reason
+                            CancelRequester.Customer.INSTANCE,    // 6. requester
+                            null,                                 // 7. promotionDiscountRetainOption
+                            request.currentCancellableAmount(),   // 8. currentCancellableAmount
+                            null,                                 // 9. refundBankCode
+                            null,                                 // 10. refundAccountNumber
+                            null                                  // 11. refundAccountHolderName
                     )
                     .join();
         } catch (CompletionException e) {

@@ -17,10 +17,8 @@ class PaymentTest {
         return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 "portone_key_123",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -40,10 +38,8 @@ class PaymentTest {
         Payment payment = Payment.createPending(
                 orderId,
                 UUID.randomUUID(),
-                null,
                 "portone_key_123",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -58,40 +54,13 @@ class PaymentTest {
         Payment payment = Payment.createPending(
                 UUID.randomUUID(),
                 memberId,
-                null,
                 "portone_key_123",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
 
         assertThat(payment.getMemberId()).isEqualTo(memberId);
-    }
-
-    @Test
-    @DisplayName("결제 생성 시 쿠폰이 없으면 memberCouponId 는 null 이다")
-    void create_memberCouponId_null() {
-        Payment payment = createPayment();
-        assertThat(payment.getMemberCouponId()).isNull();
-    }
-
-    @Test
-    @DisplayName("결제 생성 시 쿠폰이 있으면 memberCouponId 가 저장된다")
-    void create_memberCouponId_not_null() {
-        UUID memberCouponId = UUID.randomUUID();
-        Payment payment = Payment.createPending(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                memberCouponId,
-                "portone_key_123",
-                100000L,
-                20000L,
-                80000L,
-                PaymentPayWay.CARD
-        );
-
-        assertThat(payment.getMemberCouponId()).isEqualTo(memberCouponId);
     }
 
     @Test
@@ -101,32 +70,13 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("결제 생성 시 discountPrice 가 저장된다")
-    void create_discountPrice() {
-        Payment payment = Payment.createPending(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                null,
-                "portone_key_123",
-                100000L,
-                20000L,
-                80000L,
-                PaymentPayWay.CARD
-        );
-
-        assertThat(payment.getDiscountPrice()).isEqualTo(20000L);
-    }
-
-    @Test
     @DisplayName("결제 생성 시 paidTotalPrice 가 저장된다")
     void create_paidTotalPrice() {
         Payment payment = Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 "portone_key_123",
                 100000L,
-                20000L,
                 80000L,
                 PaymentPayWay.CARD
         );
