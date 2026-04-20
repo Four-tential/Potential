@@ -12,6 +12,7 @@ import four_tential.potential.domain.course.course_category.CourseCategoryReposi
 import four_tential.potential.domain.course.course_image.CourseImage;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course_image.CourseImageRepository;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistoryRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.course.fixture.CourseFixture;
@@ -27,8 +28,11 @@ import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
+import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
+import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
 import four_tential.potential.presentation.course.model.response.CreateCourseRequestResponse;
@@ -62,6 +66,7 @@ class CourseServiceTest {
 
     @Mock private CourseRepository courseRepository;
     @Mock private CourseImageRepository courseImageRepository;
+    @Mock private CourseApprovalHistoryRepository courseApprovalHistoryRepository;
     @Mock private CourseCategoryRepository courseCategoryRepository;
     @Mock private CourseWishlistRepository courseWishlistRepository;
     @Mock private InstructorMemberRepository instructorMemberRepository;
@@ -904,5 +909,83 @@ class CourseServiceTest {
         Member member = MemberFixture.defaultMember();
         ReflectionTestUtils.setField(member, "id", InstructorMemberFixture.DEFAULT_MEMBER_ID);
         return member;
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인 성공 - PREPARATION 코스가 OPEN으로 전이되고 이력 저장")
+    void handleCourseRequest_approve_success() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        CourseRequestActionResponse response =
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null));
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(response.confirmedAt()).isNotNull();
+        verify(courseApprovalHistoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 반려 성공 - PREPARATION 상태 유지, 반려 이력 저장")
+    void handleCourseRequest_reject_success() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        CourseRequestActionResponse response =
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.REJECT, "사진 자료 미비"));
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.status()).isEqualTo(CourseStatus.PREPARATION);
+        assertThat(response.confirmedAt()).isNull();
+        verify(courseApprovalHistoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 반려 실패 - rejectReason 없으면 ERR_REJECT_REASON_REQUIRED")
+    void handleCourseRequest_rejectWithoutReason() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.REJECT, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("반려 사유는 필수입니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인/반려 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void handleCourseRequest_courseNotFound() {
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인/반려 실패 - PREPARATION이 아니면 ERR_COURSE_NOT_IN_PREPARATION")
+    void handleCourseRequest_notPreparation() {
+        UUID courseId = UUID.randomUUID();
+        Course course = openCourseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("PREPARATION 상태의 코스만 승인 또는 반려할 수 있습니다");
     }
 }
