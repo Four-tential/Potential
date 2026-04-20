@@ -9,7 +9,7 @@ import java.util.UUID;
  * 환불 가능 여부 조회 응답 DTO
  *
  * currentOrderCount : Order.orderCount (부분 환불 시 차감 업데이트된 잔여 수강권 수량)
- * unitPrice         : 수강권 1개당 금액 (paidTotalPrice / orderCount)
+ * unitPrice         : 수강권 1개당 금액 (Order.priceSnap)
  * refundable        : 환불 가능 여부
  *                     PAID/PART_REFUNDED 상태이고, 당일 취소가 아니며,
  *                     코스 시작 7일 초과 남아 있어야 true

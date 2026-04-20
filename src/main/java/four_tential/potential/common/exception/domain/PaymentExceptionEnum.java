@@ -25,6 +25,7 @@ public enum PaymentExceptionEnum implements ServiceErrorCode {
     // 환불
     ERR_NOT_FOUND_REFUND(HttpStatus.NOT_FOUND, "환불 내역을 찾을 수 없습니다"),
     ERR_REFUND_NOT_ALLOWED(HttpStatus.CONFLICT, "환불이 불가한 기간입니다"),
+    ERR_REFUND_PAYMENT_STATUS_INVALID(HttpStatus.BAD_REQUEST, "환불 가능한 결제 상태가 아닙니다"),
     ERR_ALREADY_FULLY_REFUNDED(HttpStatus.BAD_REQUEST, "이미 전액 환불된 결제입니다"),
     ERR_CANCEL_COUNT_EXCEEDED(HttpStatus.BAD_REQUEST, "취소 가능 수량을 초과했습니다"),
     ERR_CANCEL_COUNT_INVALID(HttpStatus.BAD_REQUEST, "취소 수량이 올바르지 않습니다"),
