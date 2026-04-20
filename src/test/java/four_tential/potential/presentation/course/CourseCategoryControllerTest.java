@@ -61,7 +61,6 @@ class CourseCategoryControllerTest {
         }).given(jwtFilter).doFilter(any(), any(), any());
     }
 
-    // region createCourseCategory
     @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("카테고리 생성 - ADMIN이면 201 CREATED 및 생성 정보 반환")
@@ -108,9 +107,7 @@ class CourseCategoryControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
     }
-    // endregion
 
-    // region updateCategoryName
     @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("카테고리 이름 수정 - ADMIN이면 200 OK 및 수정 정보 반환")
@@ -173,9 +170,7 @@ class CourseCategoryControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
-    // endregion
 
-    // region deleteCategory
     @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("카테고리 삭제 - ADMIN이면 200 OK")
@@ -222,5 +217,4 @@ class CourseCategoryControllerTest {
                         .with(csrf()))
                 .andExpect(status().isConflict());
     }
-    // endregion
 }

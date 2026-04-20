@@ -9,6 +9,8 @@ import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
+import four_tential.potential.domain.course.course_image.CourseImage;
+import four_tential.potential.domain.course.course_image.CourseImageRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
@@ -17,10 +19,12 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
+import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
+import four_tential.potential.presentation.course.model.response.CreateCourseRequestResponse;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,10 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_COURSE_IN_PREPARATION;
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_FORBIDDEN_COURSE;
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_INSTRUCTOR;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_MEMBER;
 
@@ -42,6 +43,7 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 public class CourseService {
 
     private final CourseRepository courseRepository;
+    private final CourseImageRepository courseImageRepository;
     private final CourseCategoryRepository courseCategoryRepository;
     private final CourseWishlistRepository courseWishlistRepository;
     private final InstructorMemberRepository instructorMemberRepository;
@@ -184,5 +186,58 @@ public class CourseService {
                 .map(result -> CourseStudentItem.register(result));
 
         return PageResponse.register(students);
+    }
+
+    @Transactional
+    public CreateCourseRequestResponse createCourseRequest(UUID memberId, CreateCourseRequestRequest request) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        CourseCategory category = courseCategoryRepository.findByCode(instructorMember.getCategoryCode())
+                .orElseThrow(() -> new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
+
+        Course course = Course.register(
+                category.getId(),
+                instructorMember.getId(),
+                request.title(),
+                request.description(),
+                request.addressMain(),
+                request.addressDetail(),
+                request.capacity(),
+                request.price(),
+                request.level(),
+                request.orderOpenAt(),
+                request.orderCloseAt(),
+                request.startAt(),
+                request.endAt()
+        );
+        courseRepository.save(course);
+
+        if (request.imageUrls() != null) {
+            request.imageUrls().forEach(url -> courseImageRepository.save(CourseImage.register(course, url)));
+        }
+
+        return CreateCourseRequestResponse.register(course, category.getCode());
+    }
+
+    @Transactional
+    public void deleteCourseRequest(UUID memberId, UUID courseId) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+        }
+
+        if (course.getStatus() != CourseStatus.PREPARATION) {
+            throw new ServiceErrorException(ERR_CANNOT_DELETE_COURSE_REQUEST);
+        }
+
+        courseRepository.delete(course);
     }
 }

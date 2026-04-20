@@ -41,7 +41,6 @@ class CourseCategoryServiceTest {
     @InjectMocks
     private CourseCategoryService courseCategoryService;
 
-    // region createCourseCategory
     @Test
     @DisplayName("카테고리 생성 성공 - 저장 후 code, name 반환")
     void createCourseCategory_success() {
@@ -70,9 +69,7 @@ class CourseCategoryServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("이미 존재하는 카테고리 코드입니다");
     }
-    // endregion
 
-    // region updateCategoryName
     @Test
     @DisplayName("카테고리 이름 수정 성공 - 수정된 code, name, updatedAt 반환")
     void updateCategoryName_success() {
@@ -100,9 +97,7 @@ class CourseCategoryServiceTest {
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 카테고리입니다");
     }
-    // endregion
 
-    // region deleteCategory
     @Test
     @DisplayName("카테고리 삭제 성공 - 코스와 강사가 없으면 삭제")
     void deleteCategory_success() {
@@ -164,5 +159,4 @@ class CourseCategoryServiceTest {
 
         verify(courseCategoryRepository, never()).delete(any());
     }
-    // endregion
 }
