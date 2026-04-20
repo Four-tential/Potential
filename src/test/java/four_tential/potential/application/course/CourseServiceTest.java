@@ -32,6 +32,8 @@ import four_tential.potential.domain.course.course_approval_history.CourseApprov
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistory;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
+import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
+import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
@@ -830,6 +832,214 @@ class CourseServiceTest {
                 .hasMessage("PREPARATION 상태의 코스만 삭제할 수 있습니다");
 
         verify(courseRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("코스 수정 성공 - PREPARATION 코스의 모든 필드가 수정된다")
+    void updateCourse_preparation_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseImageRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateCourseResponse response = courseService.updateCourse(memberId, courseId, defaultUpdateRequest());
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.title()).isEqualTo("수정된 제목");
+        verify(courseImageRepository).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 수정 성공 - imageUrls가 null이면 이미지 변경 없음")
+    void updateCourse_nullImageUrls_imagesUnchanged() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        UpdateCourseRequest request = new UpdateCourseRequest(
+                "수정된 제목", "수정된 설명입니다.",
+                CourseLevel.INTERMEDIATE,
+                "서울시 서초구 강남대로 456", "2층 필라테스 스튜디오",
+                BigInteger.valueOf(65000), 12,
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
+                null
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.updateCourse(memberId, courseId, request);
+
+        verify(courseImageRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 수정 성공 - imageUrls가 빈 배열이면 기존 이미지 전체 삭제")
+    void updateCourse_emptyImageUrls_clearsImages() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        UpdateCourseRequest request = new UpdateCourseRequest(
+                "수정된 제목", "수정된 설명입니다.",
+                CourseLevel.INTERMEDIATE,
+                "서울시 서초구 강남대로 456", "2층 필라테스 스튜디오",
+                BigInteger.valueOf(65000), 12,
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
+                List.of()
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.updateCourse(memberId, courseId, request);
+
+        verify(courseImageRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 수정 성공 - REJECTED 코스도 모든 필드 수정 가능")
+    void updateCourse_rejected_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        course.reject("사진 자료 미비");
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseImageRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateCourseResponse response = courseService.updateCourse(memberId, courseId, defaultUpdateRequest());
+
+        assertThat(response.title()).isEqualTo("수정된 제목");
+    }
+
+    @Test
+    @DisplayName("코스 수정 성공 - OPEN 코스는 제목, 설명, 이미지만 수정된다")
+    void updateCourse_open_basicFieldsOnly() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        UpdateCourseRequest request = new UpdateCourseRequest(
+                "수정된 제목", "수정된 설명",
+                null, null, null, null, null,
+                null, null, null, null,
+                List.of("https://cdn.example.com/new.jpg")
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseImageRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateCourseResponse response = courseService.updateCourse(memberId, courseId, request);
+
+        assertThat(response.title()).isEqualTo("수정된 제목");
+    }
+
+    @Test
+    @DisplayName("코스 수정 실패 - OPEN 코스에서 수정 불가 필드 포함 시 ERR_IMMUTABLE_FIELD_IN_OPEN")
+    void updateCourse_open_withPrepOnlyFields_throwsConflict() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.updateCourse(memberId, courseId, defaultUpdateRequest()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("OPEN 상태에서는 가격, 일정, 장소, 정원을 수정할 수 없습니다");
+
+        verify(courseImageRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 수정 실패 - CLOSED 코스는 ERR_CANNOT_MODIFY_COURSE")
+    void updateCourse_closed_throwsConflict() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        course.close();
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.updateCourse(memberId, courseId, defaultUpdateRequest()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("코스 수정 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE")
+    void updateCourse_notOwnCourse_throwsForbidden() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", UUID.randomUUID());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.updateCourse(memberId, courseId, defaultUpdateRequest()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인 코스만 조회 가능합니다");
+    }
+
+    @Test
+    @DisplayName("코스 수정 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void updateCourse_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.updateCourse(memberId, courseId, defaultUpdateRequest()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
+    private UpdateCourseRequest defaultUpdateRequest() {
+        return new UpdateCourseRequest(
+                "수정된 제목",
+                "수정된 설명입니다.",
+                CourseLevel.INTERMEDIATE,
+                "서울시 서초구 강남대로 456",
+                "2층 필라테스 스튜디오",
+                BigInteger.valueOf(65000),
+                12,
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
+                List.of("https://cdn.example.com/img1.jpg")
+        );
     }
 
     private CreateCourseRequestRequest defaultCreateRequest(List<String> imageUrls) {

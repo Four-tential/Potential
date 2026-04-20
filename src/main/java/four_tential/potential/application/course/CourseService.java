@@ -24,8 +24,10 @@ import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
+import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
 import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
+import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
@@ -193,6 +195,53 @@ public class CourseService {
                 .map(result -> CourseStudentItem.register(result));
 
         return PageResponse.register(students);
+    }
+
+    @Transactional
+    public UpdateCourseResponse updateCourse(UUID memberId, UUID courseId, UpdateCourseRequest request) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+        }
+
+        CourseStatus status = course.getStatus();
+
+        if (status == CourseStatus.CLOSED || status == CourseStatus.CANCELLED) {
+            throw new ServiceErrorException(ERR_CANNOT_MODIFY_COURSE);
+        }
+
+        if (status == CourseStatus.OPEN && request.hasPrepOnlyFields()) {
+            throw new ServiceErrorException(ERR_IMMUTABLE_FIELD_IN_OPEN);
+        }
+
+        course.updateInfo(request.title(), request.description());
+
+        if (status == CourseStatus.PREPARATION || status == CourseStatus.REJECTED) {
+            course.updateInfoInPreparation(
+                    request.price(), request.capacity(), request.level(),
+                    request.addressMain(), request.addressDetail(),
+                    request.orderOpenAt(), request.orderCloseAt(),
+                    request.startAt(), request.endAt()
+            );
+        }
+
+        if (request.imageUrls() != null) {
+            course.clearImages();
+            if (!request.imageUrls().isEmpty()) {
+                List<CourseImage> images = request.imageUrls().stream()
+                        .map(url -> CourseImage.register(course, url))
+                        .collect(Collectors.toList());
+                courseImageRepository.saveAll(images);
+            }
+        }
+
+        return UpdateCourseResponse.from(course);
     }
 
     @Transactional

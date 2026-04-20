@@ -8,15 +8,21 @@ import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.CourseSort;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
+import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
+import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,6 +57,17 @@ public class CourseController {
         PageResponse<CourseListItem> response = courseService.getCourses(condition, memberId, pageable);
 
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 목록 조회 성공", response));
+    }
+
+    @PatchMapping("/{courseId}")
+    @PreAuthorize("hasRole('INSTRUCTOR')")
+    public ResponseEntity<BaseResponse<UpdateCourseResponse>> updateCourse(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID courseId,
+            @Valid @RequestBody UpdateCourseRequest request
+    ) {
+        UpdateCourseResponse response = courseService.updateCourse(principal.memberId(), courseId, request);
+        return ResponseEntity.ok(BaseResponse.success("OK", "코스가 수정되었습니다", response));
     }
 
     @GetMapping("/{courseId}")
