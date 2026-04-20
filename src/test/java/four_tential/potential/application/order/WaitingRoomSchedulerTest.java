@@ -52,7 +52,7 @@ class WaitingRoomSchedulerTest {
     }
 
     @Test
-    @DisplayName("순번 정보가 없으면 하트비트를 전송한다")
+    @DisplayName("순번 정보가 없으면 하트비트를 전송하며, 대기열 총 인원을 조회하지 않는다")
     void pushWaitingStatusUpdates_noRank_sendHeartbeat() {
         // given
         UUID courseId = UUID.randomUUID();
@@ -67,6 +67,8 @@ class WaitingRoomSchedulerTest {
 
         // then
         verify(sseWaitingEventPublisher).sendHeartbeat(courseId, memberId);
+        // 최적화: rank가 null이면 getWaitingListSize를 호출하지 않아야 함
+        verify(waitingListService, never()).getWaitingListSize(any());
     }
 
     @Test

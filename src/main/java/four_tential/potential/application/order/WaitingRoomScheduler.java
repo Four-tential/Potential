@@ -38,11 +38,11 @@ public class WaitingRoomScheduler {
                 UUID memberId = UUID.fromString(parts[1]);
 
                 Long rank = waitingListService.getWaitingRank(courseId, memberId);
-                int totalWaitingCount = waitingSizeCache.computeIfAbsent(
-                        courseId, waitingListService::getWaitingListSize
-                );
 
                 if (rank != null) {
+                    int totalWaitingCount = waitingSizeCache.computeIfAbsent(
+                            courseId, waitingListService::getWaitingListSize
+                    );
                     sseWaitingEventPublisher.publish(courseId, memberId,
                             WaitingRoomEventResponse.waiting(courseId, memberId, rank, totalWaitingCount));
                 } else {
