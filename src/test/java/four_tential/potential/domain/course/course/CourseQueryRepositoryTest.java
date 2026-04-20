@@ -483,6 +483,94 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isFalse();
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // findMyCoursesByInstructorMemberId (강사 본인 전용 — PREPARATION 포함)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("내 코스 목록 - PREPARATION 코스가 포함된다")
+    void findMyCoursesByInstructorMemberId_includes_preparation_courses() {
+        savePreparationCourse("승인 대기 코스");
+        saveOpenCourse("공개 코스");
+
+        Page<InstructorCourseQueryResult> result = courseRepository
+                .findMyCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent().stream().map(InstructorCourseQueryResult::title).toList())
+                .containsExactlyInAnyOrder("승인 대기 코스", "공개 코스");
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 - PREPARATION/OPEN/CLOSED 모두 포함된다")
+    void findMyCoursesByInstructorMemberId_includes_all_statuses() {
+        savePreparationCourse("승인 대기 코스");
+        saveOpenCourse("공개 코스");
+        saveClosedCourse("종료 코스");
+
+        Page<InstructorCourseQueryResult> result = courseRepository
+                .findMyCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(3);
+        assertThat(result.getContent().stream().map(InstructorCourseQueryResult::status).toList())
+                .containsExactlyInAnyOrder(CourseStatus.PREPARATION, CourseStatus.OPEN, CourseStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 - 다른 강사의 코스는 포함되지 않는다")
+    void findMyCoursesByInstructorMemberId_excludes_other_instructors_courses() {
+        Member otherMember = memberRepository.save(
+                Member.register("other2@test.com", "encodedPwd!", "다른강사2", "010-3333-0000")
+        );
+        InstructorMember otherInstructor = InstructorMember.register(
+                otherMember.getId(), "TEST_CAT", "다른 강사 소개", "https://img.url/other.jpg"
+        );
+        otherInstructor.approve();
+        otherInstructor = instructorMemberRepository.save(otherInstructor);
+
+        saveOpenCourse("내 코스");
+        Course otherCourse = Course.register(
+                category.getId(), otherInstructor.getId(), "다른 강사 코스", "설명",
+                "서울", "주소", 20, BigInteger.valueOf(50000), CourseLevel.BEGINNER,
+                LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(3),
+                LocalDateTime.now().plusDays(4), LocalDateTime.now().plusDays(5)
+        );
+        courseRepository.save(otherCourse);
+
+        Page<InstructorCourseQueryResult> result = courseRepository
+                .findMyCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("내 코스");
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 - 코스가 없으면 빈 페이지를 반환한다")
+    void findMyCoursesByInstructorMemberId_returns_empty_when_no_courses() {
+        Page<InstructorCourseQueryResult> result = courseRepository
+                .findMyCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 - 페이징이 올바르게 동작한다")
+    void findMyCoursesByInstructorMemberId_paging_works() {
+        savePreparationCourse("코스 A");
+        saveOpenCourse("코스 B");
+        saveOpenCourse("코스 C");
+
+        Page<InstructorCourseQueryResult> result = courseRepository
+                .findMyCoursesByInstructorMemberId(instructor.getId(), PageRequest.of(0, 2));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(3);
+        assertThat(result.getTotalPages()).isEqualTo(2);
+        assertThat(result.isFirst()).isTrue();
+        assertThat(result.isLast()).isFalse();
+    }
+
     private CourseSearchCondition emptyCondition() {
         return new CourseSearchCondition(null, null, null, null, null, null, null);
     }

@@ -1,11 +1,14 @@
 package four_tential.potential.presentation.member;
 
+import four_tential.potential.application.course.CourseService;
 import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardGoal;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
@@ -61,6 +64,9 @@ class MemberControllerTest {
 
     @Mock
     private CourseWishlistService courseWishlistService;
+
+    @Mock
+    private CourseService courseService;
 
     @Mock
     private HttpServletResponse httpServletResponse;
@@ -643,5 +649,152 @@ class MemberControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data().content()).isEmpty();
         assertThat(response.getBody().data().totalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("강사 본인 코스 목록 조회 - 200 OK 및 페이지 응답 반환 (PREPARATION 포함)")
+    void getMyInstructorCourses_success() {
+        UUID courseId = UUID.randomUUID();
+        InstructorCourseListItem item = new InstructorCourseListItem(
+                courseId, "소도구 필라테스", CourseLevel.BEGINNER, CourseStatus.PREPARATION,
+                20, 5, BigInteger.valueOf(80000),
+                LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(10)
+        );
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
+        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getMyInstructorCourses(PRINCIPAL, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("강사 본인 코스 목록 조회 성공");
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).courseId()).isEqualTo(courseId);
+        assertThat(response.getBody().data().content().get(0).status()).isEqualTo(CourseStatus.PREPARATION);
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("강사 본인 코스 목록 조회 - 코스가 없으면 빈 페이지 반환")
+    void getMyInstructorCourses_empty() {
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getMyInstructorCourses(PRINCIPAL, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().content()).isEmpty();
+        assertThat(response.getBody().data().totalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("강사 본인 코스 목록 조회 - page=1, size=5 파라미터가 서비스에 올바르게 전달됨")
+    void getMyInstructorCourses_customPageParams() {
+        PageRequest pageRequest = PageRequest.of(1, 5);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getMyInstructorCourses(PRINCIPAL, 1, 5);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().currentPage()).isEqualTo(1);
+        assertThat(response.getBody().data().size()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("강사 본인 코스 목록 조회 - 승인된 강사 아니면 ServiceErrorException 전파")
+    void getMyInstructorCourses_instructorNotFound() {
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.getMyInstructorCourses(PRINCIPAL, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 - 200 OK 및 페이지 응답 반환 (PREPARATION 제외)")
+    void getInstructorCourses_success() {
+        UUID instructorId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorCourseListItem item = new InstructorCourseListItem(
+                courseId, "요가 중급반", CourseLevel.INTERMEDIATE, CourseStatus.OPEN,
+                15, 10, BigInteger.valueOf(60000),
+                LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(12)
+        );
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
+        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getInstructorCourses(instructorId, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("강사 코스 목록 조회 성공");
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).courseId()).isEqualTo(courseId);
+        assertThat(response.getBody().data().content().get(0).status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 - 코스가 없으면 빈 페이지 반환")
+    void getInstructorCourses_empty() {
+        UUID instructorId = UUID.randomUUID();
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getInstructorCourses(instructorId, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().content()).isEmpty();
+        assertThat(response.getBody().data().totalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 - page=1, size=5 파라미터가 서비스에 올바르게 전달됨")
+    void getInstructorCourses_customPageParams() {
+        UUID instructorId = UUID.randomUUID();
+        PageRequest pageRequest = PageRequest.of(1, 5);
+        PageResponse<InstructorCourseListItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
+                memberController.getInstructorCourses(instructorId, 1, 5);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().currentPage()).isEqualTo(1);
+        assertThat(response.getBody().data().size()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 - 존재하지 않는 강사면 ServiceErrorException 전파")
+    void getInstructorCourses_instructorNotFound() {
+        UUID instructorId = UUID.randomUUID();
+        given(courseService.getInstructorCourses(instructorId, PageRequest.of(0, 10)))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.getInstructorCourses(instructorId, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
     }
 }

@@ -80,9 +80,23 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
 
     @Override
     public Page<InstructorCourseQueryResult> findCoursesByInstructorMemberId(UUID instructorMemberId, Pageable pageable) {
+        return findInstructorCourses(instructorMemberId, pageable, true);
+    }
+
+    @Override
+    public Page<InstructorCourseQueryResult> findMyCoursesByInstructorMemberId(UUID instructorMemberId, Pageable pageable) {
+        // 본인 조회는 PREPARATION(개설 승인 대기) 포함 전체 상태
+        return findInstructorCourses(instructorMemberId, pageable, false);
+    }
+
+    private Page<InstructorCourseQueryResult> findInstructorCourses(
+            UUID instructorMemberId, Pageable pageable, boolean excludePreparation
+    ) {
         BooleanBuilder where = new BooleanBuilder();
         where.and(course.memberInstructorId.eq(instructorMemberId));
-        where.and(course.status.ne(CourseStatus.PREPARATION));
+        if (excludePreparation) {
+            where.and(course.status.ne(CourseStatus.PREPARATION));
+        }
 
         List<InstructorCourseQueryResult> content = queryFactory
                 .select(Projections.constructor(InstructorCourseQueryResult.class,

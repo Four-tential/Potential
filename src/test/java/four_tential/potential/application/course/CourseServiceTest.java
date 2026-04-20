@@ -21,8 +21,11 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
+import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
+import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -356,6 +359,116 @@ class CourseServiceTest {
                 .hasMessage("존재하지 않는 회원입니다");
 
         verify(reviewRepository, never()).findAverageRatingByCourseId(any());
+    }
+
+
+    @Test
+    @DisplayName("내 코스 목록 조회 성공 - PREPARATION 포함 전체 코스 반환")
+    void getMyInstructorCourses_success_includesPreparation() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        InstructorMember instructor = approvedInstructorMember();
+
+        InstructorCourseQueryResult openResult = sampleInstructorCourseQueryResult(CourseStatus.OPEN);
+        InstructorCourseQueryResult preparationResult = sampleInstructorCourseQueryResult(CourseStatus.PREPARATION);
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
+                .willReturn(new PageImpl<>(List.of(openResult, preparationResult), pageable, 2));
+
+        PageResponse<InstructorCourseListItem> response =
+                courseService.getMyInstructorCourses(memberId, pageable);
+
+        assertThat(response.content()).hasSize(2);
+        assertThat(response.content().stream().map(InstructorCourseListItem::status).toList())
+                .containsExactlyInAnyOrder(CourseStatus.OPEN, CourseStatus.PREPARATION);
+        assertThat(response.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 조회 성공 - 페이징 메타 정보가 올바르게 반환된다")
+    void getMyInstructorCourses_pagingMetadata_correct() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 2);
+        InstructorMember instructor = approvedInstructorMember();
+
+        List<InstructorCourseQueryResult> items = List.of(
+                sampleInstructorCourseQueryResult(CourseStatus.OPEN),
+                sampleInstructorCourseQueryResult(CourseStatus.PREPARATION)
+        );
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
+                .willReturn(new PageImpl<>(items, pageable, 5));
+
+        PageResponse<InstructorCourseListItem> response =
+                courseService.getMyInstructorCourses(memberId, pageable);
+
+        assertThat(response.totalElements()).isEqualTo(5);
+        assertThat(response.totalPages()).isEqualTo(3);
+        assertThat(response.size()).isEqualTo(2);
+        assertThat(response.isLast()).isFalse();
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 조회 실패 - 강사 등록이 없으면 ServiceErrorException 발생")
+    void getMyInstructorCourses_instructorNotFound_throwsException() {
+        UUID memberId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseService.getMyInstructorCourses(memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 조회 실패 - PENDING/REJECTED 강사는 ServiceErrorException 발생")
+    void getMyInstructorCourses_notApprovedInstructor_throwsException() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+        // PENDING 상태 그대로 (approve() 호출 안 함)
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() ->
+                courseService.getMyInstructorCourses(memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("내 코스 목록 조회 성공 - 코스가 없으면 빈 페이지 반환")
+    void getMyInstructorCourses_noCourses_returnsEmptyPage() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
+                .willReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<InstructorCourseListItem> response =
+                courseService.getMyInstructorCourses(memberId, pageable);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        assertThat(response.isLast()).isTrue();
+    }
+
+    private InstructorCourseQueryResult sampleInstructorCourseQueryResult(CourseStatus status) {
+        return new InstructorCourseQueryResult(
+                UUID.randomUUID(),
+                "테스트 강의",
+                CourseLevel.BEGINNER,
+                status,
+                20,
+                5,
+                BigInteger.valueOf(50000),
+                LocalDateTime.of(2026, 1, 1, 9, 0),
+                LocalDateTime.of(2026, 1, 12, 9, 0)
+        );
     }
 
     private CourseSearchCondition emptyCondition() {
