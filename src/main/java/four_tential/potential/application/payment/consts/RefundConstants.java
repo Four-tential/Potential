@@ -1,5 +1,7 @@
 package four_tential.potential.application.payment.consts;
 
+import four_tential.potential.domain.payment.enums.RefundReason;
+
 public final class RefundConstants {
     // 환불 가능 기준일
     public static final int REFUND_DEADLINE_DAYS = 7;
@@ -11,7 +13,7 @@ public final class RefundConstants {
     public static final String REFUND_POLICY_NOT_REFUNDABLE = "수강 일자 7일 이내 취소 · 환불 불가";
 
     // PortOne에 전달하는 수강생 취소 사유
-    public static final String STUDENT_CANCEL_REASON = "CANCEL";
+    public static final String STUDENT_CANCEL_REASON = RefundReason.CANCEL.name();
 
     private RefundConstants() {
     }
