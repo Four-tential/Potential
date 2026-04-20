@@ -199,7 +199,7 @@ public class MemberController {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
-                        "내 코스 목록 조회가 완료되었습니다.",
+                        "강사 본인 코스 목록 조회 성공",
                         courseService.getMyInstructorCourses(principal.memberId(), PageRequest.of(page, size))
                 ));
     }

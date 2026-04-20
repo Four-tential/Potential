@@ -360,10 +360,7 @@ class CourseServiceTest {
 
         verify(reviewRepository, never()).findAverageRatingByCourseId(any());
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // getMyInstructorCourses
-    // ──────────────────────────────────────────────────────────────────────────
+    
 
     @Test
     @DisplayName("내 코스 목록 조회 성공 - PREPARATION 포함 전체 코스 반환")
