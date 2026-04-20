@@ -138,4 +138,18 @@ public class CourseService {
 
         return PageResponse.register(courses);
     }
+
+
+    @Transactional(readOnly = true)
+    public PageResponse<InstructorCourseListItem> getMyInstructorCourses(UUID memberId, Pageable pageable) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Page<InstructorCourseListItem> courses =
+                courseRepository.findMyCoursesByInstructorMemberId(instructorMember.getId(), pageable)
+                        .map(InstructorCourseListItem::register);
+
+        return PageResponse.register(courses);
+    }
 }

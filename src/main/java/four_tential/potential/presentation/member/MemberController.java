@@ -189,6 +189,21 @@ public class MemberController {
                 ));
     }
 
+    @GetMapping("/instructors/me/courses")
+    @PreAuthorize("hasRole('INSTRUCTOR')")
+    public ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> getMyInstructorCourses(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "내 코스 목록 조회가 완료되었습니다.",
+                        courseService.getMyInstructorCourses(principal.memberId(), PageRequest.of(page, size))
+                ));
+    }
+
     @GetMapping("/instructors/{instructorId}/courses")
     public ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> getInstructorCourses(
             @PathVariable UUID instructorId,
