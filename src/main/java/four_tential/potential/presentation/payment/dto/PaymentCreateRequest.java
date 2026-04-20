@@ -16,8 +16,6 @@ public record PaymentCreateRequest(
         String pgKey,
 
         @NotNull(message = "결제 수단은 필수입니다")
-        PaymentPayWay payWay,
-
-        UUID memberCouponId
+        PaymentPayWay payWay
 ) {
 }

@@ -43,8 +43,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentFacade {
 
-    private static final Long NO_DISCOUNT = 0L;
-
     private final PaymentService paymentService;
     private final WebhookService webhookService;
     private final PaymentGateway paymentGateway;
@@ -189,10 +187,6 @@ public class PaymentFacade {
     ) {
         PaymentCreateCommand failedPaymentCommand = null;
         try {
-            if (request.memberCouponId() != null) {
-                throw new ServiceErrorException(PaymentExceptionEnum.ERR_COUPON_NOT_SUPPORTED);
-            }
-
             Order order = getOrder(request.orderId());
             // 타인의 주문이면 결제 기록도 남기지 않는다
             if (!order.getMemberId().equals(memberId)) {
@@ -209,9 +203,7 @@ public class PaymentFacade {
             failedPaymentCommand = new PaymentCreateCommand(
                     order.getId(),
                     memberId,
-                    null,
                     totalPrice,
-                    NO_DISCOUNT,
                     totalPrice
             );
 

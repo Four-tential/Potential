@@ -127,10 +127,8 @@ public class PaymentService {
         Payment payment = Payment.createPending(
                 preparation.orderId(),
                 preparation.memberId(),
-                preparation.memberCouponId(),
                 pgKey,
                 preparation.totalPrice(),
-                preparation.discountPrice(),
                 preparation.paidTotalPrice(),
                 payWay
         );
@@ -147,10 +145,8 @@ public class PaymentService {
         Payment payment = Payment.createPending(
                 preparation.orderId(),
                 preparation.memberId(),
-                preparation.memberCouponId(),
                 pgKey,
                 preparation.totalPrice(),
-                preparation.discountPrice(),
                 preparation.paidTotalPrice(),
                 payWay
         );

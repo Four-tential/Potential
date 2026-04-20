@@ -19,7 +19,6 @@ public enum PaymentExceptionEnum implements ServiceErrorCode {
     ERR_PAYMENT_FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),
     ERR_PAYMENT_GATEWAY_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "결제 대행사 처리 중 오류가 발생했습니다"),
     ERR_PAYMENT_COURSE_NOT_FOUND(HttpStatus.NOT_FOUND, "결제할 코스를 찾을 수 없습니다"),
-    ERR_COUPON_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "쿠폰 기능은 아직 지원하지 않습니다"),
     ERR_INVALID_PAYMENT_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "변경할 수 없는 결제 상태입니다"),
 
     // 환불
