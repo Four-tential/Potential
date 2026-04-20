@@ -5,6 +5,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -14,7 +15,14 @@ public class SseWaitingRoomRepository {
     private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
 
     public void save(UUID courseId, UUID memberId, SseEmitter emitter) {
-        emitters.put(makeKey(courseId, memberId), emitter);
+        String key = makeKey(courseId, memberId);
+        SseEmitter previous = emitters.put(key, emitter);
+        if (previous != null && previous != emitter) {
+            try {
+                previous.complete();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     public Optional<SseEmitter> find(UUID courseId, UUID memberId) {
@@ -32,12 +40,16 @@ public class SseWaitingRoomRepository {
         return courseEmitters;
     }
 
+    public void delete(UUID courseId, UUID memberId, SseEmitter expectedEmitter) {
+        emitters.remove(makeKey(courseId, memberId), expectedEmitter);
+    }
+
     public void delete(UUID courseId, UUID memberId) {
         emitters.remove(makeKey(courseId, memberId));
     }
 
     public java.util.Set<String> getAllKeys() {
-        return emitters.keySet();
+        return Set.copyOf(emitters.keySet());
     }
 
     private String makeKey(UUID courseId, UUID memberId) {

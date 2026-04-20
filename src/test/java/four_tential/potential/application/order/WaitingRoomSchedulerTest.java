@@ -15,7 +15,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class WaitingRoomSchedulerTest {
@@ -67,5 +67,42 @@ class WaitingRoomSchedulerTest {
 
         // then
         verify(sseWaitingEventPublisher).sendHeartbeat(courseId, memberId);
+    }
+
+    @Test
+    @DisplayName("잘못된 키 형식은 무시한다")
+    void pushWaitingStatusUpdates_invalidKey_ignored() {
+        // given
+        given(sseWaitingRoomRepository.getAllKeys()).willReturn(Set.of("invalidKey", "courseId:memberId:extra"));
+
+        // when
+        waitingRoomScheduler.pushWaitingStatusUpdates();
+
+        // then
+        verifyNoInteractions(waitingListService);
+        verifyNoInteractions(sseWaitingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("동일한 코스 ID에 대해서는 대기열 총 인원 조회를 한 번만 수행한다 (캐싱 검증)")
+    void pushWaitingStatusUpdates_caching_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        UUID memberId1 = UUID.randomUUID();
+        UUID memberId2 = UUID.randomUUID();
+        String key1 = courseId + ":" + memberId1;
+        String key2 = courseId + ":" + memberId2;
+
+        given(sseWaitingRoomRepository.getAllKeys()).willReturn(Set.of(key1, key2));
+        given(waitingListService.getWaitingRank(eq(courseId), any(UUID.class))).willReturn(5L);
+        given(waitingListService.getWaitingListSize(courseId)).willReturn(20);
+
+        // when
+        waitingRoomScheduler.pushWaitingStatusUpdates();
+
+        // then
+        // getWaitingListSize는 두 명의 유저가 있어도 코스가 같으므로 1번만 호출되어야 함
+        verify(waitingListService, times(1)).getWaitingListSize(courseId);
+        verify(sseWaitingEventPublisher, times(2)).publish(eq(courseId), any(UUID.class), any());
     }
 }

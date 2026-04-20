@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -24,14 +26,21 @@ public class WaitingRoomScheduler {
      */
     @Scheduled(fixedDelay = 5000)
     public void pushWaitingStatusUpdates() {
+        Map<UUID, Integer> waitingSizeCache = new HashMap<>();
         sseWaitingRoomRepository.getAllKeys().forEach(key -> {
             try {
-                String[] parts = key.split(":");
+                String[] parts = key.split(":",2);
+                if (parts.length != 2) {
+                    log.warn("대기열 키 형식 오류: key={}", key);
+                    return;
+                }
                 UUID courseId = UUID.fromString(parts[0]);
                 UUID memberId = UUID.fromString(parts[1]);
 
                 Long rank = waitingListService.getWaitingRank(courseId, memberId);
-                int totalWaitingCount = waitingListService.getWaitingListSize(courseId);
+                int totalWaitingCount = waitingSizeCache.computeIfAbsent(
+                        courseId, waitingListService::getWaitingListSize
+                );
 
                 if (rank != null) {
                     sseWaitingEventPublisher.publish(courseId, memberId,

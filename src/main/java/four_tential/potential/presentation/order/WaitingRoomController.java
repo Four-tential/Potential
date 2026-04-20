@@ -46,7 +46,6 @@ public class WaitingRoomController {
         emitter.onCompletion(() -> sseWaitingRoomRepository.delete(courseId, memberId));
         emitter.onTimeout(() -> {
             emitter.complete();
-            sseWaitingRoomRepository.delete(courseId, memberId);
         });
 
         // 연결 즉시 현재 순번 전송
@@ -59,20 +58,6 @@ public class WaitingRoomController {
         }
 
         return emitter;
-    }
-
-    /**
-     * [테스트용] 대기열 강제 진입 API
-     */
-    @PostMapping("/test/join")
-    @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<BaseResponse<String>> testJoinWaitingRoom(
-            @RequestParam UUID courseId,
-            @RequestParam UUID memberId
-    ) {
-        waitingListService.addToWaitingList(courseId, memberId);
-        log.info("[TEST] 대기열 강제 진입 성공: courseId={}, memberId={}", courseId, memberId);
-        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "대기열 강제 진입 성공", memberId.toString()));
     }
 
     /**

@@ -38,9 +38,10 @@ public class SseWaitingEventPublisher {
                 
                 if (WaitingStatus.CALLED.equals(response.status())) {
                     emitter.complete();
-                    sseWaitingRoomRepository.delete(courseId, memberId);
+                    sseWaitingRoomRepository.delete(courseId, memberId, emitter);
                 }
             } catch (IOException e) {
+                log.warn("SSE 전송 중 IO 오류: courseId={}, memberId={}", courseId, memberId, e);
                 handleDisconnect(courseId, memberId, emitter);
             } catch (Exception e) {
                 log.error("SSE 전송 실패: courseId={}, memberId={}", courseId, memberId, e);
@@ -68,8 +69,12 @@ public class SseWaitingEventPublisher {
 
     private void handleDisconnect(UUID courseId, UUID memberId, SseEmitter emitter) {
         log.warn("SSE 연결 끊김 감지: 대기열 자동 이탈 처리. courseId={}, memberId={}", courseId, memberId);
-        sseWaitingRoomRepository.delete(courseId, memberId);
-        waitingListService.removeFromWaitingList(courseId, memberId);
+        sseWaitingRoomRepository.delete(courseId, memberId, emitter);
+        try {
+            waitingListService.removeFromWaitingList(courseId, memberId);
+        } catch (Exception e) {
+            log.error("대기열 이탈 처리 실패: courseId={}, memberId={}", courseId, memberId, e);
+        }
         try {
             emitter.complete();
         } catch (Exception ignored) {}

@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.infra.redis.RedisConstants;
 import four_tential.potential.infra.redis.annotation.DistributedLock;
 import four_tential.potential.infra.sse.SseWaitingEventPublisher;
+import four_tential.potential.infra.sse.SseWaitingRoomRepository;
 import four_tential.potential.presentation.order.dto.WaitingRoomEventResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.*;
@@ -21,13 +22,15 @@ public class WaitingListService {
 
     private final RedissonClient redissonClient;
     private final SseWaitingEventPublisher sseWaitingEventPublisher;
+    private final SseWaitingRoomRepository sseWaitingRoomRepository;
 
     public WaitingListService(
             RedissonClient redissonClient,
-            @Lazy SseWaitingEventPublisher sseWaitingEventPublisher
-    ) {
+            @Lazy SseWaitingEventPublisher sseWaitingEventPublisher,
+            SseWaitingRoomRepository sseWaitingRoomRepository) {
         this.redissonClient = redissonClient;
         this.sseWaitingEventPublisher = sseWaitingEventPublisher;
+        this.sseWaitingRoomRepository = sseWaitingRoomRepository;
     }
 
     /**
@@ -62,6 +65,9 @@ public class WaitingListService {
                     // 승격되었으나 그사이 재고가 부족해진 경우 (동시성 방어)
                     log.warn("승격 유저 점유 실패: 재고 부족. courseId={}, memberId={}", courseId, memberId);
                     occupancy.delete();
+                    
+                    // 자리가 부족하여 실패했지만, 혹시라도 1개라도 남은 자리가 있다면 다음 대기자에게 기회를 줌
+                    promoteNextInWaitingList(courseId);
                     return false;
                 }
             }
@@ -137,6 +143,14 @@ public class WaitingListService {
         String nextMemberIdStr = waitingList.pollFirst();
         if (nextMemberIdStr != null) {
             UUID nextMemberId = UUID.fromString(nextMemberIdStr);
+
+            // SSE 연결 확인 (연결이 없으면 다음 대기자로 넘어감)
+            if (sseWaitingRoomRepository.find(courseId, nextMemberId).isEmpty()) {
+                log.warn("승격 대상 SSE 연결 없음, 다음 대기자 시도: courseId={}, memberId={}", courseId, nextMemberId);
+                promoteNextInWaitingList(courseId);
+                return;
+            }
+
             String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + nextMemberId;
             RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
             

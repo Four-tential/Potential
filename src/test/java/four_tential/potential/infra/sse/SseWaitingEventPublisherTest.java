@@ -53,7 +53,7 @@ class SseWaitingEventPublisherTest {
 
         // then
         verify(sseEmitter).send(any(SseEmitter.SseEventBuilder.class));
-        verify(sseWaitingRoomRepository, never()).delete(any(), any());
+        verify(sseWaitingRoomRepository, never()).delete(any(), any(), any());
     }
 
     @Test
@@ -67,7 +67,7 @@ class SseWaitingEventPublisherTest {
 
         // then
         verify(sseEmitter).complete();
-        verify(sseWaitingRoomRepository).delete(courseId, memberId);
+        verify(sseWaitingRoomRepository).delete(courseId, memberId, sseEmitter);
     }
 
     @Test
@@ -81,7 +81,7 @@ class SseWaitingEventPublisherTest {
         sseWaitingEventPublisher.publish(courseId, memberId, response);
 
         // then
-        verify(sseWaitingRoomRepository).delete(courseId, memberId);
+        verify(sseWaitingRoomRepository).delete(courseId, memberId, sseEmitter);
         verify(waitingListService).removeFromWaitingList(courseId, memberId);
         verify(sseEmitter).complete();
     }

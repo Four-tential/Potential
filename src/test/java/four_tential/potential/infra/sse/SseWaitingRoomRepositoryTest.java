@@ -39,6 +39,27 @@ class SseWaitingRoomRepositoryTest {
     }
 
     @Test
+    @DisplayName("이미 존재하는 키로 저장하면 이전 Emitter를 대체한다")
+    void save_replaces_old_emitter() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        SseEmitter oldEmitter = new SseEmitter();
+        SseEmitter newEmitter = new SseEmitter();
+
+        sseWaitingRoomRepository.save(courseId, memberId, oldEmitter);
+
+        // when
+        sseWaitingRoomRepository.save(courseId, memberId, newEmitter);
+        Optional<SseEmitter> found = sseWaitingRoomRepository.find(courseId, memberId);
+
+        // then
+        assertThat(found).isPresent();
+        assertThat(found.get()).isEqualTo(newEmitter);
+        assertThat(found.get()).isNotEqualTo(oldEmitter);
+    }
+
+    @Test
     @DisplayName("특정 코스에 속한 모든 Emitter를 조회한다")
     void findAllByCourseId_success() {
         // given
@@ -64,8 +85,8 @@ class SseWaitingRoomRepositoryTest {
     }
 
     @Test
-    @DisplayName("Emitter를 성공적으로 삭제한다")
-    void delete_success() {
+    @DisplayName("키로만 Emitter를 삭제한다")
+    void delete_by_key_success() {
         // given
         UUID courseId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -77,6 +98,27 @@ class SseWaitingRoomRepositoryTest {
 
         // then
         assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("특정 Emitter 객체가 일치할 때만 삭제한다 (조건부 삭제)")
+    void delete_with_emitter_match_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        SseEmitter currentEmitter = new SseEmitter();
+        sseWaitingRoomRepository.save(courseId, memberId, currentEmitter);
+
+        SseEmitter otherEmitter = new SseEmitter();
+
+        // when & then
+        // 1. 다른 Emitter로 삭제 시도 -> 삭제되지 않아야 함
+        sseWaitingRoomRepository.delete(courseId, memberId, otherEmitter);
+        assertThat(sseWaitingRoomRepository.find(courseId, memberId)).isPresent();
+
+        // 2. 현재 Emitter로 삭제 시도 -> 삭제되어야 함
+        sseWaitingRoomRepository.delete(courseId, memberId, currentEmitter);
+        assertThat(sseWaitingRoomRepository.find(courseId, memberId)).isEmpty();
     }
 
     @Test
