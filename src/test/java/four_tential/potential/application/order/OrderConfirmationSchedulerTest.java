@@ -32,7 +32,7 @@ class OrderConfirmationSchedulerTest {
     void confirmOrders_success_when_lock_acquired() throws InterruptedException {
         // given
         given(redissonClient.getLock(anyString())).willReturn(lock);
-        given(lock.tryLock(eq(0L), eq(10L), eq(TimeUnit.MINUTES))).willReturn(true);
+        given(lock.tryLock(0, 10, TimeUnit.MINUTES)).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
         
         // 첫 번째 호출에서 10건 조회/10건 성공, 두 번째에서 0건 조회 (종료 조건)
@@ -44,7 +44,7 @@ class OrderConfirmationSchedulerTest {
         scheduler.confirmOrders();
 
         // then
-        verify(lock).tryLock(eq(0L), eq(10L), eq(TimeUnit.MINUTES));
+        verify(lock).tryLock(0, 10, TimeUnit.MINUTES);
         verify(orderService, times(2)).processConfirmedBatch(any(LocalDateTime.class), anyInt());
         verify(lock).unlock();
     }

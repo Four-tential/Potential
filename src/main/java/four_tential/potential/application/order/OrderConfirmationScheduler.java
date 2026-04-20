@@ -44,18 +44,16 @@ public class OrderConfirmationScheduler {
                 while (totalProcessed < MAX_TOTAL_PROCESS) {
                     OrderBatchResult result = orderService.processConfirmedBatch(now, BATCH_SIZE);
 
-                    if (result.fetchedCount() == 0) {
+                    if (result.fetchedCount() == 0 || result.successCount() == 0) {
+                        if (result.fetchedCount() > 0) {
+                            log.warn("배치 내 모든 주문 확정 처리가 실패했습니다. 무한 루프 방지를 위해 이번 턴을 종료합니다.");
+                        }
                         break;
                     }
 
                     totalProcessed += result.successCount();
                     log.info("확정 주문 배치 처리 완료 (성공 {}건 / 조회 {}건, 누적 성공 {}건)", 
                             result.successCount(), result.fetchedCount(), totalProcessed);
-
-                    if (result.successCount() == 0) {
-                        log.warn("배치 내 모든 주문 확정 처리가 실패했습니다. 무한 루프 방지를 위해 이번 턴을 종료합니다.");
-                        break;
-                    }
                 }
 
                 if (totalProcessed > 0) {
