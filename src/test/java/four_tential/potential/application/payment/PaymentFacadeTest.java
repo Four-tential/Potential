@@ -119,8 +119,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-1",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-1",
@@ -131,10 +130,8 @@ class PaymentFacadeTest {
         Payment payment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-1",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -164,8 +161,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-failed",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-failed",
@@ -176,10 +172,8 @@ class PaymentFacadeTest {
         Payment failedPayment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-failed",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -208,8 +202,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-duplicate",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-duplicate",
@@ -220,10 +213,8 @@ class PaymentFacadeTest {
         Payment existingPayment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-duplicate",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -251,8 +242,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-new",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-new",
@@ -263,10 +253,8 @@ class PaymentFacadeTest {
         Payment existingPayment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-old",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -296,8 +284,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-first-webhook",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-first-webhook",
@@ -308,30 +295,24 @@ class PaymentFacadeTest {
         Payment createdPayment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-first-webhook",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
         Payment paymentForWebhook = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-first-webhook",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
         Payment latestPayment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "pg-key-first-webhook",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -368,38 +349,6 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("결제 생성 요청에 쿠폰이 포함되면 결제를 생성하지 않고 PortOne 결제 취소를 요청한다")
-    void createPayment_couponNotSupported_cancelGatewayPayment() {
-        UUID memberId = UUID.randomUUID();
-        UUID orderId = UUID.randomUUID();
-        UUID memberCouponId = UUID.randomUUID();
-        PaymentCreateRequest request = new PaymentCreateRequest(
-                orderId,
-                "pg-key-coupon",
-                PaymentPayWay.CARD,
-                memberCouponId
-        );
-        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
-                "pg-key-coupon",
-                "PAID",
-                100000L,
-                "card"
-        );
-
-        given(paymentGateway.getPayment("pg-key-coupon")).willReturn(gatewayResponse);
-
-        assertThatThrownBy(() -> paymentFacade.createPayment(memberId, request))
-                .isInstanceOf(ServiceErrorException.class);
-
-        verify(paymentGateway).cancelPayment(PaymentGatewayRequest.of(
-                "pg-key-coupon",
-                100000L,
-                "PAYMENT_CREATE_REJECTED"
-        ));
-        verifyNoInteractions(orderRepository, courseRepository);
-    }
-
-    @Test
     @DisplayName("결제 생성 검증 실패 시 PortOne 결제 취소를 요청한다")
     void createPayment_validationFail_cancelGatewayPayment() {
         UUID memberId = UUID.randomUUID();
@@ -408,8 +357,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-2",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-2",
@@ -444,8 +392,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-member-mismatch",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-member-mismatch",
@@ -484,8 +431,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-existing",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-existing",
@@ -497,10 +443,8 @@ class PaymentFacadeTest {
         Payment existingPayment = Payment.createPending(
                 orderId,
                 orderMemberId,
-                null,
                 "pg-key-existing",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -525,8 +469,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-order-invalid",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-order-invalid",
@@ -566,8 +509,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-expired-order",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-expired-order",
@@ -607,8 +549,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-no-seats",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-no-seats",
@@ -643,8 +584,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-lock-fail",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-lock-fail",
@@ -942,10 +882,8 @@ class PaymentFacadeTest {
         Payment payment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "payment-1",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -1164,8 +1102,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-failed-easy-pay",
-                PaymentPayWay.EASY_PAY,
-                null
+                PaymentPayWay.EASY_PAY
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-failed-easy-pay",
@@ -1193,8 +1130,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-request",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-other",
@@ -1222,8 +1158,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-record-fail",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-record-fail",
@@ -1267,8 +1202,7 @@ class PaymentFacadeTest {
         PaymentCreateRequest request = new PaymentCreateRequest(
                 orderId,
                 "pg-key-cancel-fail-safe",
-                PaymentPayWay.CARD,
-                null
+                PaymentPayWay.CARD
         );
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "pg-key-cancel-fail-safe",
@@ -1310,10 +1244,8 @@ class PaymentFacadeTest {
         Payment payment = Payment.createPending(
                 orderId,
                 memberId,
-                null,
                 "payment-occupancy-cleanup-fail",
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -1407,10 +1339,8 @@ class PaymentFacadeTest {
         return Payment.createPending(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
                 pgKey,
                 100000L,
-                0L,
                 100000L,
                 PaymentPayWay.CARD
         );
@@ -1498,7 +1428,7 @@ class PaymentFacadeTest {
         UUID orderId   = UUID.randomUUID();
         PaymentDetailResponse expected = new PaymentDetailResponse(
                 paymentId, orderId, "소도구 필라테스 입문반", 5,
-                125000L, 0L, 125000L,
+                125000L, 125000L,
                 PaymentPayWay.CARD, PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );

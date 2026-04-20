@@ -395,8 +395,8 @@ class RefundFacadeTest {
 
     private Payment createPaidPayment(UUID paymentId, UUID orderId, UUID memberId, Long amount) {
         Payment payment = Payment.createPending(
-                orderId, memberId, null, "pg-key-" + paymentId,
-                amount, 0L, amount, PaymentPayWay.CARD
+                orderId, memberId, "pg-key-" + paymentId,
+                amount, amount, PaymentPayWay.CARD
         );
         payment.confirmPaid();
         ReflectionTestUtils.setField(payment, "id", paymentId);

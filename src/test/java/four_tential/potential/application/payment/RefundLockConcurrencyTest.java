@@ -239,15 +239,15 @@ class RefundLockConcurrencyTest extends RedisTestContainer {
 
     private Payment createPendingPayment(String pgKey) {
         return Payment.createPending(
-                UUID.randomUUID(), UUID.randomUUID(), null,
-                pgKey, 10000L, 0L, 10000L, PaymentPayWay.CARD
+                UUID.randomUUID(), UUID.randomUUID(),
+                pgKey, 10000L, 10000L, PaymentPayWay.CARD
         );
     }
 
     private Payment createPendingPayment(UUID orderId, UUID memberId, String pgKey, Long amount) {
         return Payment.createPending(
-                orderId, memberId, null,
-                pgKey, amount, 0L, amount, PaymentPayWay.CARD
+                orderId, memberId,
+                pgKey, amount, amount, PaymentPayWay.CARD
         );
     }
 

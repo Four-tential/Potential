@@ -160,8 +160,8 @@ class RefundServiceTest {
             PaymentStatus targetStatus
     ) {
         Payment payment = Payment.createPending(
-                orderId, memberId, null, "pg-key-" + paymentId,
-                amount, 0L, amount, PaymentPayWay.CARD
+                orderId, memberId, "pg-key-" + paymentId,
+                amount, amount, PaymentPayWay.CARD
         );
 
         switch (targetStatus) {
