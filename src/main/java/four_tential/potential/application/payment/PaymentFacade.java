@@ -391,7 +391,7 @@ public class PaymentFacade {
 
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_CANCELLED,
                  PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_PARTIAL_CANCELLED:
-                log.info("[PORTONE_WEBHOOK] 환불 완료 알림 수신 — 별도 처리 없음. type={} pgKey={}", event.eventType(), event.pgKey());
+                log.info("[PORTONE_WEBHOOK] 환불 완료 알림 수신. type={} pgKey={}", event.eventType(), event.pgKey());
                 return PaymentCancelDecision.none();
 
             default:
