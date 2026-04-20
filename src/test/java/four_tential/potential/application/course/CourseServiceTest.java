@@ -11,6 +11,7 @@ import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.course.course_image.CourseImage;
 import four_tential.potential.domain.attendance.AttendanceStatus;
+import four_tential.potential.domain.course.course_image.CourseImageRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.course.fixture.CourseFixture;
@@ -26,9 +27,11 @@ import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
+import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
+import four_tential.potential.presentation.course.model.response.CreateCourseRequestResponse;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,7 @@ import static org.mockito.Mockito.verify;
 class CourseServiceTest {
 
     @Mock private CourseRepository courseRepository;
+    @Mock private CourseImageRepository courseImageRepository;
     @Mock private CourseCategoryRepository courseCategoryRepository;
     @Mock private CourseWishlistRepository courseWishlistRepository;
     @Mock private InstructorMemberRepository instructorMemberRepository;
@@ -97,7 +101,7 @@ class CourseServiceTest {
 
         given(courseRepository.findCourses(any(), any())).willReturn(new PageImpl<>(List.of(result), pageable, 1));
         given(courseWishlistRepository.findWishlistedCourseIds(memberId, List.of(courseId)))
-                .willReturn(List.of()); // 위시리스트에 없음
+                .willReturn(List.of());
 
         PageResponse<CourseListItem> response = courseService.getCourses(emptyCondition(), memberId, pageable);
 
@@ -263,7 +267,6 @@ class CourseServiceTest {
         CourseImage image1 = CourseImage.register(course, "https://cdn.example.com/img1.jpg");
         CourseImage image2 = CourseImage.register(course, "https://cdn.example.com/img2.jpg");
 
-        // 단위 테스트에서는 JPA가 동작하지 않아 id가 null — 명시적으로 주입 (UUID v7 오름차순 = 등록 순)
         ReflectionTestUtils.setField(image1, "id", UUID.fromString("00000000-0000-7000-8000-000000000001"));
         ReflectionTestUtils.setField(image2, "id", UUID.fromString("00000000-0000-7000-8000-000000000002"));
         ReflectionTestUtils.setField(course, "images", List.of(image1, image2));
@@ -303,7 +306,7 @@ class CourseServiceTest {
     @DisplayName("코스 상세 조회 실패 - PREPARATION 상태 코스는 공개 조회 불가 (NOT_FOUND)")
     void getCourseDetail_preparationCourse_treatedAsNotFound() {
         UUID courseId = UUID.randomUUID();
-        Course preparationCourse = courseWithId(courseId); // 기본 상태 = PREPARATION
+        Course preparationCourse = courseWithId(courseId);
 
         given(courseRepository.findById(courseId)).willReturn(Optional.of(preparationCourse));
 
@@ -366,7 +369,6 @@ class CourseServiceTest {
         verify(reviewRepository, never()).findAverageRatingByCourseId(any());
     }
 
-
     @Test
     @DisplayName("내 코스 목록 조회 성공 - PREPARATION 포함 전체 코스 반환")
     void getMyInstructorCourses_success_includesPreparation() {
@@ -381,11 +383,10 @@ class CourseServiceTest {
         given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
                 .willReturn(new PageImpl<>(List.of(openResult, preparationResult), pageable, 2));
 
-        PageResponse<InstructorCourseListItem> response =
-                courseService.getMyInstructorCourses(memberId, pageable);
+        PageResponse<InstructorCourseListItem> response = courseService.getMyInstructorCourses(memberId, pageable);
 
         assertThat(response.content()).hasSize(2);
-        assertThat(response.content().stream().map(InstructorCourseListItem::status).toList())
+        assertThat(response.content().stream().map(item -> item.status()).toList())
                 .containsExactlyInAnyOrder(CourseStatus.OPEN, CourseStatus.PREPARATION);
         assertThat(response.totalElements()).isEqualTo(2);
     }
@@ -405,8 +406,7 @@ class CourseServiceTest {
         given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
                 .willReturn(new PageImpl<>(items, pageable, 5));
 
-        PageResponse<InstructorCourseListItem> response =
-                courseService.getMyInstructorCourses(memberId, pageable);
+        PageResponse<InstructorCourseListItem> response = courseService.getMyInstructorCourses(memberId, pageable);
 
         assertThat(response.totalElements()).isEqualTo(5);
         assertThat(response.totalPages()).isEqualTo(3);
@@ -432,7 +432,6 @@ class CourseServiceTest {
     void getMyInstructorCourses_notApprovedInstructor_throwsException() {
         UUID memberId = UUID.randomUUID();
         InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
-        // PENDING 상태 그대로 (approve() 호출 안 함)
 
         given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pendingInstructor));
 
@@ -454,14 +453,12 @@ class CourseServiceTest {
         given(courseRepository.findMyCoursesByInstructorMemberId(instructor.getId(), pageable))
                 .willReturn(new PageImpl<>(List.of(), pageable, 0));
 
-        PageResponse<InstructorCourseListItem> response =
-                courseService.getMyInstructorCourses(memberId, pageable);
+        PageResponse<InstructorCourseListItem> response = courseService.getMyInstructorCourses(memberId, pageable);
 
         assertThat(response.content()).isEmpty();
         assertThat(response.totalElements()).isZero();
         assertThat(response.isLast()).isTrue();
     }
-
 
     @Test
     @DisplayName("수강생 명단 조회 성공 - CONFIRMED 수강생 목록과 출석 정보 반환")
@@ -471,7 +468,6 @@ class CourseServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
 
         InstructorMember instructor = approvedInstructorMember();
-        // 코스의 memberInstructorId == instructor.id 가 되도록 설정
         Course course = openCourseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
 
@@ -599,9 +595,8 @@ class CourseServiceTest {
     void getCourseStudents_notOwnCourse_throwsForbidden() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
-        InstructorMember instructor = approvedInstructorMember(); // id = randomUUID
+        InstructorMember instructor = approvedInstructorMember();
 
-        // 코스의 memberInstructorId = 다른 강사 ID
         Course course = courseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", UUID.randomUUID());
 
@@ -612,7 +607,7 @@ class CourseServiceTest {
                 courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
         )
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+                .hasMessage("본인 코스만 조회 가능합니다");
 
         verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
     }
@@ -624,7 +619,6 @@ class CourseServiceTest {
         UUID courseId = UUID.randomUUID();
         InstructorMember instructor = approvedInstructorMember();
 
-        // PREPARATION 상태 코스 (Course.register 초기값 = PREPARATION)
         Course course = courseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
 
@@ -638,6 +632,214 @@ class CourseServiceTest {
                 .hasMessage("준비 중인 코스는 수강생을 조회할 수 없습니다");
 
         verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 성공 - 강사의 카테고리로 PREPARATION 코스 생성")
+    void createCourseRequest_success() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+        CreateCourseRequestRequest request = defaultCreateRequest(List.of("https://cdn.example.com/img1.jpg"));
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+        given(courseRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(courseImageRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        CreateCourseRequestResponse response = courseService.createCourseRequest(memberId, request);
+
+        assertThat(response.title()).isEqualTo(request.title());
+        assertThat(response.categoryCode()).isEqualTo(CourseCategoryFixture.DEFAULT_CODE);
+        assertThat(response.status()).isEqualTo(CourseStatus.PREPARATION);
+        verify(courseRepository).save(any(Course.class));
+        verify(courseImageRepository).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 성공 - imageUrls가 null이면 이미지 저장 안 함")
+    void createCourseRequest_noImages() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+        CreateCourseRequestRequest request = defaultCreateRequest(null);
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+        given(courseRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        courseService.createCourseRequest(memberId, request);
+
+        verify(courseImageRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 실패 - 미승인 강사이면 ERR_NOT_FOUND_INSTRUCTOR")
+    void createCourseRequest_notApprovedInstructor() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember pending = InstructorMemberFixture.defaultInstructorMember();
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> courseService.createCourseRequest(memberId, defaultCreateRequest(null)))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 실패 - 잘못된 강의 시간 구간이면 ERR_INVALID_SCHEDULE")
+    void createCourseRequest_invalidSchedule() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+
+        LocalDateTime startAt = LocalDateTime.now().plusDays(30).withHour(18).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime endAt = startAt.withHour(9);
+        CreateCourseRequestRequest request = new CreateCourseRequestRequest(
+                "제목", "설명", "주소", "상세주소",
+                BigInteger.valueOf(50000), 10,
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                startAt, endAt,
+                CourseLevel.BEGINNER, null
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+
+        assertThatThrownBy(() -> courseService.createCourseRequest(memberId, request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 종료 일시는 코스의 시작 일시보다 이후여야 합니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 실패 - 잘못된 주문 마감 시간이면 ERR_INVALID_ORDER_CLOSE_TIME")
+    void createCourseRequest_invalidOrderCloseTime() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
+
+        LocalDateTime startAt = LocalDateTime.now().plusDays(30);
+        LocalDateTime orderCloseAt = startAt.minusHours(1);
+        CreateCourseRequestRequest request = new CreateCourseRequestRequest(
+                "제목", "설명", "주소", "상세주소",
+                BigInteger.valueOf(50000), 10,
+                LocalDateTime.now().plusDays(10),
+                orderCloseAt,
+                startAt, startAt.plusHours(2),
+                CourseLevel.BEGINNER, null
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseCategoryRepository.findByCode(instructor.getCategoryCode())).willReturn(Optional.of(category));
+
+        assertThatThrownBy(() -> courseService.createCourseRequest(memberId, request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능합니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 취소 성공 - PREPARATION 상태 코스 삭제")
+    void deleteCourseRequest_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.deleteCourseRequest(memberId, courseId);
+
+        verify(courseRepository).delete(course);
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 취소 실패 - 미승인 강사이면 ERR_NOT_FOUND_INSTRUCTOR")
+    void deleteCourseRequest_notApprovedInstructor() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember pending = InstructorMemberFixture.defaultInstructorMember();
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, UUID.randomUUID()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 취소 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void deleteCourseRequest_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 취소 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE_DELETE")
+    void deleteCourseRequest_notOwnCourse() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", UUID.randomUUID());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인 코스만 삭제 가능합니다");
+
+        verify(courseRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 취소 실패 - PREPARATION이 아닌 코스는 ERR_CANNOT_DELETE_COURSE_REQUEST")
+    void deleteCourseRequest_notPreparation() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("PREPARATION 상태의 코스만 삭제할 수 있습니다");
+
+        verify(courseRepository, never()).delete(any());
+    }
+
+    private CreateCourseRequestRequest defaultCreateRequest(List<String> imageUrls) {
+        return new CreateCourseRequestRequest(
+                "소도구 필라테스 입문반",
+                "소도구를 활용한 전신 필라테스 수업입니다.",
+                "서울시 강남구 테헤란로 123",
+                "3층 필라테스룸",
+                BigInteger.valueOf(70000),
+                10,
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
+                CourseLevel.BEGINNER,
+                imageUrls
+        );
     }
 
     private InstructorCourseQueryResult sampleInstructorCourseQueryResult(CourseStatus status) {
@@ -678,14 +880,12 @@ class CourseServiceTest {
         );
     }
 
-    /** PREPARATION 상태 (Course.register 초기값) */
     private Course courseWithId(UUID courseId) {
         Course course = CourseFixture.defaultCourse();
         ReflectionTestUtils.setField(course, "id", courseId);
         return course;
     }
 
-    /** OPEN 상태로 전환된 코스 */
     private Course openCourseWithId(UUID courseId) {
         Course course = CourseFixture.defaultCourse();
         course.open();

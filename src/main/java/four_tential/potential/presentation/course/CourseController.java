@@ -62,6 +62,6 @@ public class CourseController {
 
         CourseDetailResponse response = courseService.getCourseDetail(courseId, memberId);
 
-        return ResponseEntity.ok(BaseResponse.success("OK", "코스 상세 조회가 완료되었습니다.", response));
+        return ResponseEntity.ok(BaseResponse.success("OK", "코스 상세 조회 성공", response));
     }
 }
