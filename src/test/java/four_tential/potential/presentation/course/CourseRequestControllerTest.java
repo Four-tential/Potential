@@ -164,10 +164,10 @@ class CourseRequestControllerTest {
         CreateCourseRequestRequest invalid = new CreateCourseRequestRequest(
                 "", "설명", "주소", "상세주소",
                 BigInteger.valueOf(50000), 10,
-                LocalDateTime.of(2026, 1, 15, 10, 0),
-                LocalDateTime.of(2026, 1, 24, 10, 0),
-                LocalDateTime.of(2026, 1, 27, 14, 0),
-                LocalDateTime.of(2026, 1, 27, 16, 0),
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
                 CourseLevel.BEGINNER, null
         );
 
@@ -250,10 +250,10 @@ class CourseRequestControllerTest {
                 "3층 필라테스룸",
                 BigInteger.valueOf(70000),
                 10,
-                LocalDateTime.of(2026, 1, 15, 10, 0),
-                LocalDateTime.of(2026, 1, 24, 10, 0),
-                LocalDateTime.of(2026, 1, 27, 14, 0),
-                LocalDateTime.of(2026, 1, 27, 16, 0),
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
                 CourseLevel.BEGINNER,
                 List.of("https://cdn.example.com/img1.jpg")
         );

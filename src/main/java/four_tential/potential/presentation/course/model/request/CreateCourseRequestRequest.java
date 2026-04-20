@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.course.model.request;
 
 import four_tential.potential.domain.course.course.CourseLevel;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -33,15 +34,19 @@ public record CreateCourseRequestRequest(
         int capacity,
 
         @NotNull(message = "주문 시작 시간을 입력해주세요")
+        @Future(message = "주문 시작 시간은 현재보다 미래여야 합니다")
         LocalDateTime orderOpenAt,
 
         @NotNull(message = "주문 마감 시간을 입력해주세요")
+        @Future(message = "주문 마감 시간은 현재보다 미래여야 합니다")
         LocalDateTime orderCloseAt,
 
-        @NotNull(message = "강의 시작 시간을 입력해주세요")
+        @NotNull(message = "코스 시작 시간을 입력해주세요")
+        @Future(message = "코스 시작 시간은 현재보다 미래여야 합니다")
         LocalDateTime startAt,
 
-        @NotNull(message = "강의 종료 시간을 입력해주세요")
+        @NotNull(message = "코스 종료 시간을 입력해주세요")
+        @Future(message = "코스 종료 시간은 현재보다 미래여야 합니다")
         LocalDateTime endAt,
 
         @NotNull(message = "난이도를 입력해주세요")
