@@ -174,7 +174,7 @@ public class CourseService {
             throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
         }
 
-        // PREPARATION 코스는 수강생 조회 불가 (개설 승인 대기 중 → CONFIRMED 주문 없음)
+        // PREPARATION 코스는 수강생 조회 불가 (개설 승인 대기 중 - CONFIRMED 주문 없음)
         if (course.getStatus() == CourseStatus.PREPARATION) {
             throw new ServiceErrorException(ERR_COURSE_IN_PREPARATION);
         }

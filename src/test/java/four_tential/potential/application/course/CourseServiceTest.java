@@ -472,7 +472,7 @@ class CourseServiceTest {
 
         InstructorMember instructor = approvedInstructorMember();
         // 코스의 memberInstructorId == instructor.id 가 되도록 설정
-        Course course = courseWithId(courseId);
+        Course course = openCourseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
 
         CourseStudentQueryResult studentResult = new CourseStudentQueryResult(
@@ -501,7 +501,7 @@ class CourseServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
 
         InstructorMember instructor = approvedInstructorMember();
-        Course course = courseWithId(courseId);
+        Course course = openCourseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
 
         CourseStudentQueryResult absent = new CourseStudentQueryResult(
@@ -528,7 +528,7 @@ class CourseServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
 
         InstructorMember instructor = approvedInstructorMember();
-        Course course = courseWithId(courseId);
+        Course course = openCourseWithId(courseId);
         ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
 
         given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
