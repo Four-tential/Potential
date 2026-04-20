@@ -99,7 +99,7 @@ class CourseRequestControllerTest {
                         .content(objectMapper.writeValueAsString(defaultRequest())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("코스가 개설 신청 성공"))
+                .andExpect(jsonPath("$.message").value("코스 개설 신청 성공"))
                 .andExpect(jsonPath("$.data.title").value("소도구 필라테스 입문반"))
                 .andExpect(jsonPath("$.data.categoryCode").value("FITNESS"))
                 .andExpect(jsonPath("$.data.status").value("PREPARATION"));

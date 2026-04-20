@@ -607,7 +607,7 @@ class CourseServiceTest {
                 courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
         )
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+                .hasMessage("본인 코스만 조회 가능");
 
         verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
     }
@@ -694,13 +694,13 @@ class CourseServiceTest {
         InstructorMember instructor = approvedInstructorMember();
         CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
 
-        LocalDateTime startAt = LocalDateTime.of(2026, 1, 12, 18, 0);
-        LocalDateTime endAt = LocalDateTime.of(2026, 1, 12, 9, 0);
+        LocalDateTime startAt = LocalDateTime.now().plusDays(30).withHour(18).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime endAt = startAt.withHour(9);
         CreateCourseRequestRequest request = new CreateCourseRequestRequest(
                 "제목", "설명", "주소", "상세주소",
                 BigInteger.valueOf(50000), 10,
-                LocalDateTime.of(2026, 1, 1, 9, 0),
-                LocalDateTime.of(2026, 1, 10, 9, 0),
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
                 startAt, endAt,
                 CourseLevel.BEGINNER, null
         );
@@ -720,12 +720,12 @@ class CourseServiceTest {
         InstructorMember instructor = approvedInstructorMember();
         CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
 
-        LocalDateTime startAt = LocalDateTime.of(2026, 1, 12, 9, 0);
+        LocalDateTime startAt = LocalDateTime.now().plusDays(30);
         LocalDateTime orderCloseAt = startAt.minusHours(1);
         CreateCourseRequestRequest request = new CreateCourseRequestRequest(
                 "제목", "설명", "주소", "상세주소",
                 BigInteger.valueOf(50000), 10,
-                LocalDateTime.of(2026, 1, 1, 9, 0),
+                LocalDateTime.now().plusDays(10),
                 orderCloseAt,
                 startAt, startAt.plusHours(2),
                 CourseLevel.BEGINNER, null
@@ -801,7 +801,7 @@ class CourseServiceTest {
 
         assertThatThrownBy(() -> courseService.deleteCourseRequest(memberId, courseId))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+                .hasMessage("본인 코스만 삭제 가능");
 
         verify(courseRepository, never()).delete(any());
     }
@@ -833,10 +833,10 @@ class CourseServiceTest {
                 "3층 필라테스룸",
                 BigInteger.valueOf(70000),
                 10,
-                LocalDateTime.of(2026, 1, 15, 10, 0),
-                LocalDateTime.of(2026, 1, 24, 10, 0),
-                LocalDateTime.of(2026, 1, 27, 14, 0),
-                LocalDateTime.of(2026, 1, 27, 16, 0),
+                LocalDateTime.now().plusDays(10),
+                LocalDateTime.now().plusDays(20),
+                LocalDateTime.now().plusDays(30),
+                LocalDateTime.now().plusDays(30).plusHours(2),
                 CourseLevel.BEGINNER,
                 imageUrls
         );

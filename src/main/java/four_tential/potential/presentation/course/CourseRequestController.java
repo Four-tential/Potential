@@ -35,7 +35,7 @@ public class CourseRequestController {
     ) {
         CreateCourseRequestResponse response = courseService.createCourseRequest(principal.memberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(HttpStatus.CREATED.name(), "코스가 개설 신청 성공", response));
+                .body(BaseResponse.success(HttpStatus.CREATED.name(), "코스 개설 신청 성공", response));
     }
 
     @DeleteMapping("/{courseId}")

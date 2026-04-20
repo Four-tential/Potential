@@ -887,7 +887,7 @@ class MemberControllerTest {
 
         assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+                .hasMessage("본인 코스만 조회 가능");
     }
 
     @Test

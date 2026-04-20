@@ -52,6 +52,6 @@ public record CreateCourseRequestRequest(
         @NotNull(message = "난이도를 입력해주세요")
         CourseLevel level,
 
-        List<String> imageUrls
+        List<@NotBlank(message = "이미지 URL은 빈 값일 수 없습니다") String> imageUrls
 ) {
 }
