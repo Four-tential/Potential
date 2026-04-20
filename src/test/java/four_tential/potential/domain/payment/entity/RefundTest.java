@@ -26,82 +26,83 @@ class RefundTest {
     }
 
     @Test
-    @DisplayName("환불 생성 시 COMPLETED 상태로 생성된다")
-    void create_status_completed() {
+    @DisplayName("환불 완료 이력은 COMPLETED 상태로 생성된다")
+    void completed_status_completed() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.completed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
     }
 
     @Test
-    @DisplayName("환불 생성 시 payment 가 올바르게 저장된다")
-    void create_payment() {
+    @DisplayName("환불 완료 이력은 payment 를 함께 저장한다")
+    void completed_payment() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.completed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getPayment()).isEqualTo(payment);
     }
 
     @Test
-    @DisplayName("환불 생성 시 refundPrice 가 올바르게 저장된다")
-    void create_refundPrice() {
+    @DisplayName("환불 완료 이력은 refundPrice 를 저장한다")
+    void completed_refundPrice() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.completed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getRefundPrice()).isEqualTo(50000L);
     }
 
     @Test
-    @DisplayName("환불 생성 시 reason 이 CANCEL 로 저장된다")
-    void create_reason_cancel() {
+    @DisplayName("환불 완료 이력은 취소 수량을 저장한다")
+    void completed_cancelCount() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
-        assertThat(refund.getReason()).isEqualTo(RefundReason.CANCEL);
+        Refund refund = Refund.completed(payment, 50000L, 2, RefundReason.CANCEL);
+        assertThat(refund.getCancelCount()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("환불 생성 시 reason 이 INSTRUCTOR 로 저장된다")
-    void create_reason_instructor() {
+    @DisplayName("환불 완료 이력은 reason 을 저장한다")
+    void completed_reason() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 100000L, RefundReason.INSTRUCTOR);
+        Refund refund = Refund.completed(payment, 100000L, 1, RefundReason.INSTRUCTOR);
         assertThat(refund.getReason()).isEqualTo(RefundReason.INSTRUCTOR);
     }
 
     @Test
-    @DisplayName("환불 생성 시 refundedAt 이 null 이 아니다")
-    void create_refundedAt_not_null() {
+    @DisplayName("환불 완료 이력은 refundedAt 을 기록한다")
+    void completed_refundedAt_not_null() {
         Payment payment = createPayment();
-        Refund refund = Refund.create(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.completed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getRefundedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("환불 실패 생성 시 FAILED 상태로 생성된다")
-    void fail_status_failed() {
+    @DisplayName("환불 실패 이력은 FAILED 상태로 생성된다")
+    void failed_status_failed() {
         Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.failed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
     }
 
     @Test
-    @DisplayName("환불 실패 생성 시 payment 가 올바르게 저장된다")
-    void fail_payment() {
+    @DisplayName("환불 실패 이력은 payment 를 함께 저장한다")
+    void failed_payment() {
         Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.failed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getPayment()).isEqualTo(payment);
     }
 
     @Test
-    @DisplayName("환불 실패 생성 시 refundedAt 이 null 이다")
-    void fail_refundedAt_null() {
+    @DisplayName("환불 실패 이력은 refundedAt 을 비워둔다")
+    void failed_refundedAt_null() {
         Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.failed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getRefundedAt()).isNull();
     }
 
     @Test
-    @DisplayName("환불 실패 생성 시 refundPrice 가 올바르게 저장된다")
-    void fail_refundPrice() {
+    @DisplayName("환불 실패 이력은 refundPrice 와 취소 수량을 저장한다")
+    void failed_refundPrice_and_cancelCount() {
         Payment payment = createPayment();
-        Refund refund = Refund.fail(payment, 50000L, RefundReason.CANCEL);
+        Refund refund = Refund.failed(payment, 50000L, 1, RefundReason.CANCEL);
         assertThat(refund.getRefundPrice()).isEqualTo(50000L);
+        assertThat(refund.getCancelCount()).isEqualTo(1);
     }
 }

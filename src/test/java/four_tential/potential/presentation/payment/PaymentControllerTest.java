@@ -315,4 +315,5 @@ class PaymentControllerTest {
         assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
                 .isInstanceOf(ServiceErrorException.class);
     }
+
 }

@@ -371,6 +371,28 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("refund 호출 시 Payment 상태가 REFUNDED 로 변경된다")
+    void refund_changes_status_to_refunded() {
+        Payment payment = createPayment();
+        payment.confirmPaid();
+
+        paymentService.refund(payment);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    @DisplayName("partRefund 호출 시 Payment 상태가 PART_REFUNDED 로 변경된다")
+    void partRefund_changes_status_to_part_refunded() {
+        Payment payment = createPayment();
+        payment.confirmPaid();
+
+        paymentService.partRefund(payment);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PART_REFUNDED);
+    }
+
+    @Test
     @DisplayName("본인 결제가 존재하면 PaymentDetailResponse 를 반환한다")
     void getDetailByIdAndMemberId_returns_response_when_found() {
         UUID paymentId = UUID.randomUUID();

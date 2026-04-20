@@ -284,6 +284,48 @@ class OrderTest {
                 .hasMessage(OrderExceptionEnum.ERR_CANNOT_CANCEL_CONFIRMED_ORDER.getMessage());
     }
 
+    @Test
+    @DisplayName("부분 환불 수량만큼 주문 수량을 차감한다")
+    void applyRefund_partially_decreases_order_count() {
+        Order order = Order.register(
+                UUID.randomUUID(), UUID.randomUUID(), 3,
+                BigInteger.valueOf(10000), "테스트 코스"
+        );
+        order.completePayment();
+
+        order.applyRefund(1, LocalDateTime.now());
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getOrderCount()).isEqualTo(2);
+        assertThat(order.getTotalPriceSnap()).isEqualTo(BigInteger.valueOf(20000));
+        assertThat(order.getCancelledAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("남은 수량을 모두 환불하면 주문이 CANCELLED 상태가 된다")
+    void applyRefund_all_changes_status_to_cancelled() {
+        Order order = createPendingOrder();
+        order.completePayment();
+        LocalDateTime now = LocalDateTime.now();
+
+        order.applyRefund(1, now);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getOrderCount()).isZero();
+        assertThat(order.getTotalPriceSnap()).isEqualTo(BigInteger.ZERO);
+        assertThat(order.getCancelledAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("PAID 상태가 아니면 환불 수량 차감을 할 수 없다")
+    void applyRefund_throws_when_order_not_paid() {
+        Order order = createPendingOrder();
+
+        assertThatThrownBy(() -> order.applyRefund(1, LocalDateTime.now()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS.getMessage());
+    }
+
     private Order createPendingOrder() {
         return Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "테스트 코스");
     }

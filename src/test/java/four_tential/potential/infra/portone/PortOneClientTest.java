@@ -34,7 +34,6 @@ class PortOneClientTest {
     @DisplayName("PortOneProperties 로 PortOneClient 를 생성할 수 있다")
     void createClient_with_properties() {
         PortOneClient portOneClient = new PortOneClient(createProperties());
-
         assertThat(portOneClient).isNotNull();
     }
 
@@ -94,7 +93,6 @@ class PortOneClientTest {
                 (mock, context) -> given(mock.getPayment()).willReturn(paymentClient)
         )) {
             PaymentGatewayResponse response = portOneClient.getPayment("pg-key-no-amount");
-
             assertThat(response.totalAmount()).isZero();
         }
     }
@@ -118,7 +116,6 @@ class PortOneClientTest {
                 (mock, context) -> given(mock.getPayment()).willReturn(paymentClient)
         )) {
             PaymentGatewayResponse response = portOneClient.getPayment("pg-key-easy-pay");
-
             assertThat(response.payMethod()).isEqualTo("easyPay");
         }
     }
@@ -142,7 +139,6 @@ class PortOneClientTest {
                 (mock, context) -> given(mock.getPayment()).willReturn(paymentClient)
         )) {
             PaymentGatewayResponse response = portOneClient.getPayment("pg-key-unknown-method");
-
             assertThat(response.payMethod()).isEqualTo("unknown");
         }
     }
@@ -184,20 +180,62 @@ class PortOneClientTest {
     }
 
     @Test
-    @DisplayName("cancelPayment 호출 시 PortOne 결제 취소 API를 호출한다")
-    void cancelPayment_calls_portone_cancel_api() {
+    @DisplayName("cancelPayment 호출 시 전액 취소는 currentCancellableAmount = amount 로 PortOne API 를 호출한다")
+    void cancelPayment_full_calls_portone_with_same_cancellable_amount() {
         PortOneClient portOneClient = new PortOneClient(createProperties());
         PaymentClient paymentClient = mock(PaymentClient.class);
-        PaymentGatewayRequest request = PaymentGatewayRequest.of("pg-key-1", 1000L, "CANCEL_REASON");
+
+        // of() 팩토리 사용 시 currentCancellableAmount = amount (전액 취소)
+        PaymentGatewayRequest request = PaymentGatewayRequest.of("pg-key-1", 1000L, "CANCEL");
+
         given(paymentClient.cancelPayment(
-                eq("pg-key-1"),
-                eq(1000L),
+                eq("pg-key-1"),    // 1. paymentId
+                eq(1000L),         // 2. cancellationAmount
+                isNull(),          // 3. taxFreeAmount
+                isNull(),          // 4. vatAmount
+                eq("CANCEL"),      // 5. reason
+                eq(CancelRequester.Customer.INSTANCE), // 6. requester
+                isNull(),          // 7. promotionDiscountRetainOption
+                eq(1000L),         // 8. currentCancellableAmount
+                isNull(),          // 9. refundBankCode
+                isNull(),          // 10. refundAccountNumber
+                isNull()           // 11. refundAccountHolderName
+        )).willReturn(CompletableFuture.completedFuture(mock(CancelPaymentResponse.class)));
+
+        try (MockedConstruction<io.portone.sdk.server.PortOneClient> ignored = mockConstruction(
+                io.portone.sdk.server.PortOneClient.class,
+                (mock, context) -> given(mock.getPayment()).willReturn(paymentClient)
+        )) {
+            assertThatCode(() -> portOneClient.cancelPayment(request))
+                    .doesNotThrowAnyException();
+        }
+
+        verify(paymentClient).cancelPayment(
+                eq("pg-key-1"), eq(1000L), isNull(), isNull(), eq("CANCEL"),
+                eq(CancelRequester.Customer.INSTANCE),
+                isNull(), eq(1000L), isNull(), isNull(), isNull()
+        );
+    }
+
+    @Test
+    @DisplayName("cancelPayment 부분 취소 시 amount 와 currentCancellableAmount 를 각각 다른 값으로 PortOne API 를 호출한다")
+    void cancelPayment_partial_calls_portone_with_different_cancellable_amount() {
+        PortOneClient portOneClient = new PortOneClient(createProperties());
+        PaymentClient paymentClient = mock(PaymentClient.class);
+
+        // ofPartial() 팩토리 사용: 취소 금액 2000, 취소 가능 잔액 6000
+        PaymentGatewayRequest request = PaymentGatewayRequest.ofPartial(
+                "pg-key-partial", 2000L, 6000L, "CANCEL");
+
+        given(paymentClient.cancelPayment(
+                eq("pg-key-partial"),
+                eq(2000L),         // 2. 이번에 취소할 금액
                 isNull(),
                 isNull(),
-                eq("CANCEL_REASON"),
+                eq("CANCEL"),
                 eq(CancelRequester.Customer.INSTANCE),
                 isNull(),
-                isNull(),
+                eq(6000L),         // 8. 현재 취소 가능한 잔여 금액
                 isNull(),
                 isNull(),
                 isNull()
@@ -212,17 +250,9 @@ class PortOneClientTest {
         }
 
         verify(paymentClient).cancelPayment(
-                eq("pg-key-1"),
-                eq(1000L),
-                isNull(),
-                isNull(),
-                eq("CANCEL_REASON"),
+                eq("pg-key-partial"), eq(2000L), isNull(), isNull(), eq("CANCEL"),
                 eq(CancelRequester.Customer.INSTANCE),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()
+                isNull(), eq(6000L), isNull(), isNull(), isNull()
         );
     }
 
@@ -231,21 +261,12 @@ class PortOneClientTest {
     void cancelPayment_throws_when_sdk_call_fails() {
         PortOneClient portOneClient = new PortOneClient(createProperties());
         PaymentClient paymentClient = mock(PaymentClient.class);
-        PaymentGatewayRequest request = PaymentGatewayRequest.of("pg-key-1", 1000L, "CANCEL_REASON");
+        PaymentGatewayRequest request = PaymentGatewayRequest.of("pg-key-1", 1000L, "CANCEL");
         CompletableFuture<CancelPaymentResponse> failedFuture = new CompletableFuture<>();
         failedFuture.completeExceptionally(new RuntimeException("portone cancel failed"));
         given(paymentClient.cancelPayment(
-                anyString(),
-                anyLong(),
-                isNull(),
-                isNull(),
-                anyString(),
-                any(CancelRequester.class),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()
+                anyString(), anyLong(), isNull(), isNull(), anyString(),
+                any(CancelRequester.class), isNull(), anyLong(), isNull(), isNull(), isNull()
         )).willReturn(failedFuture);
 
         try (MockedConstruction<io.portone.sdk.server.PortOneClient> ignored = mockConstruction(
@@ -274,7 +295,6 @@ class PortOneClientTest {
                 (mock, context) -> given(mock.getPayment()).willReturn(paymentClient)
         )) {
             PaymentGatewayResponse response = portOneClient.getPayment("pg-key-" + expectedStatus);
-
             assertThat(response.status()).isEqualTo(expectedStatus);
         }
     }

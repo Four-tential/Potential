@@ -1603,4 +1603,70 @@ class PaymentFacadeTest {
         assertThat(result.totalPages()).isEqualTo(2);
         assertThat(result.isLast()).isTrue();
     }
+
+    @Test
+    @DisplayName("전체 취소 완료 웹훅(CancelledCancelled) 수신 시 별도 처리 없이 COMPLETED 로 종료한다")
+    void handleWebhook_cancelledCancelled_completes_without_payment_change() throws Exception {
+        String pgKey = "pg-cancelled-completed";
+
+        given(webhookService.isFinished("webhook-cc")).willReturn(false);
+        Webhook webhook = Webhook.createPendingRecord("webhook-cc", "UNKNOWN", "{}");
+        given(webhookService.saveIncomingWebhook("webhook-cc", "UNKNOWN", "{}"))
+                .willReturn(webhook);
+        given(portOneWebhookHandler.verify("{}", "webhook-cc", "signature", "timestamp"))
+                .willReturn(new WebhookTransactionCancelledCancelled(new TestWebhookTransactionData(pgKey)));
+        given(transactionTemplate.execute(any(TransactionCallback.class)))
+                .willAnswer(invocation -> {
+                    TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(transactionStatus);
+                });
+        given(webhookService.merge(any())).willReturn(webhook);
+
+        paymentFacade.handleWebhook("{}", "webhook-cc", "timestamp", "signature");
+
+        verify(paymentService, never()).fail(any());
+        verify(paymentService, never()).confirmPaid(any());
+        verify(webhookService).completeWebhook(webhook);
+    }
+
+    @Test
+    @DisplayName("부분 취소 완료 웹훅(CancelledPartialCancelled) 수신 시 별도 처리 없이 COMPLETED 로 종료한다")
+    void handleWebhook_cancelledPartialCancelled_completes_without_payment_change() throws Exception {
+        String pgKey = "pg-partial-cancelled";
+
+        given(webhookService.isFinished("webhook-pc")).willReturn(false);
+        Webhook webhook = Webhook.createPendingRecord("webhook-pc", "UNKNOWN", "{}");
+        given(webhookService.saveIncomingWebhook("webhook-pc", "UNKNOWN", "{}"))
+                .willReturn(webhook);
+        given(portOneWebhookHandler.verify("{}", "webhook-pc", "signature", "timestamp"))
+                .willReturn(new WebhookTransactionCancelledPartialCancelled(new TestWebhookTransactionData(pgKey)));
+        given(transactionTemplate.execute(any(TransactionCallback.class)))
+                .willAnswer(invocation -> {
+                    TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(transactionStatus);
+                });
+        given(webhookService.merge(any())).willReturn(webhook);
+
+        paymentFacade.handleWebhook("{}", "webhook-pc", "timestamp", "signature");
+
+        verify(paymentService, never()).fail(any());
+        verify(paymentService, never()).confirmPaid(any());
+        verify(webhookService).completeWebhook(webhook);
+    }
+
+    // ─────────────────────────────────────────────
+    // 내부 클래스 (기존 파일에 추가)
+    // ─────────────────────────────────────────────
+
+    private static class WebhookTransactionCancelledCancelled extends BaseWebhookTransaction {
+        private WebhookTransactionCancelledCancelled(WebhookTransactionData data) {
+            super(data);
+        }
+    }
+
+    private static class WebhookTransactionCancelledPartialCancelled extends BaseWebhookTransaction {
+        private WebhookTransactionCancelledPartialCancelled(WebhookTransactionData data) {
+            super(data);
+        }
+    }
 }
