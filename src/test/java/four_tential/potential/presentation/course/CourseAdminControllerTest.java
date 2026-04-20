@@ -87,7 +87,7 @@ class CourseAdminControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("코스 개설 신청 반려 - ADMIN이면 200 OK 및 PREPARATION 상태 유지")
+    @DisplayName("코스 개설 신청 반려 - ADMIN이면 200 OK 및 REJECTED 상태")
     void handleCourseRequest_reject_success() throws Exception {
         UUID courseId = UUID.randomUUID();
         CourseRequestActionRequest request =

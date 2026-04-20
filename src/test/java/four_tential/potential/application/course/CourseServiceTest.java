@@ -29,6 +29,7 @@ import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistory;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
@@ -40,6 +41,7 @@ import four_tential.potential.presentation.course.model.response.InstructorCours
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -925,7 +927,11 @@ class CourseServiceTest {
         assertThat(response.courseId()).isEqualTo(courseId);
         assertThat(response.status()).isEqualTo(CourseStatus.OPEN);
         assertThat(response.confirmedAt()).isNotNull();
-        verify(courseApprovalHistoryRepository).save(any());
+
+        ArgumentCaptor<CourseApprovalHistory> captor = ArgumentCaptor.forClass(CourseApprovalHistory.class);
+        verify(courseApprovalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo(CourseApprovalAction.APPROVE);
+        assertThat(captor.getValue().getRejectReason()).isNull();
     }
 
     @Test
@@ -942,7 +948,11 @@ class CourseServiceTest {
         assertThat(response.courseId()).isEqualTo(courseId);
         assertThat(response.status()).isEqualTo(CourseStatus.REJECTED);
         assertThat(response.confirmedAt()).isNull();
-        verify(courseApprovalHistoryRepository).save(any());
+
+        ArgumentCaptor<CourseApprovalHistory> captor = ArgumentCaptor.forClass(CourseApprovalHistory.class);
+        verify(courseApprovalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo(CourseApprovalAction.REJECT);
+        assertThat(captor.getValue().getRejectReason()).isEqualTo("사진 자료 미비");
     }
 
     @Test

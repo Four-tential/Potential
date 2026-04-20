@@ -221,6 +221,9 @@ public class Course extends BaseTimeWithDelEntity {
         if (this.status != CourseStatus.PREPARATION) {
             throw new ServiceErrorException(ERR_COURSE_NOT_IN_PREPARATION);
         }
+        if (rejectReason == null || rejectReason.isBlank()) {
+            throw new ServiceErrorException(ERR_REJECT_REASON_REQUIRED);
+        }
         this.status = CourseStatus.REJECTED;
         this.rejectReason = rejectReason;
     }
