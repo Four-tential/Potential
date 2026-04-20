@@ -670,7 +670,7 @@ class CourseServiceTest {
 
         courseService.createCourseRequest(memberId, request);
 
-        verify(courseImageRepository, never()).save(any());
+        verify(courseImageRepository, never()).saveAll(any());
     }
 
     @Test
