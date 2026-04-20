@@ -126,4 +126,15 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
 
         return PageableExecutionUtils.getPage(content, pageable, () -> countQuery.fetchOne());
     }
+
+    @Override
+    public List<Order> findRefundableOrdersByCourseId(UUID courseId) {
+        return queryFactory
+                .selectFrom(order)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.in(OrderStatus.PAID, OrderStatus.CONFIRMED)
+                )
+                .fetch();
+    }
 }

@@ -16,6 +16,7 @@ import four_tential.potential.domain.payment.entity.Refund;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.presentation.payment.dto.RefundCourseResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import four_tential.potential.presentation.payment.dto.RefundResponse;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -81,7 +83,7 @@ public class RefundFacade {
     }
 
     private RefundResponse refundInLock(UUID memberId, UUID orderId, int cancelCount, String pgKey) {
-        // 1.
+        // 1. 검증 및 환불 계획 수립 (트랜잭션 + 비관적 락)
         RefundPlan plan = Objects.requireNonNull(transactionTemplate.execute(
                 status -> prepareRefund(memberId, orderId, cancelCount, pgKey)
         ));
@@ -347,4 +349,184 @@ public class RefundFacade {
             RefundResponse response
     ) {
     }
+
+    /**
+     * 강사 코스 취소 시 해당 코스의 모든 결제 주문을 일괄 전액 환불
+     *
+     * 호출 시점: 코스 도메인에서 course.cancel() 후 호출
+     *   강사 직접 취소든, 관리자가 강사 코스를 강제 취소하든 동일하게 호출한다.
+     *   두 경우 모두 귀책이 강사에게 있으므로 refunds.reason = INSTRUCTOR
+     *
+     *   - 일부 실패해도 전체 중단 없이 나머지를 계속 처리한다.
+     *   - MVP: for 문 순차 처리 / 향후: 내부만 비동기로 교체
+     */
+    public RefundCourseResponse refundAllPaidOrdersForCancelledCourse(UUID courseId) {
+        Course course = getCourse(courseId);
+        // courseId 기준 환불 가능 주문 List에 담기
+        List<Order> refundableOrders = orderRepository.findRefundableOrdersByCourseId(courseId);
+
+        if (refundableOrders.isEmpty()) {
+            log.info("[INSTRUCTOR_REFUND] 환불 대상 주문 없음. courseId={}", courseId);
+            return RefundCourseResponse.of(courseId, course.getTitle(), 0, 0, 0, 0L);
+        }
+
+        log.warn("[INSTRUCTOR_REFUND] 일괄 환불 시작. courseId={} targetCount={}", courseId, refundableOrders.size());
+
+        int totalCount         = refundableOrders.size();
+        int refundedCount      = 0;
+        int failedCount        = 0;
+        Long totalRefundAmount = 0L;
+
+        for (Order order : refundableOrders) {
+            try {
+                Long refundedAmount = refundSingleOrderForInstructor(order);
+                refundedCount++;
+                totalRefundAmount += refundedAmount;
+            } catch (Exception e) {
+                // 실패 이력은 내부에서 REQUIRES_NEW 트랜잭션으로 저장됨
+                failedCount++;
+                log.error("[INSTRUCTOR_REFUND] 주문 환불 실패. orderId={} memberId={} — 관리자 수동 처리 필요",
+                        order.getId(), order.getMemberId(), e);
+            }
+        }
+
+        log.warn("[INSTRUCTOR_REFUND] 일괄 환불 완료. courseId={} total={} success={} fail={}",
+                courseId, totalCount, refundedCount, failedCount);
+
+        return RefundCourseResponse.of(
+                courseId, course.getTitle(), totalCount, refundedCount, failedCount, totalRefundAmount
+        );
+    }
+
+    /**
+     * 주문 단건에 대한 강사 취소 환불을 처리
+     *
+     * PART_REFUNDED 처리의 경우
+     *   수강생이 이미 일부 환불받은 경우 completedRefundTotal 을 차감한
+     *   나머지 금액만 PortOne 에 요청한다.
+     *   예) paid=30,000 / 기환불=10,000 → 이번 환불=20,000
+     */
+    private Long refundSingleOrderForInstructor(Order order) {
+        Payment payment = getPaymentByOrderId(order.getId());
+
+        return paymentLockExecutor.executeWithPgKeyLock(payment.getPgKey(), () -> {
+
+            // 1. 검증 및 환불 계획 수립 (트랜잭션 + 비관적 락)
+            InstructorRefundPlan plan = Objects.requireNonNull(
+                    transactionTemplate.execute(
+                            status -> prepareInstructorRefund(order.getId(), payment.getPgKey())
+                    )
+            );
+
+            // 2. PortOne 환불 요청 (트랜잭션 밖)
+            try {
+                paymentGateway.cancelPayment(PaymentGatewayRequest.ofPartial(
+                        plan.pgKey(),
+                        plan.refundPrice(),              // 이번에 환불할 금액
+                        plan.refundPrice(),              // 강사 취소는 남은 금액 전액이므로 두 값 동일
+                        RefundConstants.INSTRUCTOR_CANCEL_REASON
+                ));
+            } catch (RuntimeException e) {
+                refundService.createFailed(
+                        plan.paymentId(), plan.refundPrice(),
+                        plan.cancelCount(), RefundReason.INSTRUCTOR
+                );
+                log.error("[INSTRUCTOR_REFUND] PortOne 환불 실패. paymentId={} pgKey={} amount={}",
+                        plan.paymentId(), plan.pgKey(), plan.refundPrice(), e);
+                throw new ServiceErrorException(PaymentExceptionEnum.ERR_REFUND_PROCESS_FAILED);
+            }
+
+            // 3. DB 확정 (새 트랜잭션 + 비관적 락 재획득)
+            transactionTemplate.execute(status -> {
+                completeInstructorRefund(plan);
+                return null;
+            });
+
+            // 4. Redis 잔여석 복구 (실패해도 환불 결과에 영향 없음)
+            recoverCapacityQuietly(plan.courseId(), plan.memberId(), plan.cancelCount());
+
+            return plan.refundPrice();
+        });
+    }
+
+    /**
+     * 강사 취소 환불 검증 및 계획 수립
+     */
+    private InstructorRefundPlan prepareInstructorRefund(UUID orderId, String pgKey) {
+        Payment payment = paymentService.getByPgKeyForUpdate(pgKey);
+
+        // 결제 상태 검증 PAID, PART_REFUNDED 만 허용
+        refundService.validateRefundablePaymentStatus(payment);
+
+        Order order = getOrder(orderId);
+        validateOrderForInstructorRefund(order);
+
+        Long completedRefundTotal = refundService.getCompletedRefundTotal(payment.getId());
+        if (completedRefundTotal == null) completedRefundTotal = 0L;
+
+        // paid_total_price - completedRefundTotal = 남은 환불 가능 금액
+        Long remainingRefundablePrice = payment.getPaidTotalPrice() - completedRefundTotal;
+        if (remainingRefundablePrice <= 0) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_ALREADY_FULLY_REFUNDED);
+        }
+
+        return new InstructorRefundPlan(
+                payment.getId(),
+                payment.getPgKey(),
+                order.getId(),
+                order.getCourseId(),
+                order.getMemberId(),
+                order.getOrderCount(),       // cancelCount - confirmCount 감소에 사용
+                remainingRefundablePrice     // refundPrice - 남은 전액
+        );
+    }
+
+    /**
+     * PortOne 환불 성공 후 DB 를 확정한다 (강사 취소 전용)
+     */
+    private void completeInstructorRefund(InstructorRefundPlan plan) {
+        Payment payment = paymentService.getByPgKeyForUpdate(plan.pgKey());
+
+        // 1. 환불 이력 저장 (reason = INSTRUCTOR)
+        refundService.createCompleted(payment, plan.refundPrice(), plan.cancelCount(), RefundReason.INSTRUCTOR);
+
+        // 2. payments.status = REFUNDED
+        paymentService.refund(payment);
+
+        // 3. orders.status = CANCELLED (orderCount 감소 없음)
+        orderService.cancelOrderForInstructor(plan.orderId());
+
+        // 4. courses.confirm_count 감소
+        Course course = getCourse(plan.courseId());
+        decreaseCourseConfirmCount(course, plan.cancelCount());
+
+        log.info("[INSTRUCTOR_REFUND] 단건 확정 완료. paymentId={} pgKey={} amount={}",
+                payment.getId(), payment.getPgKey(), plan.refundPrice());
+    }
+
+    /**
+     * 강사 취소 환불 대상 주문 상태 검증
+     * 수강생 직접 환불과 달리 OrderStatus.CONFIRMED 도 허용
+     */
+    private void validateOrderForInstructorRefund(Order order) {
+        if (order.getStatus() != OrderStatus.PAID
+                && order.getStatus() != OrderStatus.CONFIRMED) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS);
+        }
+    }
+
+    /**
+     * 강사 취소 환불을 위한 record
+     * 항상 전액 환불, 소유자 검증 무관.
+     * memberId는 recoverCapacityQuietly 호출 시 필요
+     */
+    private record InstructorRefundPlan(
+            UUID paymentId,
+            String pgKey,
+            UUID orderId,
+            UUID courseId,
+            UUID memberId,
+            int cancelCount,
+            Long refundPrice   // 남은 paidTotalPrice 전액
+    ) {}
 }

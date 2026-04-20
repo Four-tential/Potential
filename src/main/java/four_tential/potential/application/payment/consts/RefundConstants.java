@@ -15,6 +15,9 @@ public final class RefundConstants {
     // PortOne에 전달하는 수강생 취소 사유
     public static final String STUDENT_CANCEL_REASON = RefundReason.CANCEL.name();
 
+    // PortOne에 전달하는 강사/관리자 코스 취소 시 사유
+    public static final String INSTRUCTOR_CANCEL_REASON = RefundReason.INSTRUCTOR.name();
+
     private RefundConstants() {
     }
 }
