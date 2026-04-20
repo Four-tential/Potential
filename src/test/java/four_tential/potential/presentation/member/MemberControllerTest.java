@@ -47,7 +47,7 @@ import java.util.UUID;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_COURSE_IN_PREPARATION;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_FORBIDDEN_COURSE;
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -194,7 +194,7 @@ class MemberControllerTest {
     void registerOnBoarding_invalidCategory() {
         OnBoardRequest request = new OnBoardRequest(MemberOnBoardGoal.HOBBY, List.of("INVALID"));
         given(memberService.createOnBoarding(MEMBER_ID, request))
-                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .willThrow(new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         assertThatThrownBy(() -> memberController.registerOnBoarding(request, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
@@ -260,7 +260,7 @@ class MemberControllerTest {
     void updateOnBoarding_invalidCategory() {
         UpdateOnBoardRequest request = new UpdateOnBoardRequest(MemberOnBoardGoal.STRESS_OUT, List.of("INVALID"));
         given(memberService.updateOnBoarding(MEMBER_ID, request))
-                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .willThrow(new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         assertThatThrownBy(() -> memberController.updateOnBoarding(request, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)
@@ -606,7 +606,7 @@ class MemberControllerTest {
     void getInstructorProfile_categoryNotFound() {
         UUID instructorId = UUID.randomUUID();
         given(memberService.getInstructorProfile(instructorId))
-                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .willThrow(new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         assertThatThrownBy(() -> memberController.getInstructorProfile(instructorId))
                 .isInstanceOf(ServiceErrorException.class)

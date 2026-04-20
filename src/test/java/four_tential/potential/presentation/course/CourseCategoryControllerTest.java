@@ -187,7 +187,7 @@ class CourseCategoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("카테고리 삭제 성공"))
-                .andExpect(jsonPath("$.data").doesNotExist());
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

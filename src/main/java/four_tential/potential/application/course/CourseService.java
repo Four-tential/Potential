@@ -32,7 +32,7 @@ import java.util.*;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_COURSE_IN_PREPARATION;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_FORBIDDEN_COURSE;
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_INSTRUCTOR;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_MEMBER;
@@ -75,7 +75,7 @@ public class CourseService {
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         CourseCategory category = courseCategoryRepository.findById(course.getCourseCategoryId())
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .orElseThrow(() -> new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         InstructorMember instructorMember = instructorMemberRepository.findById(course.getMemberInstructorId())
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));

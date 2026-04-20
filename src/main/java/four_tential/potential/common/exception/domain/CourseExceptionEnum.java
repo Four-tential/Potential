@@ -16,7 +16,6 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
     ERR_IMMUTABLE_FIELD_IN_OPEN(HttpStatus.BAD_REQUEST, "OPEN 상태에서는 가격, 일정, 장소, 정원을 수정할 수 없습니다"),
     ERR_CANNOT_MODIFY_COURSE(HttpStatus.BAD_REQUEST, "CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다"),
     ERR_IS_FULL_CAPACITY(HttpStatus.CONFLICT, "코스의 정원이 가득차 추가할 수 없습니다"),
-    ERR_NOT_FOUND_CATEGORY(HttpStatus.BAD_REQUEST, "존재하지 않는 카테고리입니다"),
     ERR_DUPLICATED_CATEGORY_CODE(HttpStatus.CONFLICT, "이미 존재하는 카테고리 코드입니다"),
     ERR_NOT_ADMIN(HttpStatus.FORBIDDEN, "관리자만 접근 할 수 있습니다"),
 
