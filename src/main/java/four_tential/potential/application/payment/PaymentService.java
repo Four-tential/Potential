@@ -178,6 +178,24 @@ public class PaymentService {
     }
 
     /**
+     * 결제를 전액 환불 상태로 바꾼다.
+     * 환불 이력 저장과 같은 트랜잭션에서 호출해야 한다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void refund(Payment payment) {
+        payment.refund();
+    }
+
+    /**
+     * 결제를 부분 환불 상태로 바꾼다.
+     * 아직 남은 수강권이 있을 때 사용하는 상태다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void partRefund(Payment payment) {
+        payment.partRefund();
+    }
+
+    /**
      * 결제 단건 조회
      */
     public PaymentDetailResponse getMyPayment(UUID paymentId, UUID memberId) {

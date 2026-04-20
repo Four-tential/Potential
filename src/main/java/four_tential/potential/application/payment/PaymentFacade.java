@@ -392,9 +392,16 @@ public class PaymentFacade {
         switch (event.eventType()) {
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID:
                 return confirmPaidWebhook(event.pgKey());
+
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED,
                  PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
                 return failExistingPayment(event.pgKey());
+
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_CANCELLED,
+                 PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_PARTIAL_CANCELLED:
+                log.info("[PORTONE_WEBHOOK] 환불 완료 알림 수신 — 별도 처리 없음. type={} pgKey={}", event.eventType(), event.pgKey());
+                return PaymentCancelDecision.none();
+
             default:
                 log.warn("[PORTONE_WEBHOOK] unsupported event type. type={}", event.eventType());
                 return PaymentCancelDecision.none();
