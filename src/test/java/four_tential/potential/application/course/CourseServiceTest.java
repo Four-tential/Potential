@@ -994,7 +994,7 @@ class CourseServiceTest {
     }
 
     @Test
-    @DisplayName("코스 수정 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE")
+    @DisplayName("코스 수정 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE_MODIFY")
     void updateCourse_notOwnCourse_throwsForbidden() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
@@ -1007,7 +1007,7 @@ class CourseServiceTest {
 
         assertThatThrownBy(() -> courseService.updateCourse(memberId, courseId, defaultUpdateRequest()))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("본인 코스만 조회 가능합니다");
+                .hasMessage("본인 코스만 수정 가능합니다");
     }
 
     @Test

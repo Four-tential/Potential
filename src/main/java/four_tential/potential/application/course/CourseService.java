@@ -207,7 +207,7 @@ public class CourseService {
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
-            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_MODIFY);
         }
 
         CourseStatus status = course.getStatus();
