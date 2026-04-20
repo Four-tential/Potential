@@ -6,8 +6,10 @@ import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.presentation.course.model.response.CourseStudentItem;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.member_onboard.MemberOnBoardGoal;
@@ -43,7 +45,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_COURSE_IN_PREPARATION;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_FORBIDDEN_COURSE;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -796,5 +801,116 @@ class MemberControllerTest {
         assertThatThrownBy(() -> memberController.getInstructorCourses(instructorId, 0, 10))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 강사입니다");
+    }
+
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 200 OK 및 페이지 응답 반환")
+    void getCourseStudents_success() {
+        UUID courseId = UUID.randomUUID();
+        CourseStudentItem item = new CourseStudentItem(
+                UUID.randomUUID(), "김수강",
+                AttendanceStatus.ATTEND,
+                LocalDateTime.of(2026, 1, 20, 14, 5)
+        );
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<CourseStudentItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
+                memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("수강생 명단 조회 성공");
+        assertThat(response.getBody().data().content()).hasSize(1);
+        assertThat(response.getBody().data().content().get(0).memberName()).isEqualTo("김수강");
+        assertThat(response.getBody().data().content().get(0).attendanceStatus()).isEqualTo(AttendanceStatus.ATTEND);
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 수강생이 없으면 빈 페이지 반환")
+    void getCourseStudents_empty() {
+        UUID courseId = UUID.randomUUID();
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        PageResponse<CourseStudentItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
+                memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().content()).isEmpty();
+        assertThat(response.getBody().data().totalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - page=1, size=5 파라미터가 서비스에 올바르게 전달됨")
+    void getCourseStudents_customPageParams() {
+        UUID courseId = UUID.randomUUID();
+        PageRequest pageRequest = PageRequest.of(1, 5);
+        PageResponse<CourseStudentItem> serviceResponse =
+                PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+
+        ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
+                memberController.getCourseStudents(courseId, PRINCIPAL, 1, 5);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data().currentPage()).isEqualTo(1);
+        assertThat(response.getBody().data().size()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 코스가 없으면 ServiceErrorException 전파 (404)")
+    void getCourseStudents_courseNotFound() {
+        UUID courseId = UUID.randomUUID();
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 본인 코스가 아니면 ServiceErrorException 전파 (403)")
+    void getCourseStudents_forbiddenCourse() {
+        UUID courseId = UUID.randomUUID();
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+                .willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE));
+
+        assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - 승인된 강사가 아니면 ServiceErrorException 전파")
+    void getCourseStudents_instructorNotFound() {
+        UUID courseId = UUID.randomUUID();
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 - PREPARATION 코스면 ServiceErrorException 전파 (400)")
+    void getCourseStudents_courseInPreparation() {
+        UUID courseId = UUID.randomUUID();
+        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+                .willThrow(new ServiceErrorException(ERR_COURSE_IN_PREPARATION));
+
+        assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("준비 중인 코스는 수강생을 조회할 수 없습니다");
     }
 }

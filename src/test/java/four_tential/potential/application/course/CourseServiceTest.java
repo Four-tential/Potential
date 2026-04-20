@@ -10,6 +10,7 @@ import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.course.course_image.CourseImage;
+import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.course.fixture.CourseFixture;
@@ -19,12 +20,15 @@ import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.order.CourseStudentQueryResult;
+import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
+import four_tential.potential.presentation.course.model.response.CourseStudentItem;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +63,7 @@ class CourseServiceTest {
     @Mock private InstructorMemberRepository instructorMemberRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private ReviewRepository reviewRepository;
+    @Mock private OrderRepository orderRepository;
 
     @InjectMocks
     private CourseService courseService;
@@ -455,6 +460,184 @@ class CourseServiceTest {
         assertThat(response.content()).isEmpty();
         assertThat(response.totalElements()).isZero();
         assertThat(response.isLast()).isTrue();
+    }
+
+
+    @Test
+    @DisplayName("수강생 명단 조회 성공 - CONFIRMED 수강생 목록과 출석 정보 반환")
+    void getCourseStudents_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = CourseFixture.DEFAULT_COURSE_CATEGORY_ID;
+        Pageable pageable = PageRequest.of(0, 10);
+
+        InstructorMember instructor = approvedInstructorMember();
+        // 코스의 memberInstructorId == instructor.id 가 되도록 설정
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        CourseStudentQueryResult studentResult = new CourseStudentQueryResult(
+                UUID.randomUUID(), "김수강", AttendanceStatus.ATTEND,
+                LocalDateTime.of(2026, 1, 20, 14, 5)
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderRepository.findConfirmedStudentsByCourseId(courseId, pageable))
+                .willReturn(new PageImpl<>(List.of(studentResult), pageable, 1));
+
+        PageResponse<CourseStudentItem> response = courseService.getCourseStudents(courseId, memberId, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).memberName()).isEqualTo("김수강");
+        assertThat(response.content().get(0).attendanceStatus()).isEqualTo(AttendanceStatus.ATTEND);
+        assertThat(response.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 성공 - 출석 정보가 없는 수강생(ABSENT)도 포함")
+    void getCourseStudents_success_withAbsentStudent() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        CourseStudentQueryResult absent = new CourseStudentQueryResult(
+                UUID.randomUUID(), "이결석", AttendanceStatus.ABSENT, null
+        );
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderRepository.findConfirmedStudentsByCourseId(courseId, pageable))
+                .willReturn(new PageImpl<>(List.of(absent), pageable, 1));
+
+        PageResponse<CourseStudentItem> response = courseService.getCourseStudents(courseId, memberId, pageable);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).attendanceStatus()).isEqualTo(AttendanceStatus.ABSENT);
+        assertThat(response.content().get(0).attendanceAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 성공 - 수강생이 없으면 빈 페이지 반환")
+    void getCourseStudents_empty() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderRepository.findConfirmedStudentsByCourseId(courseId, pageable))
+                .willReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        PageResponse<CourseStudentItem> response = courseService.getCourseStudents(courseId, memberId, pageable);
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        assertThat(response.isLast()).isTrue();
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 강사 등록이 없으면 ERR_NOT_FOUND_INSTRUCTOR")
+    void getCourseStudents_instructorNotFound_throwsException() {
+        UUID memberId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseService.getCourseStudents(UUID.randomUUID(), memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 미승인 강사(PENDING)는 ERR_NOT_FOUND_INSTRUCTOR")
+    void getCourseStudents_notApprovedInstructor_throwsException() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() ->
+                courseService.getCourseStudents(UUID.randomUUID(), memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 코스가 없으면 ERR_NOT_FOUND_COURSE")
+    void getCourseStudents_courseNotFound_throwsException() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE")
+    void getCourseStudents_notOwnCourse_throwsForbidden() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember(); // id = randomUUID
+
+        // 코스의 memberInstructorId = 다른 강사 ID
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", UUID.randomUUID());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인 코스에 대해서만 조회할 수 있습니다");
+
+        verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - PREPARATION 코스는 ERR_COURSE_IN_PREPARATION")
+    void getCourseStudents_preparationCourse_throwsBadRequest() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        // PREPARATION 상태 코스 (Course.register 초기값 = PREPARATION)
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("준비 중인 코스는 수강생을 조회할 수 없습니다");
+
+        verify(orderRepository, never()).findConfirmedStudentsByCourseId(any(), any());
     }
 
     private InstructorCourseQueryResult sampleInstructorCourseQueryResult(CourseStatus status) {

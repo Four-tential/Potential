@@ -1,5 +1,6 @@
 package four_tential.potential.domain.order;
 
+import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import four_tential.potential.domain.course.course.CourseStatus;
@@ -14,7 +15,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.domain.attendance.QAttendance.attendance;
 import static four_tential.potential.domain.course.course.QCourse.course;
+import static four_tential.potential.domain.member.member.QMember.member;
 import static four_tential.potential.domain.order.QOrder.order;
 
 @RequiredArgsConstructor
@@ -87,5 +90,40 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .fetchOne();
 
         return studentCount != null ? studentCount : 0L;
+    }
+
+    @Override
+    public Page<CourseStudentQueryResult> findConfirmedStudentsByCourseId(UUID courseId, Pageable pageable) {
+        List<CourseStudentQueryResult> content = queryFactory
+                .select(Projections.constructor(CourseStudentQueryResult.class,
+                        member.id,
+                        member.name,
+                        attendance.status,
+                        attendance.attendanceAt
+                ))
+                .from(order)
+                .join(member).on(member.id.eq(order.memberId))
+                .leftJoin(attendance).on(
+                        attendance.courseId.eq(order.courseId)
+                                .and(attendance.memberId.eq(order.memberId))
+                )
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.eq(OrderStatus.CONFIRMED)
+                )
+                .orderBy(order.createdAt.asc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        JPAQuery<Long> countQuery = queryFactory
+                .select(order.count())
+                .from(order)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.eq(OrderStatus.CONFIRMED)
+                );
+
+        return PageableExecutionUtils.getPage(content, pageable, () -> countQuery.fetchOne());
     }
 }

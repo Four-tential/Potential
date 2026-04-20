@@ -8,6 +8,7 @@ import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.member.model.request.*;
+import four_tential.potential.presentation.course.model.response.CourseStudentItem;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
 import four_tential.potential.presentation.member.model.response.FollowedInstructorItem;
@@ -186,6 +187,22 @@ public class MemberController {
                         HttpStatus.OK.name(),
                         "강사 프로필 조회 성공",
                         memberService.getInstructorProfile(instructorId)
+                ));
+    }
+
+    @GetMapping("/instructors/me/courses/{courseId}/students")
+    @PreAuthorize("hasRole('INSTRUCTOR')")
+    public ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> getCourseStudents(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(
+                        HttpStatus.OK.name(),
+                        "수강생 명단 조회 성공",
+                        courseService.getCourseStudents(courseId, principal.memberId(), PageRequest.of(page, size))
                 ));
     }
 

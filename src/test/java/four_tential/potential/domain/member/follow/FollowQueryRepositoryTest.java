@@ -61,9 +61,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         fitnessCategory = courseCategoryRepository.save(CourseCategory.register("FITNESS_TEST", "피트니스테스트"));
     }
 
-    // ────────────────────────────────────────────────────────────
     // 팔로우 목록 조회
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("팔로우한 강사 3명 조회 - content 3건 반환")
@@ -104,9 +102,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.getContent()).isEmpty();
     }
 
-    // ────────────────────────────────────────────────────────────
     // courseCount 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("코스 없는 강사 팔로우 시 courseCount = 0")
@@ -161,9 +157,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         assertThat(itemB.courseCount()).isZero();
     }
 
-    // ────────────────────────────────────────────────────────────
     // averageRating 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("리뷰 없는 강사 팔로우 시 averageRating = null")
@@ -209,9 +203,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         assertThat(item.averageRating()).isNull();
     }
 
-    // ────────────────────────────────────────────────────────────
     // 페이징 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("팔로우 3건, 페이지 size=2 → 첫 페이지 2건, 전체 3건")
@@ -244,9 +236,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isTrue();
     }
 
-    // ────────────────────────────────────────────────────────────
     // 응답 필드 검증
-    // ────────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("응답 항목에 memberId, name, categoryCode, categoryName, followedAt 이 올바르게 매핑됨")
@@ -280,9 +270,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
         assertThat(item.profileImageUrl()).isNull();
     }
 
-    // ────────────────────────────────────────────────────────────
     // 헬퍼 메서드
-    // ────────────────────────────────────────────────────────────
 
     private InstructorMember approvedInstructor(String email, String name) {
         Member member = memberRepository.save(
