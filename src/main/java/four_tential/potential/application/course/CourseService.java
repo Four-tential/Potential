@@ -234,10 +234,11 @@ public class CourseService {
         if (request.imageUrls() != null) {
             course.clearImages();
             if (!request.imageUrls().isEmpty()) {
-                List<CourseImage> images = request.imageUrls().stream()
-                        .map(url -> CourseImage.register(course, url))
-                        .collect(Collectors.toList());
-                courseImageRepository.saveAll(images);
+                courseImageRepository.saveAll(
+                        request.imageUrls().stream()
+                                .map(url -> CourseImage.register(course, url))
+                                .toList()
+                );
             }
         }
 
@@ -322,6 +323,8 @@ public class CourseService {
             courseApprovalHistoryRepository.save(
                     CourseApprovalHistory.register(courseId, CourseApprovalAction.APPROVE, null)
             );
+        } else {
+            throw new ServiceErrorException(ERR_INVALID_COURSE_APPROVAL_ACTION);
         }
 
         return CourseRequestActionResponse.from(course);
@@ -337,7 +340,7 @@ public class CourseService {
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
-            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_MODIFY);
         }
 
         course.reapply();

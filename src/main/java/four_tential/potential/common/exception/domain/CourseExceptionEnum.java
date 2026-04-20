@@ -13,6 +13,8 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
     ERR_INVALID_CAPACITY(HttpStatus.BAD_REQUEST, "코스의 정원은 최소 1명 이상이어야 합니다"),
     ERR_INVALID_ORDER_CLOSE_TIME(HttpStatus.BAD_REQUEST, "코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능합니다"),
     ERR_INVALID_SCHEDULE(HttpStatus.BAD_REQUEST, "코스의 종료 일시는 코스의 시작 일시보다 이후여야 합니다"),
+    ERR_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "필수 입력값을 모두 입력해주세요"),
+    ERR_INVALID_COURSE_APPROVAL_ACTION(HttpStatus.BAD_REQUEST, "지원하지 않는 코스 승인 액션입니다"),
     ERR_IMMUTABLE_FIELD_IN_OPEN(HttpStatus.BAD_REQUEST, "OPEN 상태에서는 가격, 일정, 장소, 정원을 수정할 수 없습니다"),
     ERR_CANNOT_MODIFY_COURSE(HttpStatus.BAD_REQUEST, "CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다"),
     ERR_IS_FULL_CAPACITY(HttpStatus.CONFLICT, "코스의 정원이 가득차 추가할 수 없습니다"),

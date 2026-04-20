@@ -161,6 +161,11 @@ public class Course extends BaseTimeWithDelEntity {
             throw new ServiceErrorException(ERR_INVALID_CAPACITY);
         }
 
+        if (price == null || level == null || addressMain == null || addressDetail == null
+                || orderOpenAt == null || orderCloseAt == null || startAt == null || endAt == null) {
+            throw new ServiceErrorException(ERR_INVALID_REQUEST);
+        }
+
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
             throw new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME);
         }
