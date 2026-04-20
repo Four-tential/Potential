@@ -264,6 +264,7 @@ public class CourseService {
             if (request.rejectReason() == null || request.rejectReason().isBlank()) {
                 throw new ServiceErrorException(ERR_REJECT_REASON_REQUIRED);
             }
+            course.reject(request.rejectReason());
             courseApprovalHistoryRepository.save(
                     CourseApprovalHistory.register(courseId, CourseApprovalAction.REJECT, request.rejectReason())
             );
@@ -275,5 +276,21 @@ public class CourseService {
                 CourseApprovalHistory.register(courseId, CourseApprovalAction.APPROVE, null)
         );
         return CourseRequestActionResponse.from(course);
+    }
+
+    @Transactional
+    public void reapplyCourseRequest(UUID memberId, UUID courseId) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_DELETE);
+        }
+
+        course.reapply();
     }
 }

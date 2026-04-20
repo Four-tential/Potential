@@ -929,7 +929,7 @@ class CourseServiceTest {
     }
 
     @Test
-    @DisplayName("코스 개설 신청 반려 성공 - PREPARATION 상태 유지, 반려 이력 저장")
+    @DisplayName("코스 개설 신청 반려 성공 - REJECTED 상태로 전이, 반려 이력 저장")
     void handleCourseRequest_reject_success() {
         UUID courseId = UUID.randomUUID();
         Course course = courseWithId(courseId);
@@ -940,9 +940,45 @@ class CourseServiceTest {
                 courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.REJECT, "사진 자료 미비"));
 
         assertThat(response.courseId()).isEqualTo(courseId);
-        assertThat(response.status()).isEqualTo(CourseStatus.PREPARATION);
+        assertThat(response.status()).isEqualTo(CourseStatus.REJECTED);
         assertThat(response.confirmedAt()).isNull();
         verify(courseApprovalHistoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("코스 개설 재신청 성공 - REJECTED 코스가 PREPARATION으로 전이")
+    void reapplyCourseRequest_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        course.reject("사진 자료 미비");
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.reapplyCourseRequest(memberId, courseId);
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.PREPARATION);
+        assertThat(course.getRejectReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("코스 개설 재신청 실패 - REJECTED 상태가 아니면 ERR_CANNOT_REAPPLY_COURSE")
+    void reapplyCourseRequest_notRejected() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.reapplyCourseRequest(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("REJECTED 상태의 코스만 재신청할 수 있습니다");
     }
 
     @Test

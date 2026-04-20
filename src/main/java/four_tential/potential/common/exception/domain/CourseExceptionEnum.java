@@ -31,7 +31,8 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
 
     ERR_CANNOT_DELETE_COURSE_REQUEST(HttpStatus.BAD_REQUEST, "PREPARATION 상태의 코스만 삭제할 수 있습니다"),
     ERR_COURSE_NOT_IN_PREPARATION(HttpStatus.CONFLICT, "PREPARATION 상태의 코스만 승인 또는 반려할 수 있습니다"),
-    ERR_REJECT_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "반려 사유는 필수입니다")
+    ERR_REJECT_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "반려 사유는 필수입니다"),
+    ERR_CANNOT_REAPPLY_COURSE(HttpStatus.BAD_REQUEST, "REJECTED 상태의 코스만 재신청할 수 있습니다")
     ;
 
     private final HttpStatus httpStatus;

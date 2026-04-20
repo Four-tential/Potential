@@ -76,6 +76,9 @@ public class Course extends BaseTimeWithDelEntity {
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
 
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
+
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CourseImage> images = new ArrayList<>();
 
@@ -212,6 +215,22 @@ public class Course extends BaseTimeWithDelEntity {
         }
 
         this.status = CourseStatus.CANCELLED;
+    }
+
+    public void reject(String rejectReason) {
+        if (this.status != CourseStatus.PREPARATION) {
+            throw new ServiceErrorException(ERR_COURSE_NOT_IN_PREPARATION);
+        }
+        this.status = CourseStatus.REJECTED;
+        this.rejectReason = rejectReason;
+    }
+
+    public void reapply() {
+        if (this.status != CourseStatus.REJECTED) {
+            throw new ServiceErrorException(ERR_CANNOT_REAPPLY_COURSE);
+        }
+        this.status = CourseStatus.PREPARATION;
+        this.rejectReason = null;
     }
 
     public void increaseConfirmCount() {

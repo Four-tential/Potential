@@ -93,7 +93,7 @@ class CourseAdminControllerTest {
         CourseRequestActionRequest request =
                 new CourseRequestActionRequest(CourseApprovalAction.REJECT, "사진 자료 미비");
         CourseRequestActionResponse serviceResponse =
-                new CourseRequestActionResponse(courseId, CourseStatus.PREPARATION, null);
+                new CourseRequestActionResponse(courseId, CourseStatus.REJECTED, null);
 
         given(courseService.handleCourseRequest(eq(courseId), any())).willReturn(serviceResponse);
 
@@ -104,7 +104,7 @@ class CourseAdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("코스 반려 성공"))
-                .andExpect(jsonPath("$.data.status").value("PREPARATION"))
+                .andExpect(jsonPath("$.data.status").value("REJECTED"))
                 .andExpect(jsonPath("$.data.confirmedAt").value(org.hamcrest.Matchers.nullValue()));
     }
 
