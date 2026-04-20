@@ -1,7 +1,11 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.payment.RefundFacade;
 import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
+import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.order.WaitingStatus;
 import four_tential.potential.presentation.order.dto.*;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,7 @@ public class OrderFacade {
 
     private final OrderService orderService;
     private final WaitingListService waitingListService;
+    private final RefundFacade refundFacade;
 
     public OrderPlaceResult placeOrder(UUID memberId, OrderCreateRequest request) {
         // 잔여석 점유 시도
@@ -69,16 +74,42 @@ public class OrderFacade {
 
     /**
      * 주문 취소
+     * 결제된 주문은 환불이 성공한 뒤 주문 수량과 상태를 정리한다.
      */
-    public OrderCancelResponse cancelOrder(UUID orderId, UUID memberId) {
-        Order order = orderService.cancelOrder(orderId, memberId);
+    public OrderCancelResponse cancelOrder(UUID orderId, UUID memberId, OrderCancelRequest request) {
+        // 1. 본인 주문인지 확인
+        Order order = orderService.getOrderDetails(orderId, memberId);
+
+        // 2. 주문 상태 PAID이면 환불 흐름 진입
+        if (order.getStatus() == OrderStatus.PAID) {
+            // 2-1. 환불 처리 (내부에서 PortOne API 호출 + DB 반영)
+            // RefundFacade 내부에서 recoverCapacity 호출
+            refundFacade.refundPaidOrderByStudent(memberId, orderId, request.cancelCount());
+
+            // 2-2. 환불이 완료된 주문을 다시 조회
+            Order refundedOrder = orderService.getOrderDetails(orderId, memberId);
+            return OrderCancelResponse.from(refundedOrder);
+        }
+
+        // cancelCount != orderCount면 예외
+        validateFullCancel(order, request.cancelCount());
+
+        // 주문 상태 CANCELLED 변경
+        Order cancelledOrder = orderService.cancelOrder(orderId, memberId);
 
         // Redis 잔여석 복구 (취소된 수량만큼) 및 점유 정보 정리
-        waitingListService.recoverCapacity(order.getCourseId(), order.getMemberId(), order.getOrderCount());
+        waitingListService.recoverCapacity(
+                cancelledOrder.getCourseId(),
+                cancelledOrder.getMemberId(),
+                cancelledOrder.getOrderCount()
+        );
 
-        // TODO: (결제 도메인 연동) PAID 상태(결제 완료)인 주문이 취소될 경우, 실제 PG사(포트원 등) 환불 API 호출 로직 결합 필요.
-        // PaymentFacade 또는 관련 이벤트를 발행하여 결제 취소가 안전하게 이루어지도록 해야 함.
+        return OrderCancelResponse.from(cancelledOrder);
+    }
 
-        return OrderCancelResponse.from(order);
+    private void validateFullCancel(Order order, int cancelCount) {
+        if (cancelCount != order.getOrderCount()) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
     }
 }

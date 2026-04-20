@@ -81,10 +81,11 @@ public class OrderController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<BaseResponse<OrderCancelResponse>> cancelOrder(
             @AuthenticationPrincipal MemberPrincipal principal,
-            @PathVariable UUID orderId
+            @PathVariable UUID orderId,
+            @Valid @RequestBody OrderCancelRequest request
     ) {
-        OrderCancelResponse response = orderFacade.cancelOrder(orderId, principal.memberId());
-        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "주문이 성공적으로 취소되었습니다", response));
+        OrderCancelResponse response = orderFacade.cancelOrder(orderId, principal.memberId(), request);
+        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "주문 취소 요청 성공", response));
     }
 
 }
