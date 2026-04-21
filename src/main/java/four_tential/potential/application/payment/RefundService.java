@@ -1,6 +1,7 @@
 package four_tential.potential.application.payment;
 
 import four_tential.potential.application.payment.consts.RefundConstants;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.Payment;
@@ -11,8 +12,10 @@ import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.domain.payment.repository.RefundRepository;
 import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
+import four_tential.potential.presentation.payment.dto.RefundListResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +74,14 @@ public class RefundService {
     public RefundDetailResponse getMyRefund(UUID refundId, UUID memberId) {
         return refundRepository.findDetailByIdAndMemberId(refundId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_REFUND));
+    }
+
+    /**
+     * 환불 목록을 조회한다.
+     * status 가 null 이면 전체 조회한다.
+     */
+    public PageResponse<RefundListResponse> getAllMyRefunds(UUID memberId, RefundStatus status, Pageable pageable) {
+        return PageResponse.register(refundRepository.findListByMemberIdAndStatus(memberId, status, pageable));
     }
 
     /**

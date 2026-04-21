@@ -2,6 +2,9 @@ package four_tential.potential.domain.payment.repository;
 
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
+import four_tential.potential.presentation.payment.dto.RefundListResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -14,4 +17,6 @@ public interface RefundCustomRepository {
     Long sumRefundPriceByPaymentIdAndStatus(UUID paymentId, RefundStatus status);
 
     Optional<RefundDetailResponse> findDetailByIdAndMemberId(UUID refundId, UUID memberId);
+
+    Page<RefundListResponse> findListByMemberIdAndStatus(UUID memberId, RefundStatus status, Pageable pageable);
 }
