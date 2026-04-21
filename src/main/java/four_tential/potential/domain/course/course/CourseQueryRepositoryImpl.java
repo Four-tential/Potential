@@ -28,6 +28,7 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
 
     @Override
     public Page<CourseListQueryResult> findCourses(CourseSearchCondition condition, Pageable pageable) {
+        // TODO 성능면에 따라 서브쿼리 체킹 필요
         // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지 (썸네일)
         QCourseImage courseImageSub = new QCourseImage("courseImageSub");
 

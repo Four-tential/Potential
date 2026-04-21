@@ -95,6 +95,16 @@ public class CourseController {
         return ResponseEntity.ok(BaseResponse.success("OK", "찜 목록에서 제거 성공", response));
     }
 
+    @PatchMapping("/{courseId}/close")
+    @PreAuthorize("hasRole('INSTRUCTOR')")
+    public ResponseEntity<BaseResponse<Void>> closeCourse(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID courseId
+    ) {
+        courseService.closeCourse(principal.memberId(), courseId);
+        return ResponseEntity.ok(BaseResponse.success("OK", "코스가 종료되었습니다", null));
+    }
+
     @GetMapping("/{courseId}")
     public ResponseEntity<BaseResponse<CourseDetailResponse>> getCourseDetail(
             @AuthenticationPrincipal MemberPrincipal principal,

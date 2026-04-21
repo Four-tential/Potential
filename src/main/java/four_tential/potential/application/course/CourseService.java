@@ -67,7 +67,7 @@ public class CourseService {
         Page<CourseListQueryResult> results = courseRepository.findCourses(condition, pageable);
 
         List<UUID> courseIds = results.getContent().stream()
-                .map(CourseListQueryResult::courseId)
+                .map(courseListQueryResult -> courseListQueryResult.courseId())
                 .toList();
 
         Set<UUID> wishlistedIds = (memberId != null && !courseIds.isEmpty())
@@ -350,6 +350,24 @@ public class CourseService {
         }
 
         return CourseRequestActionResponse.from(course);
+    }
+
+    @Transactional
+    public void closeCourse(UUID memberId, UUID courseId) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_CLOSE);
+        }
+
+        course.close();
+
+        courseWishlistRepository.deleteByCourseId(courseId);
     }
 
     @Transactional

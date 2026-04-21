@@ -17,4 +17,6 @@ public interface CourseWishlistRepository extends JpaRepository<CourseWishlist, 
 
     @Query("SELECT cw.courseId FROM CourseWishlist cw WHERE cw.memberId = :memberId AND cw.courseId IN :courseIds")
     List<UUID> findWishlistedCourseIds(@Param("memberId") UUID memberId, @Param("courseIds") Collection<UUID> courseIds);
+
+    void deleteByCourseId(UUID courseId);
 }
