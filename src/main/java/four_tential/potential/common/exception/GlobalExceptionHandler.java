@@ -42,7 +42,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = DataIntegrityViolationException.class)
     public ResponseEntity<BaseResponse<Void>> DataIntegrityViolationExceptionHandler(DataIntegrityViolationException e) {
         log.error("데이터 저장 실패 발생 : ", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(BaseResponse.fail(HttpStatus.INTERNAL_SERVER_ERROR.name(), "데이터 저장에 실패하였습니다"));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(BaseResponse.fail(HttpStatus.CONFLICT.name(), "데이터 저장에 실패하였습니다"));
     }
 
     @ExceptionHandler(value = NoResourceFoundException.class)

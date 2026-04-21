@@ -28,8 +28,11 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
 
     @Override
     public Page<CourseListQueryResult> findCourses(CourseSearchCondition condition, Pageable pageable) {
-        // TODO 성능면에 따라 서브쿼리 체킹 필요
         // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지 (썸네일)
+        // TODO 코스 수가 증가하면(예: 1만 건 이상) 아래 서브쿼리가 코스마다 실행되어 성능 병목이 될 수 있음
+        //   - 확인 방법: EXPLAIN 으로 쿼리 실행 계획 확인, Nested Loop 발생 시 대안 검토
+        //   - 대안 1: course_thumbnail_url 컬럼을 Course 엔티티에 추가해 이미지 조회 자체를 제거
+        //   - 대안 2: 코스 ID 목록으로 이미지를 한 번에 조회한 뒤 애플리케이션에서 매핑 (N+1 제거)
         QCourseImage courseImageSub = new QCourseImage("courseImageSub");
 
         BooleanBuilder whereConditions = buildWhereConditions(condition);

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
 
 import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_DISTRIBUTED_LOCK_KEY_NULL;
+import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_DISTRIBUTED_LOCK_SPEL_EVAL_FAILED;
 import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_GET_DISTRIBUTED_LOCK_FAIL;
 
 /**
@@ -89,13 +90,13 @@ public class DistributedLockAspect {
         }
 
         // SpEL 표현식 평가로 실제 락 키 값 도출
-        // 표현식 자체가 잘못 작성된 경우(SpellParseException 등) 커스텀 예외로 변환해 500 응답을 방지
+        // 표현식 문법 오류(SpelParseException 등)와 키가 null/blank인 경우를 별도 에러코드로 구분
         String evaluatedKey;
         try {
             evaluatedKey = parser.parseExpression(distributedLock.key()).getValue(context, String.class);
         } catch (Exception e) {
             log.error(">>> [LOCK ASPECT ERROR] SpEL Evaluation Failed: {}", e.getMessage());
-            throw new ServiceErrorException(ERR_DISTRIBUTED_LOCK_KEY_NULL);
+            throw new ServiceErrorException(ERR_DISTRIBUTED_LOCK_SPEL_EVAL_FAILED);
         }
 
         if (evaluatedKey == null || evaluatedKey.isBlank()) {

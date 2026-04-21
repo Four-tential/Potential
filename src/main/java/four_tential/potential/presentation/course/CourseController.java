@@ -102,7 +102,7 @@ public class CourseController {
             @PathVariable UUID courseId
     ) {
         courseService.closeCourse(principal.memberId(), courseId);
-        return ResponseEntity.ok(BaseResponse.success("OK", "코스가 종료 성공", null));
+        return ResponseEntity.ok(BaseResponse.success("OK", "코스 종료 성공", null));
     }
 
     @GetMapping("/{courseId}")

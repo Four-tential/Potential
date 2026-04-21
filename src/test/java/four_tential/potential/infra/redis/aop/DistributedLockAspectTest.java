@@ -88,7 +88,7 @@ class DistributedLockAspectTest {
                 .hasMessage(ERR_DISTRIBUTED_LOCK_KEY_NULL.getMessage());
     }
 
-    @DistributedLock(key = "")
+    @DistributedLock(key = "''")
     private void mockMethodWithNullKey() {
         // 이 메서드는 테스트에서 리플렉션을 통해 어노테이션 메타데이터를 추출하기 위한 용도로만 사용됩니다.
         // 실제 실행을 위한 메서드가 아닙니다.

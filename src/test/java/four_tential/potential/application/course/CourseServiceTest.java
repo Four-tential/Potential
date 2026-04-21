@@ -935,6 +935,107 @@ class CourseServiceTest {
     }
 
     @Test
+    @DisplayName("코스 종료 성공 - OPEN 코스가 CLOSED로 전이되고 찜 목록이 삭제된다")
+    void closeCourse_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.closeCourse(memberId, courseId);
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.CLOSED);
+        verify(courseWishlistRepository).deleteByCourseId(courseId);
+    }
+
+    @Test
+    @DisplayName("코스 종료 실패 - 강사 등록이 없으면 ERR_NOT_FOUND_INSTRUCTOR")
+    void closeCourse_instructorNotFound() {
+        UUID memberId = UUID.randomUUID();
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.closeCourse(memberId, UUID.randomUUID()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("코스 종료 실패 - 미승인 강사(PENDING)이면 ERR_NOT_FOUND_INSTRUCTOR")
+    void closeCourse_notApprovedInstructor() {
+        UUID memberId = UUID.randomUUID();
+        InstructorMember pendingInstructor = InstructorMemberFixture.defaultInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(pendingInstructor));
+
+        assertThatThrownBy(() -> courseService.closeCourse(memberId, UUID.randomUUID()))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("코스 종료 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void closeCourse_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.closeCourse(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).deleteByCourseId(any());
+    }
+
+    @Test
+    @DisplayName("코스 종료 실패 - 본인 코스가 아니면 ERR_FORBIDDEN_COURSE_CLOSE")
+    void closeCourse_notOwnCourse() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = openCourseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", UUID.randomUUID());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.closeCourse(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("본인 코스만 종료 가능합니다");
+
+        verify(courseWishlistRepository, never()).deleteByCourseId(any());
+    }
+
+    @Test
+    @DisplayName("코스 종료 실패 - OPEN이 아닌 코스(PREPARATION)이면 ERR_INVALID_STATUS_TRANSITION_TO_CLOSE")
+    void closeCourse_notOpenCourse() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.closeCourse(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("OPEN 상태의 코스만 CLOSE 할 수 있습니다");
+
+        verify(courseWishlistRepository, never()).deleteByCourseId(any());
+    }
+
+    @Test
     @DisplayName("코스 수정 성공 - PREPARATION 코스의 모든 필드가 수정된다")
     void updateCourse_preparation_success() {
         UUID memberId = UUID.randomUUID();
