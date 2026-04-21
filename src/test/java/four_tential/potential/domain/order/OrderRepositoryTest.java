@@ -473,6 +473,11 @@ class OrderRepositoryTest extends RedisTestContainer {
         Order order4 = paidOrder(UUID.randomUUID(), course4.getId());
         orderRepository.save(order4);
 
+        // 5. 제외: PAID, 정확히 7일 후 시작 (취소 가능 경계이므로 확정 대상 아님)
+        Course course5 = courseRepository.save(openCourse(now.plusDays(7), now.plusDays(7).plusHours(2)));
+        Order order5 = paidOrder(UUID.randomUUID(), course5.getId());
+        orderRepository.save(order5);
+
         // when
         List<Order> result = orderRepository.findPaidOrdersToConfirm(now, PageRequest.of(0, 10));
 
@@ -480,6 +485,7 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(Order::getId)
                 .containsExactlyInAnyOrder(order1.getId(), order4.getId());
+        assertThat(result).extracting(Order::getId).doesNotContain(order5.getId());
     }
 
     private Order confirmedOrder(UUID memberId, UUID courseId) {
