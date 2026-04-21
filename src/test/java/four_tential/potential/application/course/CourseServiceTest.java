@@ -33,6 +33,7 @@ import four_tential.potential.domain.course.course_approval_history.CourseApprov
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
+import four_tential.potential.presentation.course.model.response.CourseWishlistResponse;
 import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
@@ -832,6 +833,87 @@ class CourseServiceTest {
                 .hasMessage("PREPARATION 상태의 코스만 삭제할 수 있습니다");
 
         verify(courseRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 성공 - isWishlisted=true 반환")
+    void addWishlist_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.existsById(courseId)).willReturn(true);
+        given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(false);
+
+        CourseWishlistResponse response = courseService.addWishlist(memberId, courseId);
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isTrue();
+        verify(courseWishlistRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void addWishlist_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.existsById(courseId)).willReturn(false);
+
+        assertThatThrownBy(() -> courseService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - 이미 찜한 코스이면 ERR_ALREADY_WISHLISTED")
+    void addWishlist_alreadyWishlisted() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.existsById(courseId)).willReturn(true);
+        given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(true);
+
+        assertThatThrownBy(() -> courseService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 찜한 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 해제 성공 - isWishlisted=false 반환")
+    void removeWishlist_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        four_tential.potential.domain.course.course_wishlist.CourseWishlist wishlist =
+                four_tential.potential.domain.course.course_wishlist.CourseWishlist.register(memberId, courseId);
+
+        given(courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId))
+                .willReturn(Optional.of(wishlist));
+
+        CourseWishlistResponse response = courseService.removeWishlist(memberId, courseId);
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isFalse();
+        verify(courseWishlistRepository).delete(wishlist);
+    }
+
+    @Test
+    @DisplayName("찜 해제 실패 - 찜 목록에 없으면 ERR_WISHLIST_NOT_FOUND")
+    void removeWishlist_notFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.removeWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("찜 목록에 존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).delete(any());
     }
 
     @Test

@@ -23,6 +23,8 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
 
 
     ERR_NOT_FOUND_COURSE(HttpStatus.NOT_FOUND, "존재하지 않는 코스입니다"),
+    ERR_ALREADY_WISHLISTED(HttpStatus.CONFLICT, "이미 찜한 코스입니다"),
+    ERR_WISHLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "찜 목록에 존재하지 않는 코스입니다"),
     ERR_COURSE_NOT_OPEN(HttpStatus.FORBIDDEN, "진행 중인 코스에서만 가능합니다"),
     ERR_FORBIDDEN_COURSE(HttpStatus.FORBIDDEN, "본인 코스만 조회 가능합니다"),
     ERR_FORBIDDEN_COURSE_DELETE(HttpStatus.FORBIDDEN, "본인 코스만 삭제 가능합니다"),
