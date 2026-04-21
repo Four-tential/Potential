@@ -128,6 +128,17 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
     }
 
     @Override
+    public List<Order> findRefundableOrdersByCourseId(UUID courseId) {
+        return queryFactory
+                .selectFrom(order)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.in(OrderStatus.PAID, OrderStatus.CONFIRMED)
+                )
+                .fetch();
+    }
+
+    @Override
     public List<Order> findPaidOrdersToConfirm(LocalDateTime now, Pageable pageable) {
         return queryFactory.selectFrom(order)
                 .join(course).on(course.id.eq(order.courseId))

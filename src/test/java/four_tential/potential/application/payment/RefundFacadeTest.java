@@ -16,6 +16,7 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.presentation.payment.dto.RefundCourseResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import four_tential.potential.presentation.payment.dto.RefundResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -364,6 +366,141 @@ class RefundFacadeTest {
                 .isInstanceOf(ServiceErrorException.class);
     }
 
+    @Test
+    @DisplayName("강사 코스 취소 일괄 환불 대상이 없으면 0건 응답을 반환한다")
+    void refundAllPaidOrdersForCancelledCourse_returns_empty_result_when_no_orders() {
+        UUID courseId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 0);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderRepository.findRefundableOrdersByCourseId(courseId)).willReturn(List.of());
+
+        RefundCourseResponse result = refundFacade.refundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result.courseId()).isEqualTo(courseId);
+        assertThat(result.courseTitle()).isEqualTo(course.getTitle());
+        assertThat(result.totalOrderCount()).isZero();
+        assertThat(result.refundedCount()).isZero();
+        assertThat(result.failedCount()).isZero();
+        assertThat(result.totalRefundAmount()).isZero();
+        verify(paymentGateway, never()).cancelPayment(any());
+        verify(paymentService, never()).findByOrderId(any());
+    }
+
+    @Test
+    @DisplayName("강사 코스 취소 시 결제 완료 주문을 전액 환불하고 주문을 취소한다")
+    void refundAllPaidOrdersForCancelledCourse_refunds_paid_order() {
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 2);
+        Order order = createPaidOrder(orderId, memberId, courseId, 2, 50000L);
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 100000L);
+
+        stubInstructorRefundTarget(course, order, payment);
+
+        RefundCourseResponse result = refundFacade.refundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result.totalOrderCount()).isEqualTo(1);
+        assertThat(result.refundedCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isZero();
+        assertThat(result.totalRefundAmount()).isEqualTo(100000L);
+        assertThat(course.getConfirmCount()).isZero();
+
+        PaymentGatewayRequest gatewayRequest = captureGatewayRequest();
+        assertThat(gatewayRequest.pgKey()).isEqualTo(payment.getPgKey());
+        assertThat(gatewayRequest.amount()).isEqualTo(100000L);
+        assertThat(gatewayRequest.currentCancellableAmount()).isEqualTo(100000L);
+        assertThat(gatewayRequest.reason()).isEqualTo("INSTRUCTOR");
+
+        verify(refundService).createCompleted(payment, 100000L, 2, RefundReason.INSTRUCTOR);
+        verify(paymentService).refund(payment);
+        verify(orderService).cancelOrderForInstructor(orderId);
+        verify(waitingListService).recoverCapacity(courseId, memberId, 2);
+    }
+
+    @Test
+    @DisplayName("강사 코스 취소 시 이미 부분 환불된 결제는 남은 금액만 환불한다")
+    void refundAllPaidOrdersForCancelledCourse_refunds_remaining_amount_for_part_refunded_payment() {
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 2);
+        Order order = createPaidOrder(orderId, memberId, courseId, 2, 25000L);
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 75000L);
+        payment.partRefund();
+
+        stubInstructorRefundTarget(course, order, payment);
+        given(refundService.getCompletedRefundTotal(paymentId)).willReturn(25000L);
+
+        RefundCourseResponse result = refundFacade.refundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result.totalOrderCount()).isEqualTo(1);
+        assertThat(result.refundedCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isZero();
+        assertThat(result.totalRefundAmount()).isEqualTo(50000L);
+
+        PaymentGatewayRequest gatewayRequest = captureGatewayRequest();
+        assertThat(gatewayRequest.amount()).isEqualTo(50000L);
+        assertThat(gatewayRequest.currentCancellableAmount()).isEqualTo(50000L);
+        verify(refundService).createCompleted(payment, 50000L, 2, RefundReason.INSTRUCTOR);
+        verify(paymentService).refund(payment);
+        verify(orderService).cancelOrderForInstructor(orderId);
+    }
+
+    @Test
+    @DisplayName("강사 코스 취소 일괄 환불 중 PortOne 환불 실패는 실패 건수로 집계하고 FAILED 이력을 남긴다")
+    void refundAllPaidOrdersForCancelledCourse_counts_failure_when_gateway_fails() {
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 1);
+        Order order = createPaidOrder(orderId, memberId, courseId, 1, 50000L);
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 50000L);
+
+        stubInstructorRefundTarget(course, order, payment);
+        doThrow(new RuntimeException("gateway fail")).when(paymentGateway).cancelPayment(any());
+
+        RefundCourseResponse result = refundFacade.refundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result.totalOrderCount()).isEqualTo(1);
+        assertThat(result.refundedCount()).isZero();
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(result.totalRefundAmount()).isZero();
+        verify(refundService).createFailed(paymentId, 50000L, 1, RefundReason.INSTRUCTOR);
+        verify(refundService, never()).createCompleted(any(), anyLong(), anyInt(), eq(RefundReason.INSTRUCTOR));
+        verify(orderService, never()).cancelOrderForInstructor(any());
+        verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("강사 코스 취소 일괄 환불 중 이미 전액 환불된 주문은 실패 건수로 집계하고 PG를 호출하지 않는다")
+    void refundAllPaidOrdersForCancelledCourse_counts_failure_when_no_remaining_amount() {
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 1);
+        Order order = createPaidOrder(orderId, memberId, courseId, 1, 50000L);
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 50000L);
+
+        stubInstructorRefundTarget(course, order, payment);
+        given(refundService.getCompletedRefundTotal(paymentId)).willReturn(50000L);
+
+        RefundCourseResponse result = refundFacade.refundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result.totalOrderCount()).isEqualTo(1);
+        assertThat(result.refundedCount()).isZero();
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(result.totalRefundAmount()).isZero();
+        verify(paymentGateway, never()).cancelPayment(any());
+        verify(refundService, never()).createFailed(any(), anyLong(), anyInt(), eq(RefundReason.INSTRUCTOR));
+        verify(refundService, never()).createCompleted(any(), anyLong(), anyInt(), eq(RefundReason.INSTRUCTOR));
+    }
+
     private void stubSuccessfulRefund(
             Payment payment,
             Order order,
@@ -379,6 +516,14 @@ class RefundFacadeTest {
         given(refundService.getCompletedRefundTotal(payment.getId())).willReturn(completedRefundTotal);
         lenient().when(refundService.createCompleted(eq(payment), anyLong(), anyInt(), eq(RefundReason.CANCEL)))
                 .thenReturn(refund);
+    }
+
+    private void stubInstructorRefundTarget(Course course, Order order, Payment payment) {
+        given(courseRepository.findById(course.getId())).willReturn(Optional.of(course));
+        given(orderRepository.findRefundableOrdersByCourseId(course.getId())).willReturn(List.of(order));
+        given(paymentService.findByOrderId(order.getId())).willReturn(Optional.of(payment));
+        given(paymentService.getByPgKeyForUpdate(payment.getPgKey())).willReturn(payment);
+        given(orderRepository.findById(order.getId())).willReturn(Optional.of(order));
     }
 
     private PaymentGatewayRequest captureGatewayRequest() {
