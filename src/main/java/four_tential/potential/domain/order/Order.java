@@ -163,4 +163,13 @@ public class Order extends BaseTimeEntity {
             this.cancelledAt = now;
         }
     }
+
+    /**
+     * 강사 코스 취소로 인해 주문을 취소
+     * orderCount 감소 없이 status 만 CANCELLED로 변경
+     */
+    public void cancelByInstructor() {
+        this.status = OrderStatus.CANCELLED;
+        this.cancelledAt = LocalDateTime.now();
+    }
 }
