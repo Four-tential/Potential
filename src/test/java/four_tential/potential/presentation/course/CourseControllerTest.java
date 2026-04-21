@@ -246,7 +246,7 @@ class CourseControllerTest {
 
     @Test
     @DisplayName("찜 등록 - 비인증 유저이면 403")
-    void addWishlist_unauthorized() throws Exception {
+    void addWishlist_forbidden() throws Exception {
         mockMvc.perform(post("/v1/courses/{courseId}/wishlist-courses", UUID.randomUUID())
                         .with(csrf()))
                 .andExpect(status().isForbidden());
