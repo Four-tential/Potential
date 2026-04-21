@@ -448,6 +448,46 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(page1.isLast()).isTrue();
     }
 
+    @Test
+    @DisplayName("확정 대상 주문 조회 - PAID 상태이고 코스 시작 7일 이내(환불 불가 기간 진입)인 주문만 조회한다")
+    void findPaidOrdersToConfirm_success() {
+        // given
+        // 시간 정밀도 문제를 방지하기 위해 초 단위까지만 사용
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        
+        // 1. 대상: PAID, 지금으로부터 6일 후 시작 (7일 이내이므로 환불 불가/확정 대상)
+        Course course1 = courseRepository.save(openCourse(now.plusDays(6), now.plusDays(6).plusHours(2)));
+        Order order1 = paidOrder(UUID.randomUUID(), course1.getId());
+        orderRepository.save(order1);
+
+        // 2. 제외: PAID, 지금으로부터 8일 후 시작 (7일보다 많이 남았으므로 환불 가능/확정 제외)
+        Course course2 = courseRepository.save(openCourse(now.plusDays(8), now.plusDays(8).plusHours(2)));
+        orderRepository.save(paidOrder(UUID.randomUUID(), course2.getId()));
+
+        // 3. 제외: PENDING, 지금으로부터 6일 후 시작 (상태가 PAID가 아니므로 제외)
+        Course course3 = courseRepository.save(openCourse(now.plusDays(6), now.plusDays(6).plusHours(2)));
+        orderRepository.save(Order.register(UUID.randomUUID(), course3.getId(), 1, BigInteger.valueOf(50000), "테스트"));
+
+        // 4. 대상: PAID, 지금으로부터 7일 미만(예: 6일 23시간 59분) 후 시작 (경계값, 확정 대상 포함)
+        Course course4 = courseRepository.save(openCourse(now.plusDays(7).minusMinutes(1), now.plusDays(7).plusHours(2)));
+        Order order4 = paidOrder(UUID.randomUUID(), course4.getId());
+        orderRepository.save(order4);
+
+        // 5. 제외: PAID, 정확히 7일 후 시작 (취소 가능 경계이므로 확정 대상 아님)
+        Course course5 = courseRepository.save(openCourse(now.plusDays(7), now.plusDays(7).plusHours(2)));
+        Order order5 = paidOrder(UUID.randomUUID(), course5.getId());
+        orderRepository.save(order5);
+
+        // when
+        List<Order> result = orderRepository.findPaidOrdersToConfirm(now, PageRequest.of(0, 10));
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(Order::getId)
+                .containsExactlyInAnyOrder(order1.getId(), order4.getId());
+        assertThat(result).extracting(Order::getId).doesNotContain(order5.getId());
+    }
+
     private Order confirmedOrder(UUID memberId, UUID courseId) {
         Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(50000), "테스트 강의");
         ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);

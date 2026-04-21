@@ -30,4 +30,9 @@ public interface OrderRepositoryCustom {
     );
 
     List<Order> findRefundableOrdersByCourseId(UUID courseId);
+
+    /**
+     * 결제 완료(PAID) 상태이면서 환불 가능 기간(코스 시작 7일 전)이 지난 주문 목록 조회
+     */
+    List<Order> findPaidOrdersToConfirm(LocalDateTime now, Pageable pageable);
 }

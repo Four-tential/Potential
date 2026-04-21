@@ -16,6 +16,7 @@ public enum OrderExceptionEnum implements ServiceErrorCode {
     ERR_CANNOT_CANCEL_DATETIME(HttpStatus.BAD_REQUEST, "취소 가능한 기간이 지났습니다"),
     ERR_ORDER_EXPIRED(HttpStatus.BAD_REQUEST, "결제 가능 시간이 초과되었습니다"),
     ERR_NOT_PENDING_ORDER(HttpStatus.BAD_REQUEST, "결제 대기 상태의 주문만 완료 처리가 가능합니다"),
+    ERR_NOT_PAID_ORDER(HttpStatus.BAD_REQUEST, "결제 완료된 주문만 확정 처리가 가능합니다"),
     ERR_QUEUE_FULL(HttpStatus.SERVICE_UNAVAILABLE, "현재 대기열이 가득 차서 신청할 수 없습니다"),
     ERR_DUPLICATE_ORDER(HttpStatus.BAD_REQUEST, "이미 해당 강의를 주문 중이거나 대기 중입니다"),
     ERR_INVALID_ORDER_COUNT(HttpStatus.BAD_REQUEST, "주문 수량은 1개 이상이어야 합니다"),

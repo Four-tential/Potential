@@ -271,6 +271,32 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("PAID 상태의 주문은 확정(CONFIRMED) 처리할 수 있다")
+    void confirmSuccess() {
+        // given
+        Order order = createPendingOrder();
+        order.completePayment(); // PAID 상태
+
+        // when
+        order.confirm();
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("PAID 상태가 아닌 주문을 확정 처리하면 예외가 발생한다")
+    void confirmFail_InvalidStatus() {
+        // given
+        Order order = createPendingOrder(); // PENDING 상태
+
+        // when & then
+        assertThatThrownBy(order::confirm)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_NOT_PAID_ORDER.getMessage());
+    }
+
+    @Test
     @DisplayName("확정(CONFIRMED)된 주문은 취소할 수 없다")
     void cancelOrderFail_Confirmed() {
         // given

@@ -237,6 +237,65 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("단일 주문 확정 처리를 성공적으로 수행한다")
+    void confirmOrderInNewTransaction_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "확정대상"));
+        order.completePayment(); // PAID 상태
+        ReflectionTestUtils.setField(order, "id", orderId);
+
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        boolean result = orderService.confirmOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        verify(orderRepository).saveAndFlush(order);
+    }
+
+    @Test
+    @DisplayName("단일 주문 확정 처리 중 예외가 발생하면 false를 반환한다")
+    void confirmOrderInNewTransaction_fail_on_exception() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        given(orderRepository.findById(orderId)).willThrow(new RuntimeException("DB Error"));
+
+        // when
+        boolean result = orderService.confirmOrderInNewTransaction(orderId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("확정 대상 주문들을 배치 단위로 처리한다")
+    void processConfirmedBatch_success() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        int batchSize = 100;
+        UUID orderId = UUID.randomUUID();
+        Order paidOrder = mock(Order.class);
+        given(paidOrder.getId()).willReturn(orderId);
+
+        given(orderRepository.findPaidOrdersToConfirm(eq(now), any())).willReturn(List.of(paidOrder));
+
+        // Self-invocation 모킹
+        given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
+        doReturn(true).when(orderService).confirmOrderInNewTransaction(orderId);
+
+        // when
+        OrderService.OrderBatchResult result = orderService.processConfirmedBatch(now, batchSize);
+
+        // then
+        assertThat(result.fetchedCount()).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        verify(orderService).confirmOrderInNewTransaction(orderId);
+    }
+
+    @Test
     @DisplayName("주문 취소 처리를 성공하고 취소된 주문을 반환한다")
     void cancelOrder_success() {
         // given
