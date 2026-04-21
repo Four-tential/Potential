@@ -11,17 +11,21 @@ import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
+import four_tential.potential.presentation.course.model.response.CourseWishlistResponse;
 import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -68,6 +72,27 @@ public class CourseController {
     ) {
         UpdateCourseResponse response = courseService.updateCourse(principal.memberId(), courseId, request);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스가 수정되었습니다", response));
+    }
+
+    @PostMapping("/{courseId}/wishlist-courses")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<BaseResponse<CourseWishlistResponse>> addWishlist(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID courseId
+    ) {
+        CourseWishlistResponse response = courseService.addWishlist(principal.memberId(), courseId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(HttpStatus.CREATED.name(), "찜 목록에 추가 성공", response));
+    }
+
+    @DeleteMapping("/{courseId}/wishlist-courses")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<BaseResponse<CourseWishlistResponse>> removeWishlist(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID courseId
+    ) {
+        CourseWishlistResponse response = courseService.removeWishlist(principal.memberId(), courseId);
+        return ResponseEntity.ok(BaseResponse.success("OK", "찜 목록에서 제거 성공", response));
     }
 
     @GetMapping("/{courseId}")

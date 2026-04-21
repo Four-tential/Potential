@@ -14,6 +14,7 @@ import four_tential.potential.domain.course.course_image.CourseImageRepository;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistory;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistoryRepository;
+import four_tential.potential.domain.course.course_wishlist.CourseWishlist;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
@@ -27,6 +28,7 @@ import four_tential.potential.presentation.course.model.request.CreateCourseRequ
 import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
 import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
+import four_tential.potential.presentation.course.model.response.CourseWishlistResponse;
 import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
@@ -195,6 +197,26 @@ public class CourseService {
                 .map(result -> CourseStudentItem.register(result));
 
         return PageResponse.register(students);
+    }
+
+    @Transactional
+    public CourseWishlistResponse addWishlist(UUID memberId, UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> c.getStatus() == CourseStatus.OPEN)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+        if (courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)) {
+            throw new ServiceErrorException(ERR_ALREADY_WISHLISTED);
+        }
+        courseWishlistRepository.save(CourseWishlist.register(memberId, courseId));
+        return new CourseWishlistResponse(courseId, true);
+    }
+
+    @Transactional
+    public CourseWishlistResponse removeWishlist(UUID memberId, UUID courseId) {
+        CourseWishlist wishlist = courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_WISHLIST_NOT_FOUND));
+        courseWishlistRepository.delete(wishlist);
+        return new CourseWishlistResponse(courseId, false);
     }
 
     @Transactional
