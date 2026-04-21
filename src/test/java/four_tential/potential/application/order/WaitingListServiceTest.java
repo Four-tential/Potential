@@ -327,11 +327,27 @@ class WaitingListServiceTest {
     }
 
     @Test
-    @DisplayName("잔여석 수치가 감소하거나 같으면 대기열 승격을 시도하지 않는다")
+    @DisplayName("잔여석 수치가 감소하면 대기열 승격을 시도하지 않는다")
     void updateCapacity_decrease_no_promotion() {
         // given
         long previousCapacity = 10L;
         long newCapacity = 5L;
+        given(capacityAtomic.get()).willReturn(previousCapacity);
+
+        // when
+        waitingListService.updateCapacity(courseId, newCapacity);
+
+        // then
+        verify(capacityAtomic).set(newCapacity);
+        verify(sseWaitingEventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("잔여석 수치가 이전과 같으면 대기열 승격을 시도하지 않는다")
+    void updateCapacity_equal_no_promotion() {
+        // given
+        long previousCapacity = 10L;
+        long newCapacity = 10L;
         given(capacityAtomic.get()).willReturn(previousCapacity);
 
         // when
