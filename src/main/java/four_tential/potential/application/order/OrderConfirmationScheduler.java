@@ -32,7 +32,6 @@ public class OrderConfirmationScheduler {
         RLock lock = redissonClient.getLock(LOCK_KEY);
 
         try {
-            // 최대 5분간 락 획득 시도, 락 획득 후 10분간 유지
             boolean isLocked = lock.tryLock(0, 10, TimeUnit.MINUTES);
 
             if (isLocked) {

@@ -468,8 +468,8 @@ class OrderRepositoryTest extends RedisTestContainer {
         Course course3 = courseRepository.save(openCourse(now.plusDays(6), now.plusDays(6).plusHours(2)));
         orderRepository.save(Order.register(UUID.randomUUID(), course3.getId(), 1, BigInteger.valueOf(50000), "테스트"));
 
-        // 4. 대상: PAID, 지금으로부터 딱 7일 후 시작 (경계값, 확정 대상 포함)
-        Course course4 = courseRepository.save(openCourse(now.plusDays(7), now.plusDays(7).plusHours(2)));
+        // 4. 대상: PAID, 지금으로부터 7일 미만(예: 6일 23시간 59분) 후 시작 (경계값, 확정 대상 포함)
+        Course course4 = courseRepository.save(openCourse(now.plusDays(7).minusMinutes(1), now.plusDays(7).plusHours(2)));
         Order order4 = paidOrder(UUID.randomUUID(), course4.getId());
         orderRepository.save(order4);
 

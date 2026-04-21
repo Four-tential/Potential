@@ -133,7 +133,7 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .join(course).on(course.id.eq(order.courseId))
                 .where(
                         order.status.eq(OrderStatus.PAID),
-                        course.startAt.loe(now.plusDays(7))
+                        course.startAt.lt(now.plusDays(7))
                 )
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
