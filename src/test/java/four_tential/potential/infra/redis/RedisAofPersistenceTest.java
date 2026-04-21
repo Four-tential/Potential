@@ -1,5 +1,6 @@
 package four_tential.potential.infra.redis;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Slf4j
 @DisplayName("Redis AOF 영속성 테스트")
 public class RedisAofPersistenceTest {
 
@@ -35,10 +37,15 @@ public class RedisAofPersistenceTest {
     }
 
     @AfterAll
-    static void cleanup() throws IOException {
-        // 테스트 종료 후 임시 디렉토리 및 내부 파일(AOF 등) 삭제
+    static void cleanup() {
+        // 테스트 종료 후 임시 디렉토리 및 내부 파일(AOF 등) 삭제 시도
+        // CI 환경(Linux)에서 Docker가 생성한 파일의 권한 문제로 AccessDeniedException이 발생할 수 있음
         if (tempDir != null) {
-            FileSystemUtils.deleteRecursively(tempDir);
+            try {
+                FileSystemUtils.deleteRecursively(tempDir);
+            } catch (IOException e) {
+                log.warn("테스트 임시 디렉토리 삭제 실패 (권한 문제 등): {}. CI 환경에서는 무시될 수 있습니다.", e.getMessage());
+            }
         }
     }
 
