@@ -15,7 +15,7 @@ import java.util.UUID;
  * 강사 코스 취소 일괄 환불 임시 테스트용 컨트롤러
  */
 @RestController
-@RequestMapping("/test/refund")
+@RequestMapping("/v1/refund")
 @RequiredArgsConstructor
 public class RefundTestController {
 
