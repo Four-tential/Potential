@@ -19,7 +19,7 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
-import four_tential.potential.infra.portone.PortOneWebhookHandler;
+import four_tential.potential.infra.portone.PortOneWebhookVerifier;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
@@ -46,7 +46,7 @@ public class PaymentFacade {
     private final PaymentService paymentService;
     private final WebhookService webhookService;
     private final PaymentGateway paymentGateway;
-    private final PortOneWebhookHandler portOneWebhookHandler;
+    private final PortOneWebhookVerifier portOneWebhookVerifier;
     private final TransactionTemplate transactionTemplate;
     private final OrderRepository orderRepository;
     private final CourseRepository courseRepository;
@@ -121,7 +121,7 @@ public class PaymentFacade {
         // 서명이 맞는 웹훅만 결제 이벤트로 믿고 처리한다
         io.portone.sdk.server.webhook.Webhook verified;
         try {
-            verified = portOneWebhookHandler.verify(rawBody, webhookId, webhookSignature, webhookTimestamp);
+            verified = portOneWebhookVerifier.verify(rawBody, webhookId, webhookSignature, webhookTimestamp);
         } catch (WebhookVerificationException e) {
             log.warn("[PORTONE_WEBHOOK] 서명 검증 실패. id={} reason={}", webhookId, e.getMessage());
             webhookService.failWebhook(
@@ -157,7 +157,7 @@ public class PaymentFacade {
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
-                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 불가로 내부 상태를 실패로 반영했고 PortOne 취소까지 완료");
                 return;
             } catch (RuntimeException e) {
                 webhookService.failWebhook(
@@ -505,7 +505,7 @@ public class PaymentFacade {
         if (result != null && result.cancelRequired()) {
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
-                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 거절 후 PortOne 취소 완료");
+                webhookService.failWebhook(webhook, result.cancelReason(), "결제 확정 불가로 내부 상태를 실패로 반영했고 PortOne 취소까지 완료");
                 return;
             } catch (RuntimeException e) {
                 webhookService.failWebhook(
@@ -625,3 +625,5 @@ public class PaymentFacade {
         }
     }
 }
+
+
