@@ -10,6 +10,7 @@ import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.domain.payment.repository.RefundRepository;
+import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,14 @@ public class RefundService {
      */
     public Long getCompletedRefundTotal(UUID paymentId) {
         return refundRepository.sumRefundPriceByPaymentIdAndStatus(paymentId, RefundStatus.COMPLETED);
+    }
+
+    /**
+     * 환불 단건을 조회한다.
+     */
+    public RefundDetailResponse getMyRefund(UUID refundId, UUID memberId) {
+        return refundRepository.findDetailByIdAndMemberId(refundId, memberId)
+                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_REFUND));
     }
 
     /**

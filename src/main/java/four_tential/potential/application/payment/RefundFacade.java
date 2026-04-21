@@ -17,6 +17,7 @@ import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.presentation.payment.dto.RefundCourseResponse;
+import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import four_tential.potential.presentation.payment.dto.RefundResponse;
 import lombok.RequiredArgsConstructor;
@@ -529,4 +530,12 @@ public class RefundFacade {
             int cancelCount,
             Long refundPrice   // 남은 paidTotalPrice 전액
     ) {}
+
+
+    /**
+     * 환불 단건 조회
+     */
+    public RefundDetailResponse getMyRefund(UUID memberId, UUID refundId) {
+        return refundService.getMyRefund(refundId, memberId);
+    }
 }
