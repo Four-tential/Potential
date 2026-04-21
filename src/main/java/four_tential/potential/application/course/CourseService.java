@@ -201,9 +201,9 @@ public class CourseService {
 
     @Transactional
     public CourseWishlistResponse addWishlist(UUID memberId, UUID courseId) {
-        if (!courseRepository.existsById(courseId)) {
-            throw new ServiceErrorException(ERR_NOT_FOUND_COURSE);
-        }
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> c.getStatus() == CourseStatus.OPEN)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
         if (courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)) {
             throw new ServiceErrorException(ERR_ALREADY_WISHLISTED);
         }

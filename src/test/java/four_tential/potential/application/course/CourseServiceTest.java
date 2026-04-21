@@ -836,12 +836,13 @@ class CourseServiceTest {
     }
 
     @Test
-    @DisplayName("찜 등록 성공 - isWishlisted=true 반환")
+    @DisplayName("찜 등록 성공 - OPEN 코스이면 isWishlisted=true 반환")
     void addWishlist_success() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
+        Course course = openCourseWithId(courseId);
 
-        given(courseRepository.existsById(courseId)).willReturn(true);
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
         given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(false);
 
         CourseWishlistResponse response = courseService.addWishlist(memberId, courseId);
@@ -857,7 +858,23 @@ class CourseServiceTest {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
 
-        given(courseRepository.existsById(courseId)).willReturn(false);
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - OPEN 상태가 아닌 코스이면 ERR_NOT_FOUND_COURSE (404)")
+    void addWishlist_courseNotOpen() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
 
         assertThatThrownBy(() -> courseService.addWishlist(memberId, courseId))
                 .isInstanceOf(ServiceErrorException.class)
@@ -871,8 +888,9 @@ class CourseServiceTest {
     void addWishlist_alreadyWishlisted() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
+        Course course = openCourseWithId(courseId);
 
-        given(courseRepository.existsById(courseId)).willReturn(true);
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
         given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(true);
 
         assertThatThrownBy(() -> courseService.addWishlist(memberId, courseId))
