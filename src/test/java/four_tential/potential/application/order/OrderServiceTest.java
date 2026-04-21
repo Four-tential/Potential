@@ -471,7 +471,10 @@ class OrderServiceTest {
         given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
         
         // DB 점유 좌석 수 합계 모킹 (PENDING 2 + PAID 3 + CONFIRMED 5 = 10)
-        given(orderRepository.sumOrderCountByCourseIdAndStatuses(eq(courseId), anyList())).willReturn(10);
+        given(orderRepository.sumOrderCountByCourseIdAndStatuses(
+                eq(courseId),
+                eq(List.of(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED))
+        )).willReturn(10);
 
         // when
         OrderInventoryReconcileResponse response = orderService.reconcileInventory(courseId);
@@ -482,6 +485,10 @@ class OrderServiceTest {
         assertThat(response.dbOccupiedSeats()).isEqualTo(10);
         assertThat(response.reconciledCapacity()).isEqualTo(90L); // 100 - 10
 
+        verify(orderRepository).sumOrderCountByCourseIdAndStatuses(
+                eq(courseId),
+                eq(List.of(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED))
+        );
         verify(waitingListService).updateCapacity(courseId, 90L);
     }
 }

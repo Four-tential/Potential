@@ -162,6 +162,6 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 )
                 .fetchOne();
 
-        return totalOrderCount != null ? totalOrderCount.intValue() : 0;
+        return totalOrderCount != null ? Math.toIntExact(totalOrderCount) : 0;
     }
 }
