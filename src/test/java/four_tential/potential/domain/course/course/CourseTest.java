@@ -206,16 +206,14 @@ class CourseTest {
     }
 
     @Test
-    @DisplayName("PREPARATION 상태에서 updateInfo() 호출 시 정보가 변경됨")
+    @DisplayName("PREPARATION 상태에서 updateInfo() 호출 시 제목과 설명이 변경됨")
     void updateInfo_inPreparation() {
         Course course = CourseFixture.defaultCourse();
-        UUID newCategoryId = UUID.randomUUID();
 
-        course.updateInfo("새 제목", "새 설명", newCategoryId);
+        course.updateInfo("새 제목", "새 설명");
 
         assertThat(course.getTitle()).isEqualTo("새 제목");
         assertThat(course.getDescription()).isEqualTo("새 설명");
-        assertThat(course.getCourseCategoryId()).isEqualTo(newCategoryId);
     }
 
     @Test
@@ -225,7 +223,7 @@ class CourseTest {
         course.confirm();
         course.close();
 
-        assertThatThrownBy(() -> course.updateInfo("제목", "설명", UUID.randomUUID()))
+        assertThatThrownBy(() -> course.updateInfo("제목", "설명"))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다");
     }
@@ -237,7 +235,7 @@ class CourseTest {
         course.confirm();
         course.cancel();
 
-        assertThatThrownBy(() -> course.updateInfo("제목", "설명", UUID.randomUUID()))
+        assertThatThrownBy(() -> course.updateInfo("제목", "설명"))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다");
     }
@@ -250,6 +248,7 @@ class CourseTest {
         course.updateInfoInPreparation(
                 BigInteger.valueOf(100000),
                 30,
+                CourseLevel.INTERMEDIATE,
                 "새 주소",
                 "새 상세주소",
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,
@@ -260,6 +259,7 @@ class CourseTest {
 
         assertThat(course.getPrice()).isEqualTo(BigInteger.valueOf(100000));
         assertThat(course.getCapacity()).isEqualTo(30);
+        assertThat(course.getLevel()).isEqualTo(CourseLevel.INTERMEDIATE);
         assertThat(course.getAddressMain()).isEqualTo("새 주소");
         assertThat(course.getAddressDetail()).isEqualTo("새 상세주소");
     }
@@ -273,6 +273,7 @@ class CourseTest {
         assertThatThrownBy(() -> course.updateInfoInPreparation(
                 CourseFixture.DEFAULT_PRICE,
                 CourseFixture.DEFAULT_CAPACITY,
+                CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ADDRESS_MAIN,
                 CourseFixture.DEFAULT_ADDRESS_DETAIL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT,

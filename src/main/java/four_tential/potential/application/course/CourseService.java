@@ -24,8 +24,10 @@ import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
+import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
 import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
+import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
@@ -196,6 +198,54 @@ public class CourseService {
     }
 
     @Transactional
+    public UpdateCourseResponse updateCourse(UUID memberId, UUID courseId, UpdateCourseRequest request) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_MODIFY);
+        }
+
+        CourseStatus status = course.getStatus();
+
+        if (status == CourseStatus.CLOSED || status == CourseStatus.CANCELLED) {
+            throw new ServiceErrorException(ERR_CANNOT_MODIFY_COURSE);
+        }
+
+        if (status == CourseStatus.OPEN && request.hasPrepOnlyFields()) {
+            throw new ServiceErrorException(ERR_IMMUTABLE_FIELD_IN_OPEN);
+        }
+
+        course.updateInfo(request.title(), request.description());
+
+        if (status == CourseStatus.PREPARATION || status == CourseStatus.REJECTED) {
+            course.updateInfoInPreparation(
+                    request.price(), request.capacity(), request.level(),
+                    request.addressMain(), request.addressDetail(),
+                    request.orderOpenAt(), request.orderCloseAt(),
+                    request.startAt(), request.endAt()
+            );
+        }
+
+        if (request.imageUrls() != null) {
+            course.clearImages();
+            if (!request.imageUrls().isEmpty()) {
+                courseImageRepository.saveAll(
+                        request.imageUrls().stream()
+                                .map(url -> CourseImage.register(course, url))
+                                .toList()
+                );
+            }
+        }
+
+        return UpdateCourseResponse.from(course);
+    }
+
+    @Transactional
     public CreateCourseRequestResponse createCourseRequest(UUID memberId, CreateCourseRequestRequest request) {
         InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
                 .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
@@ -273,6 +323,8 @@ public class CourseService {
             courseApprovalHistoryRepository.save(
                     CourseApprovalHistory.register(courseId, CourseApprovalAction.APPROVE, null)
             );
+        } else {
+            throw new ServiceErrorException(ERR_INVALID_COURSE_APPROVAL_ACTION);
         }
 
         return CourseRequestActionResponse.from(course);
@@ -288,7 +340,7 @@ public class CourseService {
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
-            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE_MODIFY);
         }
 
         course.reapply();

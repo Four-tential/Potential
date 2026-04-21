@@ -132,24 +132,20 @@ public class Course extends BaseTimeWithDelEntity {
         return course;
     }
 
-    // PREPARATION, OPEN 모두 가능한 필드들 (제목, 설명, 카테고리)
-    public void updateInfo(
-            String title,
-            String description,
-            UUID courseCategoryId
-    ) {
+    // PREPARATION, REJECTED, OPEN 모두 가능한 필드들 (제목, 설명)
+    public void updateInfo(String title, String description) {
         if (this.status == CourseStatus.CLOSED || this.status == CourseStatus.CANCELLED) {
             throw new ServiceErrorException(ERR_CANNOT_MODIFY_COURSE);
         }
         this.title = title;
         this.description = description;
-        this.courseCategoryId = courseCategoryId;
     }
 
-    // PREPARATION 에서만 가능한 수정필드들 (가격, 일정, 장소, 정원)
+    // PREPARATION, REJECTED 에서만 가능한 수정필드들 (가격, 일정, 장소, 정원, 레벨)
     public void updateInfoInPreparation(
             BigInteger price,
-            int capacity,
+            Integer capacity,
+            CourseLevel level,
             String addressMain,
             String addressDetail,
             LocalDateTime orderOpenAt,
@@ -157,12 +153,17 @@ public class Course extends BaseTimeWithDelEntity {
             LocalDateTime startAt,
             LocalDateTime endAt
     ) {
-        if (this.status != CourseStatus.PREPARATION) {
+        if (this.status != CourseStatus.PREPARATION && this.status != CourseStatus.REJECTED) {
             throw new ServiceErrorException(ERR_IMMUTABLE_FIELD_IN_OPEN);
         }
 
-        if (capacity < 1) {
+        if (capacity == null || capacity < 1) {
             throw new ServiceErrorException(ERR_INVALID_CAPACITY);
+        }
+
+        if (price == null || level == null || addressMain == null || addressDetail == null
+                || orderOpenAt == null || orderCloseAt == null || startAt == null || endAt == null) {
+            throw new ServiceErrorException(ERR_INVALID_REQUEST);
         }
 
         if (!orderCloseAt.isAfter(orderOpenAt) || !orderCloseAt.isBefore(startAt.minusHours(2))) {
@@ -175,6 +176,7 @@ public class Course extends BaseTimeWithDelEntity {
 
         this.price = price;
         this.capacity = capacity;
+        this.level = level;
         this.addressMain = addressMain;
         this.addressDetail = addressDetail;
         this.orderOpenAt = orderOpenAt;
