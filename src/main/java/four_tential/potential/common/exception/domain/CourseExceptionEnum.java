@@ -29,6 +29,7 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
     ERR_FORBIDDEN_COURSE(HttpStatus.FORBIDDEN, "본인 코스만 조회 가능합니다"),
     ERR_FORBIDDEN_COURSE_DELETE(HttpStatus.FORBIDDEN, "본인 코스만 삭제 가능합니다"),
     ERR_FORBIDDEN_COURSE_MODIFY(HttpStatus.FORBIDDEN, "본인 코스만 수정 가능합니다"),
+    ERR_FORBIDDEN_COURSE_CLOSE(HttpStatus.FORBIDDEN, "본인 코스만 종료 가능합니다"),
     ERR_COURSE_IN_PREPARATION(HttpStatus.BAD_REQUEST, "준비 중인 코스는 수강생을 조회할 수 없습니다"),
 
     ERR_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 카테고리입니다"),

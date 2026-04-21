@@ -38,8 +38,12 @@ import java.util.List;
 import java.util.UUID;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_ALREADY_WISHLISTED;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_FORBIDDEN_COURSE_CLOSE;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_INVALID_STATUS_TRANSITION_TO_CLOSE;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE;
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_WISHLIST_NOT_FOUND;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -312,5 +316,67 @@ class CourseControllerTest {
                         .with(memberAuth())
                         .with(csrf()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("코스 종료 - INSTRUCTOR이면 200 OK")
+    void closeCourse_success() throws Exception {
+        UUID courseId = UUID.randomUUID();
+        willDoNothing().given(courseService).closeCourse(any(), eq(courseId));
+
+        mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
+                        .with(instructorAuth())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("코스 종료 성공"));
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    @DisplayName("코스 종료 - INSTRUCTOR가 아니면 403")
+    void closeCourse_forbidden() throws Exception {
+        mockMvc.perform(patch("/v1/courses/{courseId}/close", UUID.randomUUID())
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("코스 종료 - 존재하지 않는 코스이면 404")
+    void closeCourse_courseNotFound() throws Exception {
+        UUID courseId = UUID.randomUUID();
+        willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE))
+                .given(courseService).closeCourse(any(), eq(courseId));
+
+        mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
+                        .with(instructorAuth())
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("코스 종료 - 본인 코스가 아니면 403")
+    void closeCourse_notOwnCourse() throws Exception {
+        UUID courseId = UUID.randomUUID();
+        willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE_CLOSE))
+                .given(courseService).closeCourse(any(), eq(courseId));
+
+        mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
+                        .with(instructorAuth())
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("코스 종료 - OPEN이 아닌 코스이면 400")
+    void closeCourse_notOpen() throws Exception {
+        UUID courseId = UUID.randomUUID();
+        willThrow(new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_CLOSE))
+                .given(courseService).closeCourse(any(), eq(courseId));
+
+        mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
+                        .with(instructorAuth())
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
     }
 }
