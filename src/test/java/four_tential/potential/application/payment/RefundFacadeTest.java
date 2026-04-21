@@ -14,9 +14,13 @@ import four_tential.potential.domain.payment.entity.Refund;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.enums.RefundReason;
+import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.payment.dto.RefundCourseResponse;
+import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
+import four_tential.potential.presentation.payment.dto.RefundListResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import four_tential.potential.presentation.payment.dto.RefundResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +31,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -364,6 +370,58 @@ class RefundFacadeTest {
 
         assertThatThrownBy(() -> refundFacade.getRefundPreview(memberId, paymentId))
                 .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("환불 단건 조회는 RefundService 결과를 그대로 반환한다")
+    void getMyRefund_returns_service_result() {
+        UUID memberId = UUID.randomUUID();
+        UUID refundId = UUID.randomUUID();
+        RefundDetailResponse expected = new RefundDetailResponse(
+                refundId,
+                UUID.randomUUID(),
+                "소도구 필라테스 입문반",
+                2,
+                50000L,
+                RefundReason.CANCEL,
+                RefundStatus.COMPLETED,
+                LocalDateTime.of(2026, 4, 21, 10, 0)
+        );
+
+        given(refundService.getMyRefund(refundId, memberId)).willReturn(expected);
+
+        RefundDetailResponse result = refundFacade.getMyRefund(memberId, refundId);
+
+        assertThat(result).isEqualTo(expected);
+        verify(refundService).getMyRefund(refundId, memberId);
+    }
+
+    @Test
+    @DisplayName("환불 목록 조회는 RefundService 결과를 그대로 반환한다")
+    void getAllMyRefunds_returns_service_result() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        PageResponse<RefundListResponse> expected = new PageResponse<>(
+                List.of(new RefundListResponse(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "소도구 필라테스 입문반",
+                        1,
+                        25000L,
+                        RefundReason.CANCEL,
+                        RefundStatus.COMPLETED,
+                        LocalDateTime.of(2026, 4, 21, 11, 0)
+                )),
+                0, 1, 1L, 10, true
+        );
+
+        given(refundService.getAllMyRefunds(memberId, RefundStatus.COMPLETED, pageable)).willReturn(expected);
+
+        PageResponse<RefundListResponse> result =
+                refundFacade.getAllMyRefunds(memberId, RefundStatus.COMPLETED, pageable);
+
+        assertThat(result).isEqualTo(expected);
+        verify(refundService).getAllMyRefunds(memberId, RefundStatus.COMPLETED, pageable);
     }
 
     @Test

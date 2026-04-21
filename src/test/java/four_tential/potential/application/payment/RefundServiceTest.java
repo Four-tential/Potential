@@ -10,6 +10,9 @@ import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.domain.payment.repository.RefundRepository;
+import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
+import four_tential.potential.presentation.payment.dto.RefundListResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,9 +20,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -146,6 +153,72 @@ class RefundServiceTest {
         assertThat(result.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(result.getCancelCount()).isEqualTo(1);
         assertThat(result.getRefundedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("환불 단건 조회는 본인 환불 내역을 반환한다")
+    void getMyRefund_returns_detail() {
+        UUID refundId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        RefundDetailResponse expected = new RefundDetailResponse(
+                refundId,
+                UUID.randomUUID(),
+                "소도구 필라테스 입문반",
+                2,
+                50000L,
+                RefundReason.CANCEL,
+                RefundStatus.COMPLETED,
+                LocalDateTime.of(2026, 4, 21, 9, 0)
+        );
+        given(refundRepository.findDetailByIdAndMemberId(refundId, memberId)).willReturn(Optional.of(expected));
+
+        RefundDetailResponse result = refundService.getMyRefund(refundId, memberId);
+
+        assertThat(result).isEqualTo(expected);
+        verify(refundRepository).findDetailByIdAndMemberId(refundId, memberId);
+    }
+
+    @Test
+    @DisplayName("환불 단건 조회 대상이 없으면 NOT_FOUND_REFUND 예외가 발생한다")
+    void getMyRefund_throws_when_not_found() {
+        UUID refundId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        given(refundRepository.findDetailByIdAndMemberId(refundId, memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> refundService.getMyRefund(refundId, memberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(PaymentExceptionEnum.ERR_NOT_FOUND_REFUND.getMessage());
+    }
+
+    @Test
+    @DisplayName("환불 목록 조회는 PageResponse 로 감싸 반환한다")
+    void getAllMyRefunds_returns_page_response() {
+        UUID memberId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        RefundListResponse content = new RefundListResponse(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "소도구 필라테스 입문반",
+                1,
+                25000L,
+                RefundReason.CANCEL,
+                RefundStatus.COMPLETED,
+                LocalDateTime.of(2026, 4, 21, 9, 30)
+        );
+        PageImpl<RefundListResponse> page = new PageImpl<>(List.of(content), pageable, 1);
+        given(refundRepository.findListByMemberIdAndStatus(memberId, RefundStatus.COMPLETED, pageable))
+                .willReturn(page);
+
+        PageResponse<RefundListResponse> result =
+                refundService.getAllMyRefunds(memberId, RefundStatus.COMPLETED, pageable);
+
+        assertThat(result.content()).containsExactly(content);
+        assertThat(result.currentPage()).isZero();
+        assertThat(result.totalPages()).isEqualTo(1);
+        assertThat(result.totalElements()).isEqualTo(1L);
+        assertThat(result.size()).isEqualTo(10);
+        assertThat(result.isLast()).isTrue();
+        verify(refundRepository).findListByMemberIdAndStatus(memberId, RefundStatus.COMPLETED, pageable);
     }
 
     private Payment createPaidPayment(UUID paymentId, UUID orderId, UUID memberId, Long amount) {
