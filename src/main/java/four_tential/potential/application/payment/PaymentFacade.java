@@ -19,12 +19,10 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
-import four_tential.potential.infra.portone.PortOneWebhookVerifier;
 import four_tential.potential.presentation.payment.dto.PaymentCreateRequest;
 import four_tential.potential.presentation.payment.dto.PaymentCreateResponse;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
-import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +44,6 @@ public class PaymentFacade {
     private final PaymentService paymentService;
     private final WebhookService webhookService;
     private final PaymentGateway paymentGateway;
-    private final PortOneWebhookVerifier portOneWebhookVerifier;
     private final TransactionTemplate transactionTemplate;
     private final OrderRepository orderRepository;
     private final CourseRepository courseRepository;
@@ -91,46 +88,19 @@ public class PaymentFacade {
 
     /**
      * PortOne 웹훅을 처리한다
-     * 원본 요청을 먼저 저장한 뒤 서명을 검증하고, 검증된 이벤트만 결제 상태에 반영한다
-     * 다시 받아도 결과가 달라지지 않는 실패는 사유를 남기고 조용히 종료한다
+     * WebhookController에서 서명 검증을 마친 webhook만 전달받아 결제 상태를 반영한다
      */
     public void handleWebhook(
             String rawBody,
             String webhookId,
-            String webhookTimestamp,
-            String webhookSignature) {
+            io.portone.sdk.server.webhook.Webhook verified) {
 
-        // 이미 끝난 webhook-id면 재전송으로 보고 더 처리하지 않는다
-        if (webhookService.isFinished(webhookId)) {
-            log.info("[PORTONE_WEBHOOK] finished webhook ignored. id={}", webhookId);
+        Optional<Webhook> receivedWebhook = receiveWebhook(rawBody, webhookId);
+        if (receivedWebhook.isEmpty()) {
             return;
         }
 
-        // 처리 중 실패해도 추적할 수 있게 원본 payload부터 저장한다
-        Webhook webhook = webhookService.saveIncomingWebhook(
-                webhookId,
-                PaymentWebhookConstants.EVENT_STATUS_UNKNOWN,
-                rawBody
-        );
-
-        if (webhook.isFinished()) {
-            log.info("[PORTONE_WEBHOOK] finished webhook ignored after receive. id={}", webhookId);
-            return;
-        }
-
-        // 서명이 맞는 웹훅만 결제 이벤트로 믿고 처리한다
-        io.portone.sdk.server.webhook.Webhook verified;
-        try {
-            verified = portOneWebhookVerifier.verify(rawBody, webhookId, webhookSignature, webhookTimestamp);
-        } catch (WebhookVerificationException e) {
-            log.warn("[PORTONE_WEBHOOK] 서명 검증 실패. id={} reason={}", webhookId, e.getMessage());
-            webhookService.failWebhook(
-                    webhook,
-                    PaymentWebhookConstants.FAIL_REASON_WEBHOOK_SIGNATURE_INVALID,
-                    e.getMessage()
-            );
-            return;
-        }
+        Webhook webhook = receivedWebhook.get();
 
         PaymentCancelDecision result;
         try {
@@ -174,6 +144,42 @@ public class PaymentFacade {
         if (result == null || result.webhookCompletionRequired()) {
             webhookService.completeWebhook(webhook);
         }
+    }
+
+    /**
+     * WebhookController에서 서명 검증 실패로 판단한 웹훅을 실패 이력으로 남긴다
+     */
+    public void handleInvalidWebhook(String rawBody, String webhookId, String failMessage) {
+        Optional<Webhook> receivedWebhook = receiveWebhook(rawBody, webhookId);
+        if (receivedWebhook.isEmpty()) {
+            return;
+        }
+
+        webhookService.failWebhook(
+                receivedWebhook.get(),
+                PaymentWebhookConstants.FAIL_REASON_WEBHOOK_SIGNATURE_INVALID,
+                failMessage
+        );
+    }
+
+    private Optional<Webhook> receiveWebhook(String rawBody, String webhookId) {
+        if (webhookService.isFinished(webhookId)) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored. id={}", webhookId);
+            return Optional.empty();
+        }
+
+        Webhook webhook = webhookService.saveIncomingWebhook(
+                webhookId,
+                PaymentWebhookConstants.EVENT_STATUS_UNKNOWN,
+                rawBody
+        );
+
+        if (webhook.isFinished()) {
+            log.info("[PORTONE_WEBHOOK] finished webhook ignored after receive. id={}", webhookId);
+            return Optional.empty();
+        }
+
+        return Optional.of(webhook);
     }
 
     /**
@@ -625,5 +631,3 @@ public class PaymentFacade {
         }
     }
 }
-
-
