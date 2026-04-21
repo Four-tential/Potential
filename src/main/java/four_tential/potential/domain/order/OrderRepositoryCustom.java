@@ -14,6 +14,11 @@ public interface OrderRepositoryCustom {
     Optional<Order> findOrderDetailsById(UUID orderId, UUID memberId);
     Page<Order> findMyOrders(UUID memberId, Pageable pageable);
 
+    /**
+     * 특정 코스의 유효한 주문(PENDING, PAID, CONFIRMED)들의 총 좌석 수 합계를 조회
+     */
+    int sumOrderCountByCourseIdAndStatuses(UUID courseId, List<OrderStatus> statuses);
+
     // 특정 코스에서 CONFIRMED 상태인 수강생 명단 (출석 정보 포함)
     Page<CourseStudentQueryResult> findConfirmedStudentsByCourseId(UUID courseId, Pageable pageable);
 

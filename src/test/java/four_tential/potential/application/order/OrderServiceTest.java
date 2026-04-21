@@ -10,6 +10,7 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateRequest;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateResponse;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
+import four_tential.potential.presentation.order.dto.OrderInventoryReconcileResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -458,5 +459,29 @@ class OrderServiceTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()));
         }
+    }
+
+    @Test
+    @DisplayName("재고 정합성 복구를 수행하고 결과를 반환한다")
+    void reconcileInventory_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Course course = mock(Course.class);
+        given(course.getCapacity()).willReturn(100);
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        
+        // DB 점유 좌석 수 합계 모킹 (PENDING 2 + PAID 3 + CONFIRMED 5 = 10)
+        given(orderRepository.sumOrderCountByCourseIdAndStatuses(eq(courseId), anyList())).willReturn(10);
+
+        // when
+        OrderInventoryReconcileResponse response = orderService.reconcileInventory(courseId);
+
+        // then
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.totalCapacity()).isEqualTo(100);
+        assertThat(response.dbOccupiedSeats()).isEqualTo(10);
+        assertThat(response.reconciledCapacity()).isEqualTo(90L); // 100 - 10
+
+        verify(waitingListService).updateCapacity(courseId, 90L);
     }
 }

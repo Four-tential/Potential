@@ -302,4 +302,43 @@ class WaitingListServiceTest {
         // then
         verify(waitingListSet).remove(memberId.toString());
     }
+
+    @Test
+    @DisplayName("잔여석 수치를 강제로 업데이트하고 수치가 증가하면 대기열 승격을 시도한다")
+    void updateCapacity_increase_triggers_promotion() {
+        // given
+        long previousCapacity = 5L;
+        long newCapacity = 10L;
+        given(capacityAtomic.get()).willReturn(previousCapacity);
+        
+        // 승격 로직을 위한 설정
+        given(waitingListSet.isEmpty()).willReturn(false);
+        when(capacityAtomic.get()).thenReturn(previousCapacity, newCapacity);
+        UUID nextId = UUID.randomUUID();
+        given(waitingListSet.pollFirst()).willReturn(nextId.toString());
+        given(sseWaitingRoomRepository.find(courseId, nextId)).willReturn(Optional.of(mock(SseEmitter.class)));
+
+        // when
+        waitingListService.updateCapacity(courseId, newCapacity);
+
+        // then
+        verify(capacityAtomic).set(newCapacity);
+        verify(sseWaitingEventPublisher).publish(eq(courseId), eq(nextId), any());
+    }
+
+    @Test
+    @DisplayName("잔여석 수치가 감소하거나 같으면 대기열 승격을 시도하지 않는다")
+    void updateCapacity_decrease_no_promotion() {
+        // given
+        long previousCapacity = 10L;
+        long newCapacity = 5L;
+        given(capacityAtomic.get()).willReturn(previousCapacity);
+
+        // when
+        waitingListService.updateCapacity(courseId, newCapacity);
+
+        // then
+        verify(capacityAtomic).set(newCapacity);
+        verify(sseWaitingEventPublisher, never()).publish(any(), any(), any());
+    }
 }

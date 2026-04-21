@@ -5,6 +5,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateRequest;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateResponse;
+import four_tential.potential.presentation.order.dto.OrderInventoryReconcileResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,5 +81,28 @@ class AdminOrderControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().data().currentStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(response.getBody().data().previousStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("특정 코스의 재고 정합성 복구 - 200 OK 및 복구 결과 반환")
+    void reconcileInventory_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        OrderInventoryReconcileResponse serviceResponse = new OrderInventoryReconcileResponse(
+                courseId, 100, 10, 90L
+        );
+        given(orderService.reconcileInventory(courseId)).willReturn(serviceResponse);
+
+        // when
+        ResponseEntity<BaseResponse<OrderInventoryReconcileResponse>> response = 
+                adminOrderController.reconcileInventory(courseId);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo("OK");
+        assertThat(response.getBody().message()).isEqualTo("재고 정합성 복구 성공");
+        assertThat(response.getBody().data().courseId()).isEqualTo(courseId);
+        assertThat(response.getBody().data().reconciledCapacity()).isEqualTo(90L);
     }
 }

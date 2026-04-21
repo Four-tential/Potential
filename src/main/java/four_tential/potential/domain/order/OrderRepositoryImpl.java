@@ -150,4 +150,18 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .limit(pageable.getPageSize())
                 .fetch();
     }
+
+    @Override
+    public int sumOrderCountByCourseIdAndStatuses(UUID courseId, List<OrderStatus> statuses) {
+        Long totalOrderCount = queryFactory
+                .select(order.orderCount.sumLong())
+                .from(order)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.in(statuses)
+                )
+                .fetchOne();
+
+        return totalOrderCount != null ? totalOrderCount.intValue() : 0;
+    }
 }

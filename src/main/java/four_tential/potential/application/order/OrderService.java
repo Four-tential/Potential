@@ -11,6 +11,7 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateRequest;
 import four_tential.potential.presentation.order.dto.OrderAdminStatusUpdateResponse;
 import four_tential.potential.presentation.order.dto.OrderCreateRequest;
+import four_tential.potential.presentation.order.dto.OrderInventoryReconcileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
@@ -286,5 +287,32 @@ public class OrderService {
             log.error("Redis 재고 복구 실패: orderId={}, courseId={}, reason={}",
                     order.getId(), order.getCourseId(), e.getMessage());
         }
+    }
+
+    /**
+     * 특정 코스의 재고 정합성 복구
+     * DB의 유효 주문 좌석 수를 기준으로 Redis의 잔여석 수치를 강제 업데이트합니다.
+     */
+    @Transactional(readOnly = true)
+    public OrderInventoryReconcileResponse reconcileInventory(UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+
+        // DB에서 유효한 주문(PENDING, PAID, CONFIRMED)의 좌석 합계 조회
+        int occupiedSeats = orderRepository.sumOrderCountByCourseIdAndStatuses(
+                courseId,
+                List.of(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED)
+        );
+
+        // 새 잔여석 계산 (총 정원 - 점유 좌석)
+        long newCapacity = Math.max(0, (long) course.getCapacity() - occupiedSeats);
+
+        // Redis 강제 업데이트 및 대기열 승격 시도
+        waitingListService.updateCapacity(courseId, newCapacity);
+
+        log.info("재고 정합성 복구 완료: courseId={}, 총정원={}, DB점유={}, Redis잔여석={}",
+                courseId, course.getCapacity(), occupiedSeats, newCapacity);
+
+        return OrderInventoryReconcileResponse.of(courseId, course.getCapacity(), occupiedSeats, newCapacity);
     }
 }

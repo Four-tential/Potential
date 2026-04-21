@@ -19,8 +19,11 @@ services:
   redis:
     image: redis:8.6.1
     container_name: redis-potential
+    command: redis-server --appendonly yes
     ports:
       - "${REDIS_PORT}:6379"
+    volumes:
+      - ./redis-data:/data
     networks:
       network-potential:
 
