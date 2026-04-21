@@ -1,17 +1,21 @@
 package four_tential.potential.infra.redis;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RScoredSortedSet;
 import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.StringCodec;
 import org.redisson.config.Config;
 import org.redisson.Redisson;
+import org.springframework.util.FileSystemUtils;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.containers.BindMode;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -28,6 +32,14 @@ public class RedisAofPersistenceTest {
     static void setup() throws Exception {
         // 데이터가 저장될 임시 디렉토리 생성 (Docker Volume 역할)
         tempDir = Files.createTempDirectory("redis-data-aof");
+    }
+
+    @AfterAll
+    static void cleanup() throws IOException {
+        // 테스트 종료 후 임시 디렉토리 및 내부 파일(AOF 등) 삭제
+        if (tempDir != null) {
+            FileSystemUtils.deleteRecursively(tempDir);
+        }
     }
 
     @Test
@@ -49,15 +61,19 @@ public class RedisAofPersistenceTest {
             RAtomicLong capacity = client1.getAtomicLong(capacityKey);
             capacity.set(initialCapacity);
 
-            RScoredSortedSet<String> waitingList = client1.getScoredSortedSet(waitingKey);
+            RScoredSortedSet<String> waitingList = client1.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
             waitingList.add(System.currentTimeMillis(), memberId.toString());
 
-            // AOF 파일이 디스크에 확실히 기록되도록 save 명령 수행 (테스트의 안정성)
-            redis1.execInContainer("redis-cli", "save");
-            
+            // AOF 버퍼를 디스크에 즉시 동기화하기 위해 appendfsync 설정을 일시적으로 always로 변경
+            redis1.execInContainer("redis-cli", "config", "set", "appendfsync", "always");
+            // 더미 쓰기를 수행하여 AOF fsync를 강제로 트리거
+            client1.getBucket("__sync_trigger__", StringCodec.INSTANCE).set("1");
+            // 다시 원래의 성능 지향 설정(everysec)으로 복구 (선택 사항)
+            redis1.execInContainer("redis-cli", "config", "set", "appendfsync", "everysec");
+
             client1.shutdown();
             redis1.stop(); 
-            // 컨테이너가 중지되어도 tempDir(호스트 경로)에는 appendonly.aof 파일이 남아있음
+            // 컨테이너가 중지되어도 tempDir(호스트 경로)에는 데이터가 동기화된 AOF 파일이 남아있음
         }
 
         // STEP 2: 동일한 볼륨을 사용하는 새로운 Redis 컨테이너 시작
@@ -67,7 +83,7 @@ public class RedisAofPersistenceTest {
 
             // then: 데이터가 무사히 복구되었는지 확인
             RAtomicLong capacity = client2.getAtomicLong(capacityKey);
-            RScoredSortedSet<String> waitingList = client2.getScoredSortedSet(waitingKey);
+            RScoredSortedSet<String> waitingList = client2.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
 
             assertThat(capacity.get())
                     .as("재시작 후에도 잔여석 수치가 유지되어야 함")
