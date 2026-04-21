@@ -12,6 +12,7 @@ import four_tential.potential.domain.course.course_category.CourseCategoryReposi
 import four_tential.potential.domain.course.course_image.CourseImage;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course_image.CourseImageRepository;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistoryRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.course.fixture.CourseFixture;
@@ -27,8 +28,12 @@ import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistory;
+import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
+import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
 import four_tential.potential.presentation.course.model.response.CreateCourseRequestResponse;
@@ -36,6 +41,7 @@ import four_tential.potential.presentation.course.model.response.InstructorCours
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -62,6 +68,7 @@ class CourseServiceTest {
 
     @Mock private CourseRepository courseRepository;
     @Mock private CourseImageRepository courseImageRepository;
+    @Mock private CourseApprovalHistoryRepository courseApprovalHistoryRepository;
     @Mock private CourseCategoryRepository courseCategoryRepository;
     @Mock private CourseWishlistRepository courseWishlistRepository;
     @Mock private InstructorMemberRepository instructorMemberRepository;
@@ -904,5 +911,127 @@ class CourseServiceTest {
         Member member = MemberFixture.defaultMember();
         ReflectionTestUtils.setField(member, "id", InstructorMemberFixture.DEFAULT_MEMBER_ID);
         return member;
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인 성공 - PREPARATION 코스가 OPEN으로 전이되고 이력 저장")
+    void handleCourseRequest_approve_success() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        CourseRequestActionResponse response =
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null));
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(response.confirmedAt()).isNotNull();
+
+        ArgumentCaptor<CourseApprovalHistory> captor = ArgumentCaptor.forClass(CourseApprovalHistory.class);
+        verify(courseApprovalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo(CourseApprovalAction.APPROVE);
+        assertThat(captor.getValue().getRejectReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 반려 성공 - REJECTED 상태로 전이, 반려 이력 저장")
+    void handleCourseRequest_reject_success() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        CourseRequestActionResponse response =
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.REJECT, "사진 자료 미비"));
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.status()).isEqualTo(CourseStatus.REJECTED);
+        assertThat(response.confirmedAt()).isNull();
+
+        ArgumentCaptor<CourseApprovalHistory> captor = ArgumentCaptor.forClass(CourseApprovalHistory.class);
+        verify(courseApprovalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo(CourseApprovalAction.REJECT);
+        assertThat(captor.getValue().getRejectReason()).isEqualTo("사진 자료 미비");
+    }
+
+    @Test
+    @DisplayName("코스 개설 재신청 성공 - REJECTED 코스가 PREPARATION으로 전이")
+    void reapplyCourseRequest_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        course.reject("사진 자료 미비");
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        courseService.reapplyCourseRequest(memberId, courseId);
+
+        assertThat(course.getStatus()).isEqualTo(CourseStatus.PREPARATION);
+        assertThat(course.getRejectReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("코스 개설 재신청 실패 - REJECTED 상태가 아니면 ERR_CANNOT_REAPPLY_COURSE")
+    void reapplyCourseRequest_notRejected() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseService.reapplyCourseRequest(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("REJECTED 상태의 코스만 재신청할 수 있습니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 반려 실패 - rejectReason 없으면 ERR_REJECT_REASON_REQUIRED")
+    void handleCourseRequest_rejectWithoutReason() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.REJECT, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("반려 사유는 필수입니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인/반려 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void handleCourseRequest_courseNotFound() {
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
+    @Test
+    @DisplayName("코스 개설 신청 승인/반려 실패 - PREPARATION이 아니면 ERR_COURSE_NOT_IN_PREPARATION")
+    void handleCourseRequest_notPreparation() {
+        UUID courseId = UUID.randomUUID();
+        Course course = openCourseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseService.handleCourseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("PREPARATION 상태의 코스만 승인 또는 반려할 수 있습니다");
     }
 }

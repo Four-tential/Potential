@@ -11,6 +11,9 @@ import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.course.course_image.CourseImage;
 import four_tential.potential.domain.course.course_image.CourseImageRepository;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistory;
+import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistoryRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
@@ -19,7 +22,9 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.review.review.ReviewRepository;
+import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
+import four_tential.potential.presentation.course.model.response.CourseRequestActionResponse;
 import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
@@ -45,6 +50,7 @@ public class CourseService {
 
     private final CourseRepository courseRepository;
     private final CourseImageRepository courseImageRepository;
+    private final CourseApprovalHistoryRepository courseApprovalHistoryRepository;
     private final CourseCategoryRepository courseCategoryRepository;
     private final CourseWishlistRepository courseWishlistRepository;
     private final InstructorMemberRepository instructorMemberRepository;
@@ -243,5 +249,48 @@ public class CourseService {
         }
 
         courseRepository.delete(course);
+    }
+
+    @Transactional
+    public CourseRequestActionResponse handleCourseRequest(UUID courseId, CourseRequestActionRequest request) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (course.getStatus() != CourseStatus.PREPARATION) {
+            throw new ServiceErrorException(ERR_COURSE_NOT_IN_PREPARATION);
+        }
+
+        if (request.action() == CourseApprovalAction.REJECT) {
+            if (request.rejectReason() == null || request.rejectReason().isBlank()) {
+                throw new ServiceErrorException(ERR_REJECT_REASON_REQUIRED);
+            }
+            course.reject(request.rejectReason());
+            courseApprovalHistoryRepository.save(
+                    CourseApprovalHistory.register(courseId, CourseApprovalAction.REJECT, request.rejectReason())
+            );
+        } else if (request.action() == CourseApprovalAction.APPROVE) {
+            course.confirm();
+            courseApprovalHistoryRepository.save(
+                    CourseApprovalHistory.register(courseId, CourseApprovalAction.APPROVE, null)
+            );
+        }
+
+        return CourseRequestActionResponse.from(course);
+    }
+
+    @Transactional
+    public void reapplyCourseRequest(UUID memberId, UUID courseId) {
+        InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
+                .filter(im -> im.getStatus() == InstructorMemberStatus.APPROVED)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
+        if (!course.getMemberInstructorId().equals(instructorMember.getId())) {
+            throw new ServiceErrorException(ERR_FORBIDDEN_COURSE);
+        }
+
+        course.reapply();
     }
 }

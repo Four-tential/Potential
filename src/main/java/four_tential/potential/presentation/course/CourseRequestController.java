@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 import java.util.UUID;
 
@@ -46,5 +47,15 @@ public class CourseRequestController {
     ) {
         courseService.deleteCourseRequest(principal.memberId(), courseId);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 개설 신청 삭제", null));
+    }
+
+    @PatchMapping("/{courseId}/reapply")
+    @PreAuthorize("hasRole('INSTRUCTOR')")
+    public ResponseEntity<BaseResponse<Void>> reapplyCourseRequest(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable UUID courseId
+    ) {
+        courseService.reapplyCourseRequest(principal.memberId(), courseId);
+        return ResponseEntity.ok(BaseResponse.success("OK", "코스 개설 재신청 성공", null));
     }
 }
