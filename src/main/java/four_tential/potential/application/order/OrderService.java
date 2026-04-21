@@ -119,6 +119,19 @@ public class OrderService {
     }
 
     /**
+     * 환불 완료 후 주문 수량을 차감한다.
+     * PG 환불이 성공한 뒤 결제 트랜잭션 안에서만 호출한다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Order applyRefund(UUID orderId, UUID memberId, int cancelCount) {
+        Order order = orderRepository.findOrderDetailsById(orderId, memberId)
+                .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
+
+        order.applyRefund(cancelCount, LocalDateTime.now());
+        return order;
+    }
+
+    /**
      * 만료된 주문 자동 만료 처리 (단일 배치)
      * 개별 주문 처리는 독립된 트랜잭션에서 수행하여 낙관적 락 충돌 시 배치가 롤백되지 않도록 합니다.
      */

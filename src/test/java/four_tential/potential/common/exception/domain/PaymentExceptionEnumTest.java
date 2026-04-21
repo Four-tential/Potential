@@ -80,6 +80,13 @@ class PaymentExceptionEnumTest {
     }
 
     @Test
+    @DisplayName("ERR_REFUND_PAYMENT_STATUS_INVALID 는 BAD_REQUEST 상태코드를 반환한다")
+    void err_refund_payment_status_invalid_status() {
+        assertThat(PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID.getHttpStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
     @DisplayName("ERR_NOT_FOUND_REFUND 는 NOT_FOUND 상태코드를 반환한다")
     void err_not_found_refund_status() {
         assertThat(PaymentExceptionEnum.ERR_NOT_FOUND_REFUND.getHttpStatus())

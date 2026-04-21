@@ -12,7 +12,6 @@ public record PaymentDetailResponse(
         String courseTitle,
         int orderCount,
         Long totalPrice,
-        Long discountPrice,
         Long paidTotalPrice,
         PaymentPayWay payWay,
         PaymentStatus status,

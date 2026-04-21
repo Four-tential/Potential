@@ -195,16 +195,17 @@ class OrderControllerTest {
                 "CANCELLED",
                 LocalDateTime.now()
         );
-        given(orderFacade.cancelOrder(ORDER_ID, MEMBER_ID)).willReturn(expectedResponse);
+        OrderCancelRequest request = new OrderCancelRequest(1);
+        given(orderFacade.cancelOrder(ORDER_ID, MEMBER_ID, request)).willReturn(expectedResponse);
 
         // when
         ResponseEntity<BaseResponse<OrderCancelResponse>> response = 
-                orderController.cancelOrder(studentPrincipal, ORDER_ID);
+                orderController.cancelOrder(studentPrincipal, ORDER_ID, request);
 
         // then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().data().orderId()).isEqualTo(ORDER_ID);
-        assertThat(response.getBody().message()).isEqualTo("주문이 성공적으로 취소되었습니다");
-        verify(orderFacade).cancelOrder(ORDER_ID, MEMBER_ID);
+        assertThat(response.getBody().message()).isEqualTo("주문 취소 요청 성공");
+        verify(orderFacade).cancelOrder(ORDER_ID, MEMBER_ID, request);
     }
 }

@@ -43,8 +43,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentFacade {
 
-    private static final Long NO_DISCOUNT = 0L;
-
     private final PaymentService paymentService;
     private final WebhookService webhookService;
     private final PaymentGateway paymentGateway;
@@ -189,10 +187,6 @@ public class PaymentFacade {
     ) {
         PaymentCreateCommand failedPaymentCommand = null;
         try {
-            if (request.memberCouponId() != null) {
-                throw new ServiceErrorException(PaymentExceptionEnum.ERR_COUPON_NOT_SUPPORTED);
-            }
-
             Order order = getOrder(request.orderId());
             // 타인의 주문이면 결제 기록도 남기지 않는다
             if (!order.getMemberId().equals(memberId)) {
@@ -209,9 +203,7 @@ public class PaymentFacade {
             failedPaymentCommand = new PaymentCreateCommand(
                     order.getId(),
                     memberId,
-                    null,
                     totalPrice,
-                    NO_DISCOUNT,
                     totalPrice
             );
 
@@ -392,9 +384,16 @@ public class PaymentFacade {
         switch (event.eventType()) {
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_PAID:
                 return confirmPaidWebhook(event.pgKey());
+
             case PaymentWebhookConstants.WEBHOOK_TRANSACTION_FAILED,
                  PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED:
                 return failExistingPayment(event.pgKey());
+
+            case PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_CANCELLED,
+                 PaymentWebhookConstants.WEBHOOK_TRANSACTION_CANCELLED_PARTIAL_CANCELLED:
+                log.info("[PORTONE_WEBHOOK] 환불 완료 알림 수신. type={} pgKey={}", event.eventType(), event.pgKey());
+                return PaymentCancelDecision.none();
+
             default:
                 log.warn("[PORTONE_WEBHOOK] unsupported event type. type={}", event.eventType());
                 return PaymentCancelDecision.none();

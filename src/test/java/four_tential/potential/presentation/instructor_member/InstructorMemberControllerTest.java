@@ -28,7 +28,7 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 import java.util.UUID;
 
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -154,7 +154,7 @@ class InstructorMemberControllerTest {
     @DisplayName("강사 신청 - 존재하지 않는 카테고리 코드이면 ServiceErrorException 전파")
     void applyInstructor_invalidCategory() {
         given(instructorMemberService.applyInstructor(MEMBER_ID, DEFAULT_REQUEST))
-                .willThrow(new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .willThrow(new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         assertThatThrownBy(() -> instructorMemberController.applyInstructor(DEFAULT_REQUEST, PRINCIPAL))
                 .isInstanceOf(ServiceErrorException.class)

@@ -30,6 +30,9 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "refund_price", nullable = false)
     private Long refundPrice;
 
+    @Column(name = "cancel_count", nullable = false)
+    private int cancelCount;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private RefundReason reason;
@@ -41,20 +44,30 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
 
-    public static Refund create(Payment payment, Long refundPrice, RefundReason reason) {
+    /**
+     * PortOne 환불이 성공했을 때 남기는 완료 이력이다.
+     * cancelCount는 이번에 취소된 수강권 수량이다.
+     */
+    public static Refund completed(Payment payment, Long refundPrice, int cancelCount, RefundReason reason) {
         Refund refund = new Refund();
         refund.payment = payment;
         refund.refundPrice = refundPrice;
+        refund.cancelCount = cancelCount;
         refund.reason = reason;
         refund.status = RefundStatus.COMPLETED;
         refund.refundedAt = LocalDateTime.now();
         return refund;
     }
 
-    public static Refund fail(Payment payment, Long refundPrice, RefundReason reason) {
+    /**
+     * PortOne 환불이 실패했을 때도 기록은 남긴다.
+     * 운영자가 나중에 어떤 환불이 실패했는지 확인하기 위함이다.
+     */
+    public static Refund failed(Payment payment, Long refundPrice, int cancelCount, RefundReason reason) {
         Refund refund = new Refund();
         refund.payment = payment;
         refund.refundPrice = refundPrice;
+        refund.cancelCount = cancelCount;
         refund.reason = reason;
         refund.status = RefundStatus.FAILED;
         return refund;

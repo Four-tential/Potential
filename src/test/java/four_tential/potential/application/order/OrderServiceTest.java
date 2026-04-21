@@ -340,6 +340,24 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("환불 완료 후 주문 수량을 차감한다")
+    void applyRefund_success() {
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Order order = Order.register(memberId, courseId, 3, BigInteger.valueOf(20000), "테스트");
+        order.completePayment();
+
+        given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
+
+        Order result = orderService.applyRefund(orderId, memberId, 1);
+
+        assertThat(result.getOrderCount()).isEqualTo(2);
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(orderRepository).findOrderDetailsById(orderId, memberId);
+    }
+
+    @Test
     @DisplayName("관리자가 주문 상태를 강제로 변경하면 응답을 반환하고 취소 시 재고를 복구한다")
     void updateOrderStatusByAdmin_Success() {
         try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {

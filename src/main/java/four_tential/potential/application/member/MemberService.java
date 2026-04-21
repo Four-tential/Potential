@@ -51,7 +51,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_CATEGORY;
+import static four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_CATEGORY_NOT_FOUND;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 
 
@@ -115,7 +115,7 @@ public class MemberService {
         // 카테고리 코드 유효성 검증
         Set<String> existingCodes = courseCategoryRepository.findExistingCodes(categoryCodes);
         if (existingCodes.size() != categoryCodes.size()) {
-            throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+            throw new ServiceErrorException(ERR_CATEGORY_NOT_FOUND);
         }
 
         // 온보딩 등록
@@ -165,7 +165,7 @@ public class MemberService {
             // 카테고리 코드 유효성 검증
             Set<String> validCodes = courseCategoryRepository.findExistingCodes(newCodes);
             if (validCodes.size() != newCodes.size()) {
-                throw new ServiceErrorException(ERR_NOT_FOUND_CATEGORY);
+                throw new ServiceErrorException(ERR_CATEGORY_NOT_FOUND);
             }
 
             // 기존에 있고 새 요청에 없는 것
@@ -315,7 +315,7 @@ public class MemberService {
 
         // 카테고리 조회
         CourseCategory category = courseCategoryRepository.findByCode(instructorMember.getCategoryCode())
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_CATEGORY));
+                .orElseThrow(() -> new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
 
         // 강사 개설 코스 조회
         long courseCount = courseRepository.countByMemberInstructorId(instructorMember.getId());

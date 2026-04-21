@@ -13,18 +13,29 @@ public enum CourseExceptionEnum implements ServiceErrorCode {
     ERR_INVALID_CAPACITY(HttpStatus.BAD_REQUEST, "코스의 정원은 최소 1명 이상이어야 합니다"),
     ERR_INVALID_ORDER_CLOSE_TIME(HttpStatus.BAD_REQUEST, "코스의 주문 마감 시간은 코스의 주문가능 시작 시각부터 코스의 시작일시 2시간 전 까지 가능합니다"),
     ERR_INVALID_SCHEDULE(HttpStatus.BAD_REQUEST, "코스의 종료 일시는 코스의 시작 일시보다 이후여야 합니다"),
+    ERR_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "필수 입력값을 모두 입력해주세요"),
+    ERR_INVALID_COURSE_APPROVAL_ACTION(HttpStatus.BAD_REQUEST, "지원하지 않는 코스 승인 액션입니다"),
     ERR_IMMUTABLE_FIELD_IN_OPEN(HttpStatus.BAD_REQUEST, "OPEN 상태에서는 가격, 일정, 장소, 정원을 수정할 수 없습니다"),
     ERR_CANNOT_MODIFY_COURSE(HttpStatus.BAD_REQUEST, "CLOSED 또는 CANCELLED 상태의 코스는 수정할 수 없습니다"),
     ERR_IS_FULL_CAPACITY(HttpStatus.CONFLICT, "코스의 정원이 가득차 추가할 수 없습니다"),
-    ERR_NOT_FOUND_CATEGORY(HttpStatus.BAD_REQUEST, "존재하지 않는 카테고리입니다"),
     ERR_DUPLICATED_CATEGORY_CODE(HttpStatus.CONFLICT, "이미 존재하는 카테고리 코드입니다"),
     ERR_NOT_ADMIN(HttpStatus.FORBIDDEN, "관리자만 접근 할 수 있습니다"),
 
 
     ERR_NOT_FOUND_COURSE(HttpStatus.NOT_FOUND, "존재하지 않는 코스입니다"),
     ERR_COURSE_NOT_OPEN(HttpStatus.FORBIDDEN, "진행 중인 코스에서만 가능합니다"),
-    ERR_FORBIDDEN_COURSE(HttpStatus.FORBIDDEN, "본인 코스에 대해서만 조회할 수 있습니다"),
-    ERR_COURSE_IN_PREPARATION(HttpStatus.BAD_REQUEST, "준비 중인 코스는 수강생을 조회할 수 없습니다")
+    ERR_FORBIDDEN_COURSE(HttpStatus.FORBIDDEN, "본인 코스만 조회 가능합니다"),
+    ERR_FORBIDDEN_COURSE_DELETE(HttpStatus.FORBIDDEN, "본인 코스만 삭제 가능합니다"),
+    ERR_FORBIDDEN_COURSE_MODIFY(HttpStatus.FORBIDDEN, "본인 코스만 수정 가능합니다"),
+    ERR_COURSE_IN_PREPARATION(HttpStatus.BAD_REQUEST, "준비 중인 코스는 수강생을 조회할 수 없습니다"),
+
+    ERR_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 카테고리입니다"),
+    ERR_CATEGORY_HAS_COURSES_OR_INSTRUCTORS(HttpStatus.CONFLICT, "카테고리 내 코스 또는 강사가 존재하여 삭제할 수 없습니다"),
+
+    ERR_CANNOT_DELETE_COURSE_REQUEST(HttpStatus.BAD_REQUEST, "PREPARATION 상태의 코스만 삭제할 수 있습니다"),
+    ERR_COURSE_NOT_IN_PREPARATION(HttpStatus.CONFLICT, "PREPARATION 상태의 코스만 승인 또는 반려할 수 있습니다"),
+    ERR_REJECT_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "반려 사유는 필수입니다"),
+    ERR_CANNOT_REAPPLY_COURSE(HttpStatus.BAD_REQUEST, "REJECTED 상태의 코스만 재신청할 수 있습니다")
     ;
 
     private final HttpStatus httpStatus;

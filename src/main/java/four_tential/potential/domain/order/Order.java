@@ -149,4 +149,28 @@ public class Order extends BaseTimeEntity {
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = now;
     }
+
+    /**
+     * 환불 완료 후 주문 수량을 줄인다.
+     * 남은 수량이 0이면 주문도 취소 상태로 마무리한다.
+     */
+    public void applyRefund(int cancelCount, LocalDateTime now) {
+        if (this.status != OrderStatus.PAID) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS);
+        }
+        // cancelCount 범위 검증
+        if (cancelCount <= 0 || cancelCount > this.orderCount) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
+        // orderCount 차감, totalPriceSnap 재계산
+        this.orderCount -= cancelCount;
+        this.totalPriceSnap = this.priceSnap.multiply(BigInteger.valueOf(this.orderCount));
+
+        // orderCount가 0이 되면 CANCELLED + cancelledAt 기록
+        if (this.orderCount == 0) {
+            this.status = OrderStatus.CANCELLED;
+            this.cancelledAt = now;
+        }
+    }
 }

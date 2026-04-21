@@ -33,4 +33,8 @@ public class CourseCategory extends BaseTimeEntity {
         category.name = name;
         return category;
     }
+
+    public void updateName(String name) {
+        this.name = name;
+    }
 }
