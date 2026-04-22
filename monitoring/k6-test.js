@@ -12,7 +12,7 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get('http://host.docker.internal:8080/actuator/health');
+  const res = http.get(`${__ENV.BASE_URL}/actuator/health`);
   
   check(res, {
     'is status 200': (r) => r.status === 200,
