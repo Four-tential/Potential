@@ -43,13 +43,29 @@ public class OrderService {
 
     /**
      * 주문 생성 (DB 저장)
+     * 회원 단위 분산 락을 적용하여 동일 시간대 중복 예약 체크의 원자성을 보장
      */
     @Transactional
+    @DistributedLock(key = "'order:member:' + #memberId")
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
         // 코스 정보 조회
         Course course = courseRepository.findById(request.courseId())
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
+        // 동일 시간대 중복 예약 재검증
+        // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId,
+                course.getStartAt(),
+                course.getEndAt()
+        );
+
+        if (hasOverlap) {
+            log.warn("중복 예약이 감지되었습니다: memberId={}, courseId={}", memberId, course.getId());
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
+        }
+
+        // 주문 등록
         Order order = Order.register(
                 memberId,
                 request.courseId(),

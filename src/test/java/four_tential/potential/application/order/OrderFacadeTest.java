@@ -38,9 +38,7 @@ class OrderFacadeTest {
 
     private final UUID memberId = UUID.randomUUID();
     private final UUID courseId = UUID.randomUUID();
-    private final OrderCreateRequest request = new OrderCreateRequest(
-            courseId, 2
-    );
+    private final OrderCreateRequest request = new OrderCreateRequest(courseId, 2);
 
     @Test
     @DisplayName("잔여석 점유 성공 시 주문을 생성하고 성공 응답을 반환한다")
