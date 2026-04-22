@@ -198,10 +198,6 @@ public class PaymentFacade {
 
         Optional<Payment> existingPayment = paymentService.findByOrderId(order.getId());
         if (existingPayment.isPresent()) {
-            if (existingPayment.get().isPending()) {
-                Course course = getCourse(order.getCourseId());
-                validateOrderForPayment(order, course);
-            }
             return getExistingPaymentOrReject(existingPayment.get());
         }
 
