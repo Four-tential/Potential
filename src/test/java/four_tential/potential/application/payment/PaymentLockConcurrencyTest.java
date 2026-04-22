@@ -12,7 +12,6 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.enums.WebhookStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.domain.payment.repository.WebhookRepository;
-import four_tential.potential.infra.portone.PortOneWebhookHandler;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import io.portone.sdk.server.webhook.WebhookTransaction;
 import io.portone.sdk.server.webhook.WebhookTransactionData;
@@ -22,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigInteger;
@@ -38,8 +36,6 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,9 +63,6 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
-
-    @MockitoBean
-    private PortOneWebhookHandler portOneWebhookHandler;
 
     @AfterEach
     void tearDown() {
@@ -179,15 +172,11 @@ class PaymentLockConcurrencyTest extends RedisTestContainer {
         ));
         paymentRepository.saveAndFlush(createPendingPayment(order.getId(), memberId, pgKey));
 
-        given(portOneWebhookHandler.verify(anyString(), anyString(), anyString(), anyString()))
-                .willReturn(new WebhookTransactionPaid(new TestWebhookTransactionData(pgKey)));
-
         ConcurrentResult result = runConcurrently(THREAD_COUNT, index ->
                 paymentFacade.handleWebhook(
                         "{}",
                         "webhook-lock-test-" + index,
-                        "timestamp",
-                        "signature"
+                        new WebhookTransactionPaid(new TestWebhookTransactionData(pgKey))
                 )
         );
 
