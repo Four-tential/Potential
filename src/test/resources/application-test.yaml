@@ -1,4 +1,12 @@
 spring:
+  cloud:
+    aws:
+      # CI 환경에는 AWS 자격증명이 없으므로 더미 값으로 Spring Cloud AWS 자동설정을 통과시킴
+      region:
+        static: ap-northeast-2
+      credentials:
+        access-key: test-access-key
+        secret-key: test-secret-key
   datasource:
     url: jdbc:h2:mem:potential;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -17,7 +25,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-
 
 jwt:
   secret:

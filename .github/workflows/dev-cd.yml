@@ -62,13 +62,30 @@ jobs:
         run: |
           ./scripts/deploy.sh
 
-      # 6. 배포 완료 검증 - EC2에서 실행 중인 컨테이너 목록 확인
+      # 6. 배포 완료 검증 - EC2에서 실행 중인 컨테이너 목록 확인 (SSM 명령 결과까지 동기 대기)
       - name: Verify container
         run: |
-          aws ssm send-command \
+          # SSM 명령 전송 후 CommandId 추출
+          CMD_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${EC2_INSTANCE_ID}" \
             --parameters commands="[
               \"docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Status}}'\"
             ]" \
-            --region $AWS_REGION --output json
+            --region $AWS_REGION --output json \
+            --query 'Command.CommandId' --output text)
+
+          echo "[INFO] Verify CommandId: ${CMD_ID}"
+
+          # 명령 완료까지 대기 (최대 60초)
+          aws ssm wait command-executed \
+            --command-id "${CMD_ID}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --region "${AWS_REGION}"
+
+          # 실행 결과(컨테이너 목록) 출력
+          aws ssm get-command-invocation \
+            --command-id "${CMD_ID}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --query 'StandardOutputContent' --output text

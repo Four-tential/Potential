@@ -77,8 +77,21 @@ for i in {1..30}; do
   echo "[INFO] SSM Status: ${STATUS}"
 
   case "${STATUS}" in
-    Success)                      exit 0 ;;   # 배포 성공
-    Failed|Cancelled|TimedOut)    echo "[ERROR] SSM failed: ${STATUS}"; exit 1 ;;  # 배포 실패
+    Success)
+      exit 0 ;;   # 배포 성공
+    Failed|Cancelled|TimedOut)
+      echo "[ERROR] SSM failed: ${STATUS}"
+      # 실패 원인 진단을 위해 EC2 실행 로그 출력
+      INVOCATION=$(aws ssm get-command-invocation \
+        --command-id "${CMD_ID}" \
+        --instance-id "${EC2_INSTANCE_ID}" \
+        --region "${AWS_REGION}" \
+        --output json)
+      echo "[ERROR] --- stdout ---"
+      echo "${INVOCATION}" | jq -r '.StandardOutputContent'
+      echo "[ERROR] --- stderr ---"
+      echo "${INVOCATION}" | jq -r '.StandardErrorContent'
+      exit 1 ;;
     # InProgress / Pending 은 계속 대기
   esac
 
