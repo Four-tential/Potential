@@ -171,6 +171,8 @@ gradle-app.setting
 ### docker-compose local volumes ###
 db-data/
 redis-data/
+prometheus-data/
+grafana-data/
 
 ### claude ###
 .claude

@@ -1,6 +1,7 @@
 package four_tential.potential.application.payment;
 
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
@@ -202,7 +203,7 @@ class PaymentServiceTest {
         assertThatThrownBy(() ->
                 paymentService.validateGatewayPayment(preparation, "pg-key-from-request", PaymentPayWay.CARD, gatewayResponse))
                 .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("결제 식별자가 일치하지 않습니다");
+                .hasMessage(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH.getMessage());
     }
 
     @Test
