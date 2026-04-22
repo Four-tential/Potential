@@ -27,5 +27,53 @@ services:
     networks:
       network-potential:
 
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus-potential
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-remote-write-receiver'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      network-potential:
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana-potential
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # 초기 비밀번호 admin
+    volumes:
+      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
+      - ./grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      network-potential:
+
+  k6:
+    image: grafana/k6:0.55.0
+    container_name: k6-potential
+    profiles: ["k6"]
+    environment:
+      BASE_URL: ${BASE_URL:-http://host.docker.internal:8080}
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),min,avg
+    volumes:
+      - ./monitoring:/scripts:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    entrypoint: ["k6"]
+    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/k6-test.js"]
+    networks:
+      network-potential:
+
 networks:
   network-potential:
