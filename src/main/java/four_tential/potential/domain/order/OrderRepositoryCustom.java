@@ -40,4 +40,9 @@ public interface OrderRepositoryCustom {
      * 결제 완료(PAID) 상태이면서 환불 가능 기간(코스 시작 7일 전)이 지난 주문 목록 조회
      */
     List<Order> findPaidOrdersToConfirm(LocalDateTime now, Pageable pageable);
+
+    /**
+     * 특정 시간대에 이미 유효한(PENDING, PAID, CONFIRMED) 주문이 있는지 확인
+     */
+    boolean hasOverlappingReservation(UUID memberId, LocalDateTime startAt, LocalDateTime endAt);
 }

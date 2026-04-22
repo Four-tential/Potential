@@ -46,33 +46,38 @@ public class OrderService {
      */
     @Transactional
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
-        // 동일 시간대 중복 예약 체크
-        checkDuplicateTimeCourse(memberId, request.courseId());
-
-        BigInteger coursePrice = request.priceSnap();
-        String courseTitle = request.titleSnap();
+        // 코스 정보 조회
+        Course course = courseRepository.findById(request.courseId())
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
         Order order = Order.register(
                 memberId,
                 request.courseId(),
                 request.orderCount(),
-                coursePrice,
-                courseTitle
+                course.getPrice(),
+                course.getTitle()
         );
         return orderRepository.save(order);
     }
 
     /**
      * 동일 시간대 중복 예약 체크
-     * TODO: Course 도메인 구현 후 실제 시간대(Time Slot) 비교 로직 추가 필요
      */
-    private void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
-        log.info("동일 시간대 중복 예약 체크 중 (Placeholder): memberId={}, courseId={}", memberId, courseId);
+    public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
         
-        // 시나리오: 
-        // 1. 요청한 courseId의 시작/종료 시간을 조회
-        // 2. 해당 회원의 기존 PAID, PENDING 주문들 중 시간대가 겹치는 코스가 있는지 DB 조회
-        // 3. 존재한다면 OrderExceptionEnum.ERR_ALREADY_RESERVED 예외 발생
+        log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
+        
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, 
+                course.getStartAt(), 
+                course.getEndAt()
+        );
+
+        if (hasOverlap) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
+        }
     }
 
     /**
