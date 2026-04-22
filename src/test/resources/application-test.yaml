@@ -30,3 +30,12 @@ portone:
   webhook-secret: dGVzdC13ZWJob29rLXNlY3JldA==
   store-id: test-store-id
   channel-key: test-channel-key
+
+aws:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2
+    cloudfront-domain: test.cloudfront.net
+
+member:
+  default-profile-image-url: https://test.cloudfront.net/profile-image/default-profile.png

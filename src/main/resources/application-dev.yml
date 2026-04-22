@@ -1,0 +1,70 @@
+spring:
+  config:
+    import:
+      - "aws-parameterstore:/config/potential-dev/"
+
+  # DB
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${db.host}:${db.port:3306}/${db.name}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    username: ${db.username}
+    password: ${db.password}
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-test-query: SELECT 1
+      keepalive-time: 60000
+
+  # Redis
+  data:
+    redis:
+      host: ${redis.host}
+      port: ${redis.port}
+
+  # Flyway
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  # JPA
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+# AWS S3
+aws:
+  s3:
+    bucket: potential-dev-images
+    region: ap-northeast-2
+    cloudfront-domain: d1273c5t8zsdng.cloudfront.net
+
+# JWT
+jwt:
+  secret:
+    key: ${jwt.key}
+    accessExpire: 1800000
+    refreshExpire: 60480000
+
+# PortOne
+portone:
+  api-secret: ${portone.api-secret}
+  webhook-secret: ${portone.webhook-secret}
+  store-id: ${portone.store-id}
+  channel-key: ${portone.channel-key}
+
+# Member
+member:
+  default-profile-image-url: ${member.default-profile-image-url}
+
+# SpringDocs With Swagger
+springdoc:
+  api-docs.enabled: true
+  swagger-ui:
+    enabled: true
+    display-request-duration: true
+    tryItOutEnabled: true
