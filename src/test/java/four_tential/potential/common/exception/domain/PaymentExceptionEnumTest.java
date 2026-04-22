@@ -47,7 +47,7 @@ class PaymentExceptionEnumTest {
     @DisplayName("ERR_PAYMENT_KEY_MISMATCH returns the correct message")
     void err_payment_key_mismatch_message() {
         assertThat(PaymentExceptionEnum.ERR_PAYMENT_KEY_MISMATCH.getMessage())
-                .isEqualTo("결제 식별자가 일치하지 않습니다.");
+                .isEqualTo("결제 식별자가 일치하지 않습니다");
     }
 
     @Test
