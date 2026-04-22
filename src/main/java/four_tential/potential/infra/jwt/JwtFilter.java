@@ -49,6 +49,9 @@ public class JwtFilter extends OncePerRequestFilter {
             // Course
             patternParser.parse("/v1/courses"),
 
+            // Actuator (Monitoring)
+            patternParser.parse("/actuator/**"),
+
             // 결제 테스트 관련 추가
             patternParser.parse("/payment-test.html"),
             patternParser.parse("/v1/payments/portone-config"),

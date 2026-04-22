@@ -72,3 +72,23 @@ logging:
 
 server:
   port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health, info
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99 # P50, P95, P99 활성화
+      sla:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 3s # 특정 시간 내 처리 비율 확인
+  prometheus:
+    metrics:
+      export:
+        enabled: true
