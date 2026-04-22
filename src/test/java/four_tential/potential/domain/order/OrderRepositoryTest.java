@@ -488,6 +488,60 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(result).extracting(Order::getId).doesNotContain(order5.getId());
     }
 
+    @Test
+    @DisplayName("상태별 좌석 합계 조회 - 특정 코스의 PENDING, PAID, CONFIRMED 좌석만 합산한다")
+    void sumOrderCountByCourseIdAndStatuses_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        
+        // 1. PENDING (합산 대상)
+        orderRepository.save(Order.register(UUID.randomUUID(), courseId, 2, BigInteger.valueOf(10000), "테스트1"));
+        
+        // 2. PAID (합산 대상)
+        Order paidOrder = Order.register(UUID.randomUUID(), courseId, 3, BigInteger.valueOf(10000), "테스트2");
+        paidOrder.completePayment();
+        orderRepository.save(paidOrder);
+        
+        // 3. CONFIRMED (합산 대상)
+        Order confirmedOrder = Order.register(UUID.randomUUID(), courseId, 5, BigInteger.valueOf(10000), "테스트3");
+        ReflectionTestUtils.setField(confirmedOrder, "status", OrderStatus.CONFIRMED);
+        orderRepository.save(confirmedOrder);
+        
+        // 4. CANCELLED (합산 제외)
+        Order cancelledOrder = Order.register(UUID.randomUUID(), courseId, 10, BigInteger.valueOf(10000), "테스트4");
+        ReflectionTestUtils.setField(cancelledOrder, "status", OrderStatus.CANCELLED);
+        orderRepository.save(cancelledOrder);
+        
+        // 5. 다른 코스 주문 (합산 제외)
+        orderRepository.save(Order.register(UUID.randomUUID(), UUID.randomUUID(), 100, BigInteger.valueOf(10000), "다른코스"));
+
+        // when
+        int totalSum = orderRepository.sumOrderCountByCourseIdAndStatuses(
+                courseId, 
+                List.of(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED)
+        );
+
+        // then
+        assertThat(totalSum).isEqualTo(2 + 3 + 5); // 10
+    }
+
+    @Test
+    @DisplayName("상태별 좌석 합계 조회 - 조건에 맞는 주문이 없으면 0을 반환한다")
+    void sumOrderCountByCourseIdAndStatuses_returnZero() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        orderRepository.save(Order.register(UUID.randomUUID(), UUID.randomUUID(), 10, BigInteger.valueOf(10000), "다른코스"));
+
+        // when
+        int totalSum = orderRepository.sumOrderCountByCourseIdAndStatuses(
+                courseId, 
+                List.of(OrderStatus.PAID)
+        );
+
+        // then
+        assertThat(totalSum).isZero();
+    }
+
     private Order confirmedOrder(UUID memberId, UUID courseId) {
         Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(50000), "테스트 강의");
         ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);

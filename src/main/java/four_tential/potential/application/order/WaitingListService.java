@@ -254,4 +254,25 @@ public class WaitingListService {
         // 자리가 났으므로 승격 시도
         promoteNextInWaitingList(courseId);
     }
+
+    /**
+     * 특정 코스의 잔여 좌석 수치를 강제로 업데이트하고 대기열 승격을 시도
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void updateCapacity(UUID courseId, long newCapacity) {
+        long sanitizedCapacity = Math.max(0L, newCapacity);
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+
+        long previousValue = capacity.get();
+        capacity.set(sanitizedCapacity);
+
+        log.info("잔여석 강제 업데이트 완료: courseId={}, 이전={}, 변경={}",
+                courseId, previousValue, sanitizedCapacity);
+
+        // 자리가 늘어난 경우(기존보다 수치가 커진 경우) 대기열 승격 시도
+        if (sanitizedCapacity > previousValue) {
+            promoteNextInWaitingList(courseId);
+        }
+    }
 }

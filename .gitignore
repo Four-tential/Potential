@@ -173,6 +173,7 @@ application-*.yml
 
 ### docker-compose local volumes ###
 db-data/
+redis-data/
 
 ### claude ###
 .claude
