@@ -114,6 +114,7 @@ class OrderFacadeConcurrencyTest extends RedisTestContainer {
         });
 
         latch.await();
+        executorService.shutdown();
 
         // then
         log.info("Success count: {}, Fail count: {}", successCount.get(), failCount.get());

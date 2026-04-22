@@ -79,6 +79,7 @@ public class OrderService {
     /**
      * 동일 시간대 중복 예약 체크
      */
+    @Transactional(readOnly = true)
     public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
