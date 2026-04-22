@@ -10,6 +10,7 @@ import java.util.UUID;
 public record PaymentCreateResponse(
         UUID paymentId,
         UUID orderId,
+        String pgKey,
         Long totalPrice,
         Long paidTotalPrice,
         PaymentPayWay payWay,
@@ -21,6 +22,7 @@ public record PaymentCreateResponse(
         return new PaymentCreateResponse(
                 payment.getId(),
                 payment.getOrderId(),
+                payment.getPgKey(),
                 payment.getTotalPrice(),
                 payment.getPaidTotalPrice(),
                 payment.getPayWay(),

@@ -8,9 +8,9 @@ import org.mockito.Mockito;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
-class PortOneWebhookHandlerTest {
+class PortOneWebhookVerifierTest {
 
-    private PortOneWebhookHandler portOneWebhookHandler;
+    private PortOneWebhookVerifier portOneWebhookVerifier;
 
     @BeforeEach
     void setUp() {
@@ -18,15 +18,15 @@ class PortOneWebhookHandlerTest {
         Mockito.when(properties.getWebhookSecret())
                 .thenReturn("whsec_dGVzdC13ZWJob29rLXNlY3JldA==");
 
-        portOneWebhookHandler = new PortOneWebhookHandler(properties);
-        portOneWebhookHandler.init();
+        portOneWebhookVerifier = new PortOneWebhookVerifier(properties);
+        portOneWebhookVerifier.init();
     }
 
     @Test
     @DisplayName("잘못된 서명으로 verify 호출 시 WebhookVerificationException 이 발생한다")
     void verify_throws_when_invalid_signature() {
         assertThatThrownBy(() ->
-                portOneWebhookHandler.verify(
+                portOneWebhookVerifier.verify(
                         "{\"type\":\"Transaction.Paid\"}",
                         "test-webhook-id",
                         "v1,invalidsignature",
