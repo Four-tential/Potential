@@ -1,6 +1,8 @@
 package four_tential.potential.presentation.image;
 
 import four_tential.potential.common.dto.BaseResponse;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.infra.s3.ImageType;
 import four_tential.potential.infra.s3.PresignedUrlResult;
 import four_tential.potential.infra.s3.S3Service;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
@@ -23,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_AUTHORIZE;
+
 @Tag(name = "이미지", description = "S3 Presigned URL 발급 API")
 @RestController
 @RequestMapping("/v1/images")
@@ -43,8 +47,18 @@ public class ImageController {
             @Valid @RequestBody PresignedUrlRequest request
     ) {
         UUID resourceId = switch (request.type()) {
-            case PROFILE, INSTRUCTOR -> principal.memberId();
-            default -> request.resourceId();
+            case PROFILE, INSTRUCTOR -> {
+                if (principal == null) {
+                    throw new ServiceErrorException(ERR_INVALID_AUTHORIZE);
+                }
+                yield principal.memberId();
+            }
+            case COURSE -> {
+                if (request.resourceId() == null) {
+                    throw new IllegalArgumentException("COURSE 타입은 resourceId가 필수입니다");
+                }
+                yield request.resourceId();
+            }
         };
 
         List<PresignedUrlResult> results = s3Service.generatePresignedUrls(

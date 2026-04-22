@@ -29,7 +29,9 @@ import java.util.UUID;
 
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_IMAGE_FILE;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -94,7 +96,7 @@ class ImageControllerTest {
                 ImageType.COURSE, COURSE_ID, List.of("image/jpeg", "image/png")
         );
 
-        given(s3Service.generatePresignedUrls(any(), any(), any()))
+        given(s3Service.generatePresignedUrls(eq("course-image"), eq(COURSE_ID), eq(List.of("image/jpeg", "image/png"))))
                 .willReturn(List.of(
                         new PresignedUrlResult("https://s3.presigned/1", "https://cdn.example.com/course-image/" + COURSE_ID + "/1.jpg"),
                         new PresignedUrlResult("https://s3.presigned/2", "https://cdn.example.com/course-image/" + COURSE_ID + "/2.png")
@@ -110,6 +112,10 @@ class ImageControllerTest {
                 .andExpect(jsonPath("$.message").value("Presigned URL 발급 성공"))
                 .andExpect(jsonPath("$.data.urls").isArray())
                 .andExpect(jsonPath("$.data.urls.length()").value(2));
+
+        then(s3Service).should().generatePresignedUrls(
+                eq("course-image"), eq(COURSE_ID), eq(List.of("image/jpeg", "image/png"))
+        );
     }
 
     @Test
@@ -119,7 +125,7 @@ class ImageControllerTest {
                 ImageType.PROFILE, null, List.of("image/jpeg")
         );
 
-        given(s3Service.generatePresignedUrls(any(), any(), any()))
+        given(s3Service.generatePresignedUrls(eq("profile-image"), eq(MEMBER_ID), eq(List.of("image/jpeg"))))
                 .willReturn(List.of(
                         new PresignedUrlResult("https://s3.presigned/1", "https://cdn.example.com/profile-image/" + MEMBER_ID + "/1.jpg")
                 ));
@@ -131,6 +137,10 @@ class ImageControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+
+        then(s3Service).should().generatePresignedUrls(
+                eq("profile-image"), eq(MEMBER_ID), eq(List.of("image/jpeg"))
+        );
     }
 
     @Test
@@ -140,7 +150,7 @@ class ImageControllerTest {
                 ImageType.INSTRUCTOR, null, List.of("image/jpeg")
         );
 
-        given(s3Service.generatePresignedUrls(any(), any(), any()))
+        given(s3Service.generatePresignedUrls(eq("instructor-image"), eq(MEMBER_ID), eq(List.of("image/jpeg"))))
                 .willReturn(List.of(
                         new PresignedUrlResult("https://s3.presigned/1", "https://cdn.example.com/instructor-image/" + MEMBER_ID + "/1.jpg")
                 ));
@@ -152,6 +162,10 @@ class ImageControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+
+        then(s3Service).should().generatePresignedUrls(
+                eq("instructor-image"), eq(MEMBER_ID), eq(List.of("image/jpeg"))
+        );
     }
 
     @Test
@@ -177,6 +191,21 @@ class ImageControllerTest {
     void getPresignedUrls_missingType() throws Exception {
         String body = """
                 {"contentTypes": ["image/jpeg"]}
+                """;
+
+        mockMvc.perform(post("/v1/images/presigned-urls")
+                        .with(instructorAuth())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Presigned URL 발급 - COURSE 타입 resourceId 누락 시 400")
+    void getPresignedUrls_course_missingResourceId() throws Exception {
+        String body = """
+                {"type": "COURSE", "contentTypes": ["image/jpeg"]}
                 """;
 
         mockMvc.perform(post("/v1/images/presigned-urls")

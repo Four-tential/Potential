@@ -57,7 +57,7 @@ jwt:
   secret:
     key: ${JWT_KEY}
     accessExpire: 1800000
-    refreshExpire: 60480000
+    refreshExpire: 604800000
 
 # PortOne
 portone:
