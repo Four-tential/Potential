@@ -5,80 +5,109 @@ import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
-import io.portone.sdk.server.payment.*;
-import lombok.RequiredArgsConstructor;
+import io.portone.sdk.server.payment.CancelRequester;
+import io.portone.sdk.server.payment.CancelledPayment;
+import io.portone.sdk.server.payment.FailedPayment;
+import io.portone.sdk.server.payment.PartialCancelledPayment;
+import io.portone.sdk.server.payment.PayPendingPayment;
+import io.portone.sdk.server.payment.PaidPayment;
+import io.portone.sdk.server.payment.Payment;
+import io.portone.sdk.server.payment.PaymentAmount;
+import io.portone.sdk.server.payment.PaymentMethod;
+import io.portone.sdk.server.payment.PaymentMethodCard;
+import io.portone.sdk.server.payment.PaymentMethodEasyPay;
+import io.portone.sdk.server.payment.ReadyPayment;
+import io.portone.sdk.server.payment.VirtualAccountIssuedPayment;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PortOneClient implements PaymentGateway {
 
-    private static final String API_BASE = "https://api.portone.io";
-
     private final PortOneProperties portOneProperties;
+    private final io.portone.sdk.server.PortOneClient sdkClient;
 
-    // pgKey로 PortOne 서버에 실제 결제 정보를 조회
-    @Override
-    public PaymentGatewayResponse getPayment(String pgKey) {
-        try (io.portone.sdk.server.PortOneClient client = createClient()) {
-            Payment payment = client.getPayment().getPayment(pgKey).join();
-
-            if (!(payment instanceof Payment.Recognized recognized)) {
-                throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
-            }
-
-            return new PaymentGatewayResponse(
-                    recognized.getId(),
-                    statusOf(payment),
-                    paidAmountOf(recognized),
-                    payMethodOf(recognized.getMethod())
-            );
-        } catch (CompletionException e) {
-            log.error("[PORTONE] getPayment failed. pgKey={}", pgKey, e);
-            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
-        }
-    }
-
-    // 검증 실패나 웹훅 최종 검증 실패 시 PortOne 결제를 취소 요청
-    @Override
-    public void cancelPayment(PaymentGatewayRequest request) {
-        try (io.portone.sdk.server.PortOneClient client = createClient()) {
-            client.getPayment()
-                    .cancelPayment(
-                            request.pgKey(),                      // 1. paymentId
-                            request.amount(),                     // 2. cancellationAmount
-                            null,                                 // 3. taxFreeAmount
-                            null,                                 // 4. vatAmount
-                            request.reason(),                     // 5. reason
-                            CancelRequester.Customer.INSTANCE,    // 6. requester
-                            null,                                 // 7. promotionDiscountRetainOption
-                            request.currentCancellableAmount(),   // 8. currentCancellableAmount
-                            null,                                 // 9. refundBankCode
-                            null,                                 // 10. refundAccountNumber
-                            null                                  // 11. refundAccountHolderName
-                    )
-                    .join();
-        } catch (CompletionException e) {
-            log.error("[PORTONE] cancelPayment failed. pgKey={} amount={}",
-                    request.pgKey(), request.amount(), e);
-            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
-        }
-    }
-
-    private io.portone.sdk.server.PortOneClient createClient() {
-        return new io.portone.sdk.server.PortOneClient(
+    public PortOneClient(PortOneProperties portOneProperties) {
+        this.portOneProperties = portOneProperties;
+        this.sdkClient = new io.portone.sdk.server.PortOneClient(
                 portOneProperties.getApiSecret(),
-                API_BASE,
+                portOneProperties.getApiBase(),
                 portOneProperties.getStoreId()
         );
     }
 
-    // application 계층이 PortOne SDK 타입을 직접 알지 않게 하기 위한 변환 메서드
+    // pgKey로 PortOne 서버의 실제 결제 정보를 조회한다.
+    @Override
+    public PaymentGatewayResponse getPayment(String pgKey) {
+        Payment payment = await(sdkClient.getPayment().getPayment(pgKey), "getPayment", pgKey);
+
+        if (!(payment instanceof Payment.Recognized recognized)) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
+        }
+
+        return new PaymentGatewayResponse(
+                recognized.getId(),
+                statusOf(payment),
+                paidAmountOf(recognized),
+                payMethodOf(recognized.getMethod())
+        );
+    }
+
+    // 검증 실패 webhook 최종 검증 실패 시 PortOne 결제를 취소 요청한다.
+    @Override
+    public void cancelPayment(PaymentGatewayRequest request) {
+        await(
+                sdkClient.getPayment().cancelPayment(
+                        request.pgKey(),                      // 1. paymentId
+                        request.amount(),                     // 2. cancellationAmount
+                        null,                                 // 3. taxFreeAmount
+                        null,                                 // 4. vatAmount
+                        request.reason(),                     // 5. reason
+                        CancelRequester.Customer.INSTANCE,    // 6. requester
+                        null,                                 // 7. promotionDiscountRetainOption
+                        request.currentCancellableAmount(),   // 8. currentCancellableAmount
+                        null,                                 // 9. refundBankCode
+                        null,                                 // 10. refundAccountNumber
+                        null                                  // 11. refundAccountHolderName
+                ),
+                "cancelPayment",
+                request.pgKey()
+        );
+    }
+
+    // 스프링 빈 생명주기 동안 하나의 SDK client를 재사용하고, 종료 시점에 정리한다.
+    @PreDestroy
+    void close() throws Exception {
+        sdkClient.close();
+    }
+
+    // application.yml의 Duration 설정값으로 SDK 대기 시간을 직접 제어한다.
+    private <T> T await(CompletableFuture<T> future, String action, String pgKey) {
+        try {
+            return future.get(portOneProperties.getSdkTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            log.error("[PORTONE] {} timeout. pgKey={} timeout={}ms",
+                    action, pgKey, portOneProperties.getSdkTimeout().toMillis(), e);
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[PORTONE] {} interrupted. pgKey={}", action, pgKey, e);
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
+        } catch (ExecutionException e) {
+            log.error("[PORTONE] {} failed. pgKey={}", action, pgKey, e.getCause());
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_GATEWAY_FAILED);
+        }
+    }
+
+    // application 계층에서 PortOne SDK 타입을 직접 알지 않게 하기 위한 변환 메서드
     private String statusOf(Payment payment) {
         if (payment instanceof PaidPayment) {
             return "PAID";

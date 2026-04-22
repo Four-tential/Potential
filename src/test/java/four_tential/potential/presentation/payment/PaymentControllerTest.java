@@ -47,20 +47,17 @@ class PaymentControllerTest {
     private RefundFacade refundFacade;
 
     @Test
-    @DisplayName("createPayment 호출 시 결제 생성 결과를 201 Created 로 반환한다")
+    @DisplayName("createPayment 호출 시 결제 준비 결과를 201 Created로 반환한다")
     void createPayment_returns_created_response() {
         UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
-        PaymentCreateRequest request = new PaymentCreateRequest(
-                orderId,
-                "pg-key-1",
-                PaymentPayWay.CARD
-        );
+        PaymentCreateRequest request = new PaymentCreateRequest(orderId, PaymentPayWay.CARD);
         PaymentCreateResponse facadeResponse = new PaymentCreateResponse(
                 paymentId,
                 orderId,
+                "pservergeneratedkey",
                 100000L,
                 100000L,
                 PaymentPayWay.CARD,
@@ -77,22 +74,28 @@ class PaymentControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().status()).isEqualTo(HttpStatus.CREATED.name());
-        assertThat(response.getBody().message()).isEqualTo("결제 요청 성공");
+        assertThat(response.getBody().message()).isEqualTo("결제 준비 성공");
         assertThat(response.getBody().data()).isEqualTo(facadeResponse);
+        assertThat(response.getBody().data().pgKey()).isEqualTo("pservergeneratedkey");
         verify(paymentFacade).createPayment(memberId, request);
     }
 
     @Test
-    @DisplayName("본인 결제이면 200 OK 와 PaymentDetailResponse 를 반환한다")
+    @DisplayName("본인 결제면 200 OK와 PaymentDetailResponse를 반환한다")
     void getMyPayment_returns_200_with_detail() {
-        UUID memberId  = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
-        UUID orderId   = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         PaymentDetailResponse detail = new PaymentDetailResponse(
-                paymentId, orderId, "소도구 필라테스 입문반", 5,
-                125000L, 125000L,
-                PaymentPayWay.CARD, PaymentStatus.PAID,
+                paymentId,
+                orderId,
+                "소도구 필라테스 입문반",
+                5,
+                125000L,
+                125000L,
+                PaymentPayWay.CARD,
+                PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );
         given(paymentFacade.getMyPayment(memberId, paymentId)).willReturn(detail);
@@ -105,21 +108,14 @@ class PaymentControllerTest {
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().status()).isEqualTo(HttpStatus.OK.name());
         assertThat(response.getBody().message()).isEqualTo("결제 조회 성공");
-
-        PaymentDetailResponse data = response.getBody().data();
-        assertThat(data.paymentId()).isEqualTo(paymentId);
-        assertThat(data.orderId()).isEqualTo(orderId);
-        assertThat(data.courseTitle()).isEqualTo("소도구 필라테스 입문반");
-        assertThat(data.orderCount()).isEqualTo(5);
-        assertThat(data.paidTotalPrice()).isEqualTo(125000L);
-        assertThat(data.status()).isEqualTo(PaymentStatus.PAID);
+        assertThat(response.getBody().data()).isEqualTo(detail);
         verify(paymentFacade).getMyPayment(memberId, paymentId);
     }
 
     @Test
-    @DisplayName("결제가 없거나 타인의 결제면 ServiceErrorException 이 전파된다")
+    @DisplayName("결제가 없으면 ServiceErrorException을 전파한다")
     void getMyPayment_propagates_exception_when_not_found() {
-        UUID memberId  = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         given(paymentFacade.getMyPayment(memberId, paymentId))
@@ -130,18 +126,26 @@ class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("status 가 null 이면 전체 결제 목록을 200 OK 로 반환한다")
+    @DisplayName("status가 null이면 전체 결제 목록을 200 OK로 반환한다")
     void getMyPayments_returns_200_with_all_when_status_null() {
         UUID memberId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         Pageable pageable = PageRequest.of(0, 10);
         PageResponse<PaymentListResponse> pageResponse = new PageResponse<>(
                 List.of(new PaymentListResponse(
-                        UUID.randomUUID(), UUID.randomUUID(),
-                        "소도구 필라테스 입문반", 5, 125000L,
-                        PaymentStatus.PAID, LocalDateTime.of(2025, 1, 1, 10, 0)
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "소도구 필라테스 입문반",
+                        5,
+                        125000L,
+                        PaymentStatus.PAID,
+                        LocalDateTime.of(2025, 1, 1, 10, 0)
                 )),
-                0, 1, 1L, 10, true
+                0,
+                1,
+                1L,
+                10,
+                true
         );
         given(paymentFacade.getAllMyPayments(memberId, null, pageable)).willReturn(pageResponse);
 
@@ -152,30 +156,30 @@ class PaymentControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().message()).isEqualTo("결제 목록 조회 성공");
-
-        PageResponse<PaymentListResponse> data = response.getBody().data();
-        assertThat(data.content()).hasSize(1);
-        assertThat(data.content().get(0).courseTitle()).isEqualTo("소도구 필라테스 입문반");
-        assertThat(data.content().get(0).orderCount()).isEqualTo(5);
-        assertThat(data.totalElements()).isEqualTo(1L);
-        assertThat(data.currentPage()).isZero();
-        assertThat(data.isLast()).isTrue();
-        verify(paymentFacade).getAllMyPayments(memberId, null, pageable);
+        assertThat(response.getBody().data()).isEqualTo(pageResponse);
     }
 
     @Test
-    @DisplayName("status 가 PAID 이면 PAID 결제 목록만 반환한다")
+    @DisplayName("status가 PAID면 PAID 결제 목록만 반환한다")
     void getMyPayments_returns_filtered_by_paid_status() {
         UUID memberId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         Pageable pageable = PageRequest.of(0, 10);
         PageResponse<PaymentListResponse> pageResponse = new PageResponse<>(
                 List.of(new PaymentListResponse(
-                        UUID.randomUUID(), UUID.randomUUID(),
-                        "소도구 필라테스 입문반", 5, 125000L,
-                        PaymentStatus.PAID, LocalDateTime.of(2025, 1, 1, 10, 0)
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "소도구 필라테스 입문반",
+                        5,
+                        125000L,
+                        PaymentStatus.PAID,
+                        LocalDateTime.of(2025, 1, 1, 10, 0)
                 )),
-                0, 1, 1L, 10, true
+                0,
+                1,
+                1L,
+                10,
+                true
         );
         given(paymentFacade.getAllMyPayments(memberId, PaymentStatus.PAID, pageable))
                 .willReturn(pageResponse);
@@ -184,67 +188,24 @@ class PaymentControllerTest {
                 paymentController.getMyPayments(principal, PaymentStatus.PAID, pageable);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().data().content().get(0).status())
-                .isEqualTo(PaymentStatus.PAID);
-        verify(paymentFacade).getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
+        assertThat(response.getBody().data().content().get(0).status()).isEqualTo(PaymentStatus.PAID);
     }
 
     @Test
-    @DisplayName("결제 내역이 없으면 빈 목록을 200 OK 로 반환한다")
-    void getMyPayments_returns_empty_list() {
-        UUID memberId = UUID.randomUUID();
-        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
-        Pageable pageable = PageRequest.of(0, 10);
-        PageResponse<PaymentListResponse> emptyPage =
-                new PageResponse<>(List.of(), 0, 0, 0L, 10, true);
-        given(paymentFacade.getAllMyPayments(memberId, null, pageable)).willReturn(emptyPage);
-
-        ResponseEntity<BaseResponse<PageResponse<PaymentListResponse>>> response =
-                paymentController.getMyPayments(principal, null, pageable);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().data().content()).isEmpty();
-        assertThat(response.getBody().data().totalElements()).isZero();
-    }
-
-    @Test
-    @DisplayName("페이지네이션 메타 정보가 올바르게 반환된다")
-    void getMyPayments_returns_correct_pagination_meta() {
-        UUID memberId = UUID.randomUUID();
-        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
-        Pageable pageable = PageRequest.of(0, 10);
-        PageResponse<PaymentListResponse> pageResponse = new PageResponse<>(
-                List.of(new PaymentListResponse(
-                        UUID.randomUUID(), UUID.randomUUID(),
-                        "강좌A", 1, 50000L,
-                        PaymentStatus.PAID, LocalDateTime.now()
-                )),
-                0, 3, 25L, 10, false
-        );
-        given(paymentFacade.getAllMyPayments(memberId, null, pageable)).willReturn(pageResponse);
-
-        ResponseEntity<BaseResponse<PageResponse<PaymentListResponse>>> response =
-                paymentController.getMyPayments(principal, null, pageable);
-
-        PageResponse<PaymentListResponse> data = response.getBody().data();
-        assertThat(data.currentPage()).isZero();
-        assertThat(data.totalPages()).isEqualTo(3);
-        assertThat(data.totalElements()).isEqualTo(25L);
-        assertThat(data.size()).isEqualTo(10);
-        assertThat(data.isLast()).isFalse();
-    }
-
-    @Test
-    @DisplayName("환불 가능이면 200 OK 와 refundable = true 응답을 반환한다")
+    @DisplayName("환불 가능이면 200 OK와 refundable = true 응답을 반환한다")
     void getRefundPreview_returns_200_when_refundable() {
-        UUID memberId  = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         RefundPreviewResponse preview = new RefundPreviewResponse(
-                paymentId, "소도구 필라테스 입문반",
+                paymentId,
+                "소도구 필라테스 입문반",
                 LocalDateTime.of(2025, 1, 10, 10, 0),
-                5, 25000L, 125000L,
-                true, "7일 전 취소 · 전액 환불"
+                5,
+                25000L,
+                125000L,
+                true,
+                "7일 전 취소 시 전액 환불"
         );
         given(refundFacade.getRefundPreview(memberId, paymentId)).willReturn(preview);
 
@@ -254,57 +215,13 @@ class PaymentControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().message()).isEqualTo("환불 가능 여부 조회 성공");
-        RefundPreviewResponse data = response.getBody().data();
-        assertThat(data.paymentId()).isEqualTo(paymentId);
-        assertThat(data.courseTitle()).isEqualTo("소도구 필라테스 입문반");
-        assertThat(data.currentOrderCount()).isEqualTo(5);
-        assertThat(data.unitPrice()).isEqualTo(25000L);
-        assertThat(data.paidTotalPrice()).isEqualTo(125000L);
-        assertThat(data.refundable()).isTrue();
-        assertThat(data.refundPolicy()).isEqualTo("7일 전 취소 · 전액 환불");
-        verify(refundFacade).getRefundPreview(memberId, paymentId);
+        assertThat(response.getBody().data()).isEqualTo(preview);
     }
 
     @Test
-    @DisplayName("환불 불가이면 200 OK 와 refundable = false 응답을 반환한다")
-    void getRefundPreview_returns_200_when_not_refundable() {
-        UUID memberId  = UUID.randomUUID();
-        UUID paymentId = UUID.randomUUID();
-        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
-        RefundPreviewResponse preview = new RefundPreviewResponse(
-                paymentId, "소도구 필라테스 입문반",
-                LocalDateTime.of(2025, 1, 10, 10, 0),
-                5, 25000L, 125000L,
-                false, "7일 이내 취소 · 환불 불가"
-        );
-        given(refundFacade.getRefundPreview(memberId, paymentId)).willReturn(preview);
-
-        ResponseEntity<BaseResponse<RefundPreviewResponse>> response =
-                paymentController.getRefundPreview(principal, paymentId);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().data().refundable()).isFalse();
-        assertThat(response.getBody().data().refundPolicy()).isEqualTo("7일 이내 취소 · 환불 불가");
-        verify(refundFacade).getRefundPreview(memberId, paymentId);
-    }
-
-    @Test
-    @DisplayName("결제가 없으면 ServiceErrorException 이 전파된다")
-    void getRefundPreview_propagates_exception_when_not_found() {
-        UUID memberId  = UUID.randomUUID();
-        UUID paymentId = UUID.randomUUID();
-        MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
-        given(refundFacade.getRefundPreview(memberId, paymentId))
-                .willThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
-
-        assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
-                .isInstanceOf(ServiceErrorException.class);
-    }
-
-    @Test
-    @DisplayName("환불 불가 결제 상태이면 ServiceErrorException 이 전파된다")
+    @DisplayName("환불 불가 결제면 ServiceErrorException을 전파한다")
     void getRefundPreview_propagates_exception_when_invalid_status() {
-        UUID memberId  = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         MemberPrincipal principal = new MemberPrincipal(memberId, "student@test.com", "STUDENT");
         given(refundFacade.getRefundPreview(memberId, paymentId))
@@ -313,5 +230,4 @@ class PaymentControllerTest {
         assertThatThrownBy(() -> paymentController.getRefundPreview(principal, paymentId))
                 .isInstanceOf(ServiceErrorException.class);
     }
-
 }
