@@ -1,17 +1,18 @@
 /**
  * =====================================================
- * 후기 목록 조회 - Stage 2: 캐싱 + 페이지네이션
- * 조건: 인덱스X / 캐싱O / 페이지네이션O
- * 목적: 캐싱 + 페이지네이션 적용 효과 측정
+ * 후기 목록 조회 - Stage 3: 인덱스 적용
+ * 조건: 인덱스O / 캐싱O / 페이지네이션O
  *
- * 실행 전 체크:
- *   1. 캐싱 + 페이지네이션 코드 적용 후 서버 재시작
- *   2. Redis 초기화: docker exec -it redis-container redis-cli FLUSHDB
+ *
+ * 적용 인덱스:
+ *   @Index(name = "idx_reviews_course_created", columnList = "course_id, created_at DESC")
+ *   - course_id: WHERE 조건 최적화
+ *   - created_at DESC: ORDER BY 최적화 (Full Scan → Index Scan)
  *
  * 실행:
  *   MSYS_NO_PATHCONV=1 docker compose --profile k6 run --rm \
  *     -e BASE_URL=http://host.docker.internal:8080 \
- *     k6 run -o experimental-prometheus-rw /scripts/review/review-list-cache.js
+ *     k6 run -o experimental-prometheus-rw /scripts/review/review-list-index.js
  *
  * 총 소요시간: 약 4분 30초
  * =====================================================
@@ -36,11 +37,10 @@ export const options = {
 
     thresholds: {
         http_req_failed:   ['rate<0.01'],
-        http_req_duration: ['p(95)<500'],  // 캐싱 후 p95 500ms 이내
+        http_req_duration: ['p(95)<3000'],
     },
 
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
-
 };
 
 export function setup() {
@@ -58,19 +58,13 @@ export function setup() {
 }
 
 export default function ({ token }) {
-    // VU별 초기 지연: 캐시 응답이 빠를 때 VU들이 동시에 요청 몰리는 현상 방지
-    if (__ITER === 0) {
-        sleep(__VU * 0.05);
-    }
-
     const res = http.get(
-        `${BASE_URL}/v1/courses/${COURSE_ID}/reviews?page=0&size=20`,
+        `${BASE_URL}/v1/courses/${COURSE_ID}/reviews`,
         {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
             },
-            timeout: '10s',  // 기본 60s지만 명시적으로 설정
         }
     );
 
@@ -87,8 +81,11 @@ export function handleSummary(data) {
     const e = data.metrics['http_req_failed'];
     const r = data.metrics['http_reqs'];
 
+    // http_req_failed.rate는 0~1 사이 실패 비율
+    const errorPct = ((e?.values?.rate ?? 0) * 100).toFixed(2);
+
     console.log('\n========================================');
-    console.log('  [Stage 2] 캐싱 + 페이지네이션 (인덱스X / 캐싱O)');
+    console.log('  [Stage 3] 인덱스 적용 (인덱스O / 캐싱X)');
     console.log('========================================');
     console.log(`  총 요청 수    : ${r?.values?.count ?? '-'}`);
     console.log(`  평균 응답시간 : ${d?.values?.avg?.toFixed(2) ?? '-'} ms`);
@@ -96,11 +93,8 @@ export function handleSummary(data) {
     console.log(`  p95 응답시간  : ${d?.values['p(95)']?.toFixed(2) ?? '-'} ms`);
     console.log(`  p99 응답시간  : ${d?.values['p(99)']?.toFixed(2) ?? '-'} ms`);
     console.log(`  최대 응답시간 : ${d?.values?.max?.toFixed(2) ?? '-'} ms`);
-    const totalReqs = r?.values?.count ?? 0;
-    const failedReqs = e?.values?.fails ?? 0;
-    const errorRate = totalReqs > 0 ? (failedReqs / totalReqs * 100) : 0;
-    console.log(`  에러율        : ${errorRate.toFixed(2)} % (${failedReqs}건 실패)`);
-    console.log('========================================');
+    console.log(`  에러율        : ${errorPct} %`);
+    console.log('========================================\n');
 
     return {};
 }
