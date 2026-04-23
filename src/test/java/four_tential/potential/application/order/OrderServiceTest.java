@@ -528,16 +528,53 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("재고가 이미 초기화된 경우 reconcileInventory를 호출하지 않는다")
-    void reconcileInventoryIfNecessary_skips_reconcile_when_already_initialized() {
+    @DisplayName("강사가 코스 취소 시 주문 상태를 CANCELLED로 변경한다")
+    void cancelOrderForInstructor_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "강사취소테스트"));
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        orderService.cancelOrderForInstructor(orderId);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).findById(orderId);
+    }
+
+    @Test
+    @DisplayName("재고가 초기화되지 않은 경우 reconcileInventoryLocked가 복구를 수행한다")
+    void reconcileInventoryLocked_calls_reconcile_when_not_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Course course = mock(Course.class);
+        given(course.getCapacity()).willReturn(100);
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(false);
+
+        // performReconcile 내부 동작 검증을 위해 stub
+        given(orderRepository.sumOrderCountByCourseIdAndStatuses(any(), any())).willReturn(10);
+
+        // when
+        orderService.reconcileInventoryLocked(courseId);
+
+        // then
+        verify(waitingListService).updateCapacity(eq(courseId), eq(90L));
+    }
+
+    @Test
+    @DisplayName("재고가 이미 초기화된 경우 reconcileInventoryLocked가 복구를 건너뛴다")
+    void reconcileInventoryLocked_skips_reconcile_when_already_initialized() {
         // given
         UUID courseId = UUID.randomUUID();
         given(waitingListService.isCapacityInitialized(courseId)).willReturn(true);
 
         // when
-        orderService.reconcileInventoryIfNecessary(courseId);
+        orderService.reconcileInventoryLocked(courseId);
 
         // then
-        verify(orderService, never()).reconcileInventory(courseId);
+        verify(waitingListService, never()).updateCapacity(any(), anyLong());
     }
-}
+    }
+
