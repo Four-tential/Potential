@@ -1,9 +1,8 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
-import four_tential.potential.domain.course.course.CourseRepository;
-import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
@@ -26,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -37,8 +35,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    // TODO: courseRepository는 주입되면 안됌. courseFacade 주입으로 변경
-    private final CourseRepository courseRepository;
+    private final CourseFacade courseFacade;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
 
@@ -50,8 +47,7 @@ public class OrderService {
     @DistributedLock(key = "'order:member:' + #memberId")
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
         // 코스 정보 조회
-        Course course = courseRepository.findById(request.courseId())
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(request.courseId());
 
         // 동일 시간대 중복 예약 재검증
         // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
@@ -82,8 +78,7 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(courseId);
         
         log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
         
@@ -135,8 +130,7 @@ public class OrderService {
         Order order = orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
 
-        Course course = courseRepository.findById(order.getCourseId())
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(order.getCourseId());
 
         order.cancel(course.getStartAt(), LocalDateTime.now());
 
@@ -351,8 +345,7 @@ public class OrderService {
      * 실제 재고 복구 로직을 수행하는 내부 메서드
      */
     private OrderInventoryReconcileResponse performReconcile(UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(courseId);
 
         // DB에서 유효한 주문(PENDING, PAID, CONFIRMED)의 좌석 합계 조회
         int occupiedSeats = orderRepository.sumOrderCountByCourseIdAndStatuses(

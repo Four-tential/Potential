@@ -1,9 +1,9 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
-import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
-    @Mock private CourseRepository courseRepository;
+    @Mock private CourseFacade courseFacade;
     @Mock private WaitingListService waitingListService;
     @Mock private ApplicationContext applicationContext;
     @InjectMocks @Spy private OrderService orderService;
@@ -66,7 +66,7 @@ class OrderServiceTest {
         );
         Course course = CourseFixture.defaultCourse();
 
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(orderRepository.save(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -90,7 +90,7 @@ class OrderServiceTest {
         UUID courseId = UUID.randomUUID();
         Course course = CourseFixture.defaultCourse();
 
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(orderRepository.hasOverlappingReservation(memberId, course.getStartAt(), course.getEndAt()))
                 .willReturn(true);
 
@@ -327,7 +327,7 @@ class OrderServiceTest {
         Course course = mock(Course.class);
 
         given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(10));
 
         // when
@@ -350,7 +350,7 @@ class OrderServiceTest {
         Course course = mock(Course.class);
 
         given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(6));
 
         // when & then
@@ -487,7 +487,7 @@ class OrderServiceTest {
         UUID courseId = UUID.randomUUID();
         Course course = mock(Course.class);
         given(course.getCapacity()).willReturn(100);
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         
         // DB 점유 좌석 수 합계 모킹 (PENDING 2 + PAID 3 + CONFIRMED 5 = 10)
         given(orderRepository.sumOrderCountByCourseIdAndStatuses(
