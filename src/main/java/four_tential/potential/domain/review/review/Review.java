@@ -11,7 +11,13 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "reviews")
+@Table(
+        name = "reviews",
+        indexes = {
+                // course_id 조건 + created_at 정렬을 Index Scan 한 번으로 처리
+                @Index(name = "idx_reviews_course_created", columnList = "course_id, created_at DESC")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Review extends BaseTimeEntity {
 
