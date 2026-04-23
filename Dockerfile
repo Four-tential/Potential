@@ -4,8 +4,8 @@
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# CI/CD에서 빌드된 JAR 복사
-COPY build/libs/*.jar app.jar
+# CI/CD에서 빌드된 JAR 복사 (워크플로우에서 프로젝트 루트에 복사해둠)
+COPY app.jar app.jar
 
 # 보안: root 대신 전용 비권한 유저로 실행
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
