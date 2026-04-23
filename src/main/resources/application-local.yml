@@ -32,9 +32,12 @@ spring:
       port: ${REDIS_PORT}
 
   # Flyway
+  # migration-perf 은 local 전용 — 성능 테스트용 대량 시딩(수만 건) 포함
+  # dev/prod 는 locations 미지정 → Flyway 기본값(classpath:db/migration)만 사용하므로 자동 제외
   flyway:
     enabled: true
     baseline-on-migrate: true
+    locations: classpath:db/migration,classpath:db/migration-perf
 
   # JPA
   jpa:
