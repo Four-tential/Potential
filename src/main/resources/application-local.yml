@@ -15,39 +15,50 @@ spring:
       connection-test-query: SELECT 1 # 커넥션 확인용 쿼리 선언부
       keepalive-time: 60000 # 1분 마다 상태 체크
 
+  # Spring Cloud AWS - 로컬에서는 EC2 메타데이터가 없으므로 리전을 명시
+  # fallback 기본값 제공: S3 미사용 로컬 개발 시에도 앱 기동 가능
+  cloud:
+    aws:
+      region:
+        static: ${AWS_S3_REGION:ap-northeast-2}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:local-dummy-key}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:local-dummy-secret}
+
   # Redis
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
 
-  # Flyway - 엔티티 전체적 완성 이후 활성화 예정, 현재는 ddl-auto: create + data.sql 방식 사용
+  # Flyway
   flyway:
-    enabled: false
+    enabled: true
+    baseline-on-migrate: true
 
   # JPA
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: validate
     show-sql: true
-    defer-datasource-initialization: true  # JPA 스키마 생성 완료 후 data.sql 실행
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
-  # Data Seeding
-  sql:
-    init:
-      mode: always        # 내장 DB가 아니어도 data.sql 실행
-      encoding: UTF-8
+# AWS S3 - fallback 기본값 제공: 실제 업로드는 실패하지만 앱 기동은 가능
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:local-dev-bucket}
+    region: ${AWS_S3_REGION:ap-northeast-2}
+    cloudfront-domain: ${AWS_CLOUDFRONT_DOMAIN:localhost}
 
 # JWT
 jwt:
   secret:
     key: ${JWT_KEY}
     accessExpire: 1800000
-    refreshExpire: 60480000
-    
+    refreshExpire: 604800000
+
 # PortOne
 portone:
   api-secret: ${PORTONE_API_SECRET}
@@ -57,9 +68,9 @@ portone:
   api-base: ${PORTONE_API_BASE:https://api.portone.io}
   sdk-timeout: ${PORTONE_SDK_TIMEOUT:10s}
 
-# Member
+# Member - fallback: 로컬 환경변수 미설정 시 플레이스홀더 URL 사용
 member:
-  default-profile-image-url: ${DEFAULT_PROFILE_IMAGE_URL:https://bucketurl/default-profile-image.png}
+  default-profile-image-url: ${DEFAULT_PROFILE_IMAGE_URL:https://localhost/default-profile.png}
 
 # SpringDocs With Swagger
 springdoc:

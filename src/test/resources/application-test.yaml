@@ -1,4 +1,12 @@
 spring:
+  cloud:
+    aws:
+      # CI 환경에는 AWS 자격증명이 없으므로 더미 값으로 Spring Cloud AWS 자동설정을 통과시킴
+      region:
+        static: ap-northeast-2
+      credentials:
+        access-key: test-access-key
+        secret-key: test-secret-key
   datasource:
     url: jdbc:h2:mem:potential;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -18,7 +26,6 @@ spring:
       host: localhost
       port: 6379
 
-
 jwt:
   secret:
     key: cG90ZW50aWFsLXRlc3Qtc2VjcmV0LWtleS1mb3Itand0LXNpZ25pbmctMjU2LWJpdHM=
@@ -32,3 +39,12 @@ portone:
   channel-key: test-channel-key
   api-base: https://api.portone.io
   sdk-timeout: 10s
+
+aws:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2
+    cloudfront-domain: test.cloudfront.net
+
+member:
+  default-profile-image-url: https://test.cloudfront.net/profile-image/default-profile.png

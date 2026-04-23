@@ -164,9 +164,6 @@ gradle-app.setting
 # Java heap dump
 *.hprof
 
-### Profile ###
-application-*.yml
-
 ### env ###
 .env
 .env.*
