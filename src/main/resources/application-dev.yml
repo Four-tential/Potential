@@ -56,6 +56,8 @@ portone:
   webhook-secret: ${portone.webhook-secret}
   store-id: ${portone.store-id}
   channel-key: ${portone.channel-key}
+  api-base: https://api.portone.io
+  sdk-timeout: 10s
 
 # Member
 member:
