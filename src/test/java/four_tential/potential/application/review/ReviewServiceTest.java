@@ -17,6 +17,10 @@ import four_tential.potential.domain.review.review_like.ReviewLike;
 import four_tential.potential.domain.review.review_like.ReviewLikeRepository;
 import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import four_tential.potential.common.dto.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,6 +41,7 @@ import static four_tential.potential.common.exception.domain.OrderExceptionEnum.
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +53,7 @@ class ReviewServiceTest {
     @Mock private CourseRepository courseRepository;
     @Mock private OrderRepository orderRepository;
     @Mock private AttendanceRepository attendanceRepository;
+    @Mock private ReviewCacheService reviewCacheService;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -328,45 +334,47 @@ class ReviewServiceTest {
     }
 
     @Nested
-    @DisplayName("findAllByCourse() - 코스별 후기 목록 조회")
+    @DisplayName("findAllByCourse() - 코스별 후기 목록 페이지 조회")
     class FindAllByCourseTest {
 
         @Test
-        @DisplayName("해당 코스의 후기 목록을 반환한다")
+        @DisplayName("해당 코스의 후기 목록을 페이지 단위로 반환한다")
         void findAllByCourse_success() {
-            Review review = ReviewFixture.defaultReview();
-            when(reviewRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of(review));
-            when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
+            ReviewResponse stubResponse = ReviewResponse.builder()
+                    .reviewId(UUID.randomUUID()).memberId(MEMBER_ID).courseId(COURSE_ID)
+                    .rating(5).content("좋아요").imageUrls(List.of()).build();
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of(stubResponse));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(1L);
 
-            List<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID);
+            PageResponse<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
-            assertThat(result).hasSize(1);
-            verify(reviewRepository).findAllByCourseId(COURSE_ID);
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.currentPage()).isEqualTo(0);
+            assertThat(result.totalElements()).isEqualTo(1L);
+            verify(reviewCacheService).getCachedReviews(COURSE_ID, 0, 20);
         }
 
         @Test
-        @DisplayName("후기가 없으면 빈 리스트를 반환한다")
+        @DisplayName("후기가 없으면 빈 페이지를 반환한다")
         void findAllByCourse_empty() {
-            when(reviewRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of());
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of());
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(0L);
 
-            List<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID);
+            PageResponse<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
-            assertThat(result).isEmpty();
-            verify(reviewImageRepository, never()).findAllByReviewIdIn(any());
+            assertThat(result.content()).isEmpty();
+            assertThat(result.totalElements()).isEqualTo(0L);
         }
 
         @Test
-        @DisplayName("이미지를 리뷰 ID 목록으로 한 번에 일괄 조회한다")
-        void findAllByCourse_queriesImagesInBatch() {
-            Review r1 = ReviewFixture.defaultReview();
-            Review r2 = ReviewFixture.reviewWithRating(3);
-            when(reviewRepository.findAllByCourseId(COURSE_ID)).thenReturn(List.of(r1, r2));
-            when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
+        @DisplayName("캐싱은 ReviewCacheService에 위임한다 (self-invocation 방지)")
+        void findAllByCourse_delegatesToCacheService() {
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of());
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(0L);
 
-            reviewService.findAllByCourse(COURSE_ID);
+            reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
-            // N+1 해결 검증: 리뷰가 2개여도 이미지 쿼리는 1번만 나가야 한다
-            verify(reviewImageRepository, times(1)).findAllByReviewIdIn(any());
+            verify(reviewCacheService, times(1)).getCachedReviews(COURSE_ID, 0, 20);
         }
     }
 
