@@ -130,7 +130,8 @@ class MemberControllerTest {
         );
         given(memberService.updateMyPageInfo(MEMBER_ID, request)).willReturn(serviceResponse);
 
-        ResponseEntity<BaseResponse<UpdateMyPageResponse>> response = memberController.updateMyPageInfo(request, PRINCIPAL);
+        ResponseEntity<BaseResponse<UpdateMyPageResponse>> response =
+                memberController.updateMyPageInfo(request, PRINCIPAL);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();

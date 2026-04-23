@@ -14,6 +14,7 @@ import four_tential.potential.domain.member.instructor_member.InstructorMemberRe
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.review.review.ReviewRepository;
+import four_tential.potential.common.exception.domain.MemberExceptionEnum;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
 import four_tential.potential.domain.member.fixture.MemberFixture;
@@ -29,6 +30,7 @@ import four_tential.potential.presentation.member.model.request.ChangePasswordRe
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.WithdrawalRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
+import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.member.follow.FollowQueryResult;
 import four_tential.potential.presentation.member.model.response.ChangeMemberStatusResponse;
@@ -36,7 +38,6 @@ import four_tential.potential.presentation.member.model.response.FollowedInstruc
 import four_tential.potential.presentation.member.model.response.FollowResponse;
 import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.presentation.member.model.response.InstructorProfileResponse;
-import four_tential.potential.presentation.member.model.request.UpdateMyPageRequest;
 import four_tential.potential.presentation.member.model.request.UpdateOnBoardRequest;
 import four_tential.potential.presentation.member.model.response.MyPageResponse;
 import four_tential.potential.presentation.member.model.response.OnBoardResponse;
@@ -167,11 +168,11 @@ class MemberServiceTest {
         UpdateMyPageResponse response = memberService.updateMyPageInfo(member.getId(), request);
 
         assertThat(response.phone()).isEqualTo("010-9999-9999");
-        assertThat(response.profileImageUrl()).isEqualTo(CUSTOM_IMAGE_URL); // 기존 이미지 유지
+        assertThat(response.profileImageUrl()).isEqualTo(CUSTOM_IMAGE_URL);
     }
 
     @Test
-    @DisplayName("마이페이지 수정 성공 - profileImageUrl만 전송 시 이미지 변경, phone 유지")
+    @DisplayName("마이페이지 수정 성공 - 프로필 이미지 URL만 전송 시 이미지 변경, phone 유지")
     void updateMyPageInfo_profileImageOnly() {
         Member member = MemberFixture.defaultMember();
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
@@ -179,12 +180,12 @@ class MemberServiceTest {
         UpdateMyPageRequest request = new UpdateMyPageRequest(null, CUSTOM_IMAGE_URL);
         UpdateMyPageResponse response = memberService.updateMyPageInfo(member.getId(), request);
 
-        assertThat(response.phone()).isEqualTo(MemberFixture.DEFAULT_PHONE); // 기존 phone 유지
+        assertThat(response.phone()).isEqualTo(MemberFixture.DEFAULT_PHONE);
         assertThat(response.profileImageUrl()).isEqualTo(CUSTOM_IMAGE_URL);
     }
 
     @Test
-    @DisplayName("마이페이지 수정 성공 - phone, profileImageUrl 모두 전송 시 둘 다 변경")
+    @DisplayName("마이페이지 수정 성공 - phone, 프로필 이미지 URL 모두 전송 시 둘 다 변경")
     void updateMyPageInfo_both() {
         Member member = MemberFixture.defaultMember();
         given(memberRepository.findById(member.getId())).willReturn(Optional.of(member));
@@ -200,7 +201,6 @@ class MemberServiceTest {
     @DisplayName("마이페이지 수정 - 모든 필드가 null이면 ServiceErrorException 발생")
     void updateMyPageInfo_allNull() {
         UpdateMyPageRequest request = new UpdateMyPageRequest(null, null);
-
         assertThatThrownBy(() -> memberService.updateMyPageInfo(UUID.randomUUID(), request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("수정할 항목을 하나 이상 입력해주세요");
@@ -213,7 +213,6 @@ class MemberServiceTest {
         given(memberRepository.findById(unknownId)).willReturn(Optional.empty());
 
         UpdateMyPageRequest request = new UpdateMyPageRequest("010-9999-9999", null);
-
         assertThatThrownBy(() -> memberService.updateMyPageInfo(unknownId, request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 회원입니다");
