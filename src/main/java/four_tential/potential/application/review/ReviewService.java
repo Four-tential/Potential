@@ -17,6 +17,7 @@ import four_tential.potential.domain.review.review_image.ReviewImageRepository;
 import four_tential.potential.domain.review.review_like.ReviewLike;
 import four_tential.potential.domain.review.review_like.ReviewLikeRepository;
 import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,9 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static four_tential.potential.common.exception.domain.ReviewExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.OrderExceptionEnum.*;
@@ -46,6 +45,7 @@ public class ReviewService {
     private final OrderRepository orderRepository;
     private final AttendanceRepository attendanceRepository;
     private final ReviewLikeRepository reviewLikeRepository;
+    private final ReviewCacheService reviewCacheService;
 
     // 후기 작성
     @Transactional
@@ -96,36 +96,24 @@ public class ReviewService {
         Review review = Review.register(memberId, courseId, orderId, rating, content);
         reviewRepository.save(review);
 
+        reviewCacheService.evictAll(); // 후기 작성 시 캐시 무효화
+
         // 이미지 저장
         List<ReviewImage> images = saveImages(review, imageUrls);
 
         return ReviewResponse.of(review, images);
     }
 
-    // 코스별 후기 목록 조회 (N+1 방지: 이미지 일괄 조회)
+    // 코스별 후기 목록 페이지 조회
+    // - 캐싱은 ReviewCacheService에 위임 (self-invocation 방지)
+    // - 페이지 메타정보는 캐싱 외부에서 별도 조회
     @Transactional(readOnly = true)
-    public List<ReviewResponse> findAllByCourse(UUID courseId) {
-        List<Review> reviews = reviewRepository.findAllByCourseId(courseId);
-        if (reviews.isEmpty()) {
-            return List.of();
-        }
-
-        // 리뷰 ID 목록으로 이미지 일괄 조회 (쿼리 1번)
-        List<UUID> reviewIds = reviews.stream()
-                .map(Review::getId)
-                .toList();
-        List<ReviewImage> allImages = reviewImageRepository.findAllByReviewIdIn(reviewIds);
-
-        // reviewId 기준으로 그룹핑
-        Map<UUID, List<ReviewImage>> imagesByReviewId = allImages.stream()
-                .collect(Collectors.groupingBy(image -> image.getReview().getId()));
-
-        return reviews.stream()
-                .map(review -> ReviewResponse.of(
-                        review,
-                        imagesByReviewId.getOrDefault(review.getId(), List.of())
-                ))
-                .toList();
+    public PageResponse<ReviewResponse> findAllByCourse(UUID courseId, int page, int size) {
+        List<ReviewResponse> content = reviewCacheService.getCachedReviews(courseId, page, size);
+        long total = reviewRepository.countByCourseId(courseId);
+        int totalPages = size > 0 ? (int) Math.ceil((double) total / size) : 0;
+        boolean isLast = (long) (page + 1) * size >= total;
+        return new PageResponse<>(content, page, totalPages, total, size, isLast);
     }
 
     // 후기 단건 조회
@@ -158,6 +146,7 @@ public class ReviewService {
         // 기존 이미지 삭제 후 재저장
         reviewImageRepository.deleteAllByReviewId(reviewId);
         List<ReviewImage> images = saveImages(review, imageUrls);
+        reviewCacheService.evictAll(); // 후기 수정 시 캐시 무효화
 
         return ReviewResponse.of(review, images);
     }
@@ -170,6 +159,7 @@ public class ReviewService {
 
         reviewImageRepository.deleteAllByReviewId(reviewId);
         reviewRepository.delete(review);
+        reviewCacheService.evictAll(); // 후기 삭제 시 캐시 무효화
     }
 
     // 후기 좋아요 토글 (등록 / 해제)

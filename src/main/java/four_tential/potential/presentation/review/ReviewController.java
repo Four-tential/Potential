@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.review;
 
 import four_tential.potential.application.review.ReviewService;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.review.dto.request.ReviewCreateRequest;
@@ -43,12 +44,14 @@ public class ReviewController {
                 .body(BaseResponse.success(HttpStatus.CREATED.name(), "후기가 등록되었습니다", response));
     }
 
-    // 코스별 후기 목록 조회
+    // 코스별 후기 목록 조회 (페이지네이션)
     @GetMapping("/courses/{courseId}/reviews")
-    public ResponseEntity<BaseResponse<List<ReviewResponse>>> findAllByCourse(
-            @PathVariable UUID courseId
+    public ResponseEntity<BaseResponse<PageResponse<ReviewResponse>>> findAllByCourse(
+            @PathVariable UUID courseId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        List<ReviewResponse> response = reviewService.findAllByCourse(courseId);
+        PageResponse<ReviewResponse> response = reviewService.findAllByCourse(courseId, page, size);
         return ResponseEntity.ok(
                 BaseResponse.success(HttpStatus.OK.name(), "후기 목록 조회가 완료되었습니다", response)
         );

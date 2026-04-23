@@ -2,6 +2,8 @@ package four_tential.potential.presentation.review.dto.response;
 
 import four_tential.potential.domain.review.review.Review;
 import four_tential.potential.domain.review.review_image.ReviewImage;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -11,6 +13,7 @@ import java.util.UUID;
 
 @Getter
 @Builder
+@JsonDeserialize(builder = ReviewResponse.ReviewResponseBuilder.class)
 public class ReviewResponse {
 
     private UUID reviewId;
@@ -21,6 +24,9 @@ public class ReviewResponse {
     private List<String> imageUrls;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @JsonPOJOBuilder(withPrefix = "")
+    public static class ReviewResponseBuilder {}
 
     public static ReviewResponse of(Review review, List<ReviewImage> images) {
         return ReviewResponse.builder()
