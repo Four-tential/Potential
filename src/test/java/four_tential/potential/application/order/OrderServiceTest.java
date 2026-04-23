@@ -517,13 +517,14 @@ class OrderServiceTest {
         // given
         UUID courseId = UUID.randomUUID();
         given(waitingListService.isCapacityInitialized(courseId)).willReturn(false);
-        doReturn(mock(OrderInventoryReconcileResponse.class)).when(orderService).reconcileInventory(courseId);
+        given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
+        doNothing().when(orderService).reconcileInventoryLocked(courseId);
 
         // when
         orderService.reconcileInventoryIfNecessary(courseId);
 
         // then
-        verify(orderService).reconcileInventory(courseId);
+        verify(orderService).reconcileInventoryLocked(courseId);
     }
 
     @Test

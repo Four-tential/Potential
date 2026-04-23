@@ -344,10 +344,20 @@ public class OrderService {
 
     /**
      * 재고 정보가 초기화되지 않은 경우에만 정합성 복구를 수행합니다.
-     * 분산 락을 통해 여러 요청이 동시에 초기화 로직을 수행하는 것을 방지합니다.
+     * Happy Path(이미 초기화됨)에서의 성능을 위해 락 없이 1차 확인을 수행합니다.
+     */
+    public void reconcileInventoryIfNecessary(UUID courseId) {
+        if (!waitingListService.isCapacityInitialized(courseId)) {
+            // 1차 체크 통과 시에만 분산 락을 획득하고 다시 확인(Double-Check)
+            applicationContext.getBean(OrderService.class).reconcileInventoryLocked(courseId);
+        }
+    }
+
+    /**
+     * 분산 락 범위 내에서 안전하게 재고를 초기화합니다.
      */
     @DistributedLock(key = "'order:course:' + #courseId")
-    public void reconcileInventoryIfNecessary(UUID courseId) {
+    public void reconcileInventoryLocked(UUID courseId) {
         if (!waitingListService.isCapacityInitialized(courseId)) {
             log.info("재고 미초기화 감지, 복구 프로세스 시작: courseId={}", courseId);
             this.reconcileInventory(courseId);
