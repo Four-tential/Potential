@@ -37,6 +37,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    // TODO: courseRepository는 주입되면 안됌. courseFacade 주입으로 변경
     private final CourseRepository courseRepository;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
