@@ -45,6 +45,7 @@ class OrderFacadeTest {
     void placeOrder_success_occupy_seat() {
         // given
         doNothing().when(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        doNothing().when(orderService).reconcileInventoryIfNecessary(courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
         
         Order order = mock(Order.class);
@@ -60,6 +61,7 @@ class OrderFacadeTest {
         // then
         assertThat(result).isInstanceOf(OrderCreateResponse.class);
         verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        verify(orderService).reconcileInventoryIfNecessary(courseId);
         verify(orderService).createOrder(memberId, request);
     }
 
@@ -76,6 +78,7 @@ class OrderFacadeTest {
                 .hasMessage(OrderExceptionEnum.ERR_ALREADY_RESERVED.getMessage());
 
         verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        verify(orderService, never()).reconcileInventoryIfNecessary(any());
         verify(waitingListService, never()).tryOccupyingSeat(any(), any(), anyInt());
         verify(waitingListService, never()).addToWaitingList(any(), any());
     }
@@ -85,6 +88,7 @@ class OrderFacadeTest {
     void placeOrder_fail_to_waiting() {
         // given
         doNothing().when(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        doNothing().when(orderService).reconcileInventoryIfNecessary(courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(false);
 
         // when
@@ -93,6 +97,7 @@ class OrderFacadeTest {
         // then
         assertThat(result).isInstanceOf(OrderWaitingResponse.class);
         verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        verify(orderService).reconcileInventoryIfNecessary(courseId);
         verify(waitingListService).addToWaitingList(courseId, memberId);
     }
 
@@ -100,6 +105,7 @@ class OrderFacadeTest {
     @DisplayName("주문 DB 저장 실패 시 점유된 잔여석을 롤백한다")
     void placeOrder_rollback_when_db_fails() {
         // given
+        doNothing().when(orderService).reconcileInventoryIfNecessary(courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
         given(orderService.createOrder(memberId, request))
                 .willThrow(new RuntimeException("DB 저장 오류"));
@@ -117,6 +123,7 @@ class OrderFacadeTest {
     @DisplayName("보상 트랜잭션 중 발생한 예외는 원래 예외에 suppressed 된다")
     void placeOrder_rollback_suppress_exception() {
         // given
+        doNothing().when(orderService).reconcileInventoryIfNecessary(courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
         given(orderService.createOrder(memberId, request))
                 .willThrow(new RuntimeException("DB 저장 오류"));

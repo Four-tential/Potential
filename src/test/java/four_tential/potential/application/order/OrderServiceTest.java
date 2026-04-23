@@ -510,4 +510,33 @@ class OrderServiceTest {
         );
         verify(waitingListService).updateCapacity(courseId, 90L);
     }
+
+    @Test
+    @DisplayName("재고가 초기화되지 않은 경우 reconcileInventory를 호출한다")
+    void reconcileInventoryIfNecessary_calls_reconcile_when_not_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(false);
+        doReturn(mock(OrderInventoryReconcileResponse.class)).when(orderService).reconcileInventory(courseId);
+
+        // when
+        orderService.reconcileInventoryIfNecessary(courseId);
+
+        // then
+        verify(orderService).reconcileInventory(courseId);
+    }
+
+    @Test
+    @DisplayName("재고가 이미 초기화된 경우 reconcileInventory를 호출하지 않는다")
+    void reconcileInventoryIfNecessary_skips_reconcile_when_already_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(true);
+
+        // when
+        orderService.reconcileInventoryIfNecessary(courseId);
+
+        // then
+        verify(orderService, never()).reconcileInventory(courseId);
+    }
 }

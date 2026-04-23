@@ -341,4 +341,16 @@ public class OrderService {
 
         return OrderInventoryReconcileResponse.of(courseId, course.getCapacity(), occupiedSeats, newCapacity);
     }
+
+    /**
+     * 재고 정보가 초기화되지 않은 경우에만 정합성 복구를 수행합니다.
+     * 분산 락을 통해 여러 요청이 동시에 초기화 로직을 수행하는 것을 방지합니다.
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    public void reconcileInventoryIfNecessary(UUID courseId) {
+        if (!waitingListService.isCapacityInitialized(courseId)) {
+            log.info("재고 미초기화 감지, 복구 프로세스 시작: courseId={}", courseId);
+            this.reconcileInventory(courseId);
+        }
+    }
 }

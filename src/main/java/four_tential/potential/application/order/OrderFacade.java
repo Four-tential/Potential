@@ -28,9 +28,8 @@ public class OrderFacade {
         orderService.checkDuplicateTimeCourse(memberId, request.courseId());
 
         // Redis 재고 정보가 없으면 DB 기준으로 동기화 (최초 1회 또는 유실 대응)
-        if (!waitingListService.isCapacityInitialized(request.courseId())) {
-            orderService.reconcileInventory(request.courseId());
-        }
+        // 분산 락 내부에서 체크와 복구를 수행하여 TOCTOU 경쟁 조건을 방지함
+        orderService.reconcileInventoryIfNecessary(request.courseId());
 
         // 잔여석 점유 시도
         if (waitingListService.tryOccupyingSeat(request.courseId(), memberId, request.orderCount())) {
