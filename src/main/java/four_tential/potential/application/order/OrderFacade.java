@@ -24,6 +24,9 @@ public class OrderFacade {
     private final RefundFacade refundFacade;
 
     public OrderPlaceResult placeOrder(UUID memberId, OrderCreateRequest request) {
+        // 동일 시간대 중복 예약 체크 (대기열 진입 전 필수 체크)
+        orderService.checkDuplicateTimeCourse(memberId, request.courseId());
+
         // 잔여석 점유 시도
         if (waitingListService.tryOccupyingSeat(request.courseId(), memberId, request.orderCount())) {
             try {

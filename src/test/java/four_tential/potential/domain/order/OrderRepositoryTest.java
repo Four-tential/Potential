@@ -542,6 +542,121 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(totalSum).isZero();
     }
 
+    @Test
+    @DisplayName("환불 가능 주문 조회 - 특정 코스의 PAID, CONFIRMED 주문만 조회한다")
+    void findRefundableOrdersByCourseId_success() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        
+        // 1. PAID (포함)
+        Order paidOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "테스트1");
+        paidOrder.completePayment();
+        orderRepository.save(paidOrder);
+        
+        // 2. CONFIRMED (포함)
+        Order confirmedOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "테스트2");
+        ReflectionTestUtils.setField(confirmedOrder, "status", OrderStatus.CONFIRMED);
+        orderRepository.save(confirmedOrder);
+        
+        // 3. PENDING (제외)
+        orderRepository.save(Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "테스트3"));
+        
+        // 4. CANCELLED (제외)
+        Order cancelledOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "테스트4");
+        ReflectionTestUtils.setField(cancelledOrder, "status", OrderStatus.CANCELLED);
+        orderRepository.save(cancelledOrder);
+        
+        // 5. 다른 코스 주문 (제외)
+        Order otherCourseOrder = Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "다른코스");
+        otherCourseOrder.completePayment();
+        orderRepository.save(otherCourseOrder);
+
+        // when
+        List<Order> result = orderRepository.findRefundableOrdersByCourseId(courseId);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(Order::getId)
+                .containsExactlyInAnyOrder(paidOrder.getId(), confirmedOrder.getId());
+    }
+
+    @Test
+    @DisplayName("중복 예약 조회 - 시간대가 겹치는 유효한 주문이 있으면 true를 반환한다")
+    void hasOverlappingReservation_returnsTrue() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime baseTime = LocalDateTime.now().withNano(0);
+        
+        // 14:00 ~ 16:00 코스 예약 존재
+        Course course = courseRepository.save(openCourse(baseTime.withHour(14), baseTime.withHour(16)));
+        orderRepository.save(Order.register(memberId, course.getId(), 1, BigInteger.valueOf(10000), "기존 예약"));
+
+        // when: 15:00 ~ 17:00 시간대로 중복 조회 (1시간 겹침)
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, baseTime.withHour(15), baseTime.withHour(17));
+
+        // then
+        assertThat(hasOverlap).isTrue();
+    }
+
+    @Test
+    @DisplayName("중복 예약 조회 - 시간대가 겹치더라도 주문 상태가 유효하지 않으면 false를 반환한다")
+    void hasOverlappingReservation_invalidStatus_returnsFalse() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime baseTime = LocalDateTime.now().withNano(0);
+        
+        Course course = courseRepository.save(openCourse(baseTime.withHour(14), baseTime.withHour(16)));
+        Order cancelledOrder = Order.register(memberId, course.getId(), 1, BigInteger.valueOf(10000), "취소된 예약");
+        ReflectionTestUtils.setField(cancelledOrder, "status", OrderStatus.CANCELLED);
+        orderRepository.save(cancelledOrder);
+
+        // when: 14:00 ~ 16:00 동일 시간대 조회
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, baseTime.withHour(14), baseTime.withHour(16));
+
+        // then
+        assertThat(hasOverlap).isFalse();
+    }
+
+    @Test
+    @DisplayName("중복 예약 조회 - 시간대가 맞닿아 있는 경우(겹치지 않음) false를 반환한다")
+    void hasOverlappingReservation_boundary_returnsFalse() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        LocalDateTime baseTime = LocalDateTime.now().withNano(0);
+        
+        // 14:00 ~ 16:00 코스 예약 존재
+        Course course = courseRepository.save(openCourse(baseTime.withHour(14), baseTime.withHour(16)));
+        orderRepository.save(Order.register(memberId, course.getId(), 1, BigInteger.valueOf(10000), "기존 예약"));
+
+        // when: 16:00 ~ 18:00 시간대로 조회 (종료 시간과 시작 시간이 같음)
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, baseTime.withHour(16), baseTime.withHour(18));
+
+        // then
+        assertThat(hasOverlap).isFalse();
+    }
+
+    @Test
+    @DisplayName("중복 예약 조회 - 다른 회원의 예약인 경우 false를 반환한다")
+    void hasOverlappingReservation_otherMember_returnsFalse() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        UUID otherMemberId = UUID.randomUUID();
+        LocalDateTime baseTime = LocalDateTime.now().withNano(0);
+        
+        Course course = courseRepository.save(openCourse(baseTime.withHour(14), baseTime.withHour(16)));
+        orderRepository.save(Order.register(otherMemberId, course.getId(), 1, BigInteger.valueOf(10000), "다른 회원 예약"));
+
+        // when: 동일 시간대 조회
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, baseTime.withHour(14), baseTime.withHour(16));
+
+        // then
+        assertThat(hasOverlap).isFalse();
+    }
+
     private Order confirmedOrder(UUID memberId, UUID courseId) {
         Order order = Order.register(memberId, courseId, 1, BigInteger.valueOf(50000), "테스트 강의");
         ReflectionTestUtils.setField(order, "status", OrderStatus.CONFIRMED);

@@ -43,36 +43,58 @@ public class OrderService {
 
     /**
      * 주문 생성 (DB 저장)
+     * 회원 단위 분산 락을 적용하여 동일 시간대 중복 예약 체크의 원자성을 보장
      */
     @Transactional
+    @DistributedLock(key = "'order:member:' + #memberId")
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
-        // 동일 시간대 중복 예약 체크
-        checkDuplicateTimeCourse(memberId, request.courseId());
+        // 코스 정보 조회
+        Course course = courseRepository.findById(request.courseId())
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        BigInteger coursePrice = request.priceSnap();
-        String courseTitle = request.titleSnap();
+        // 동일 시간대 중복 예약 재검증
+        // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId,
+                course.getStartAt(),
+                course.getEndAt()
+        );
 
+        if (hasOverlap) {
+            log.warn("중복 예약이 감지되었습니다: memberId={}, courseId={}", memberId, course.getId());
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
+        }
+
+        // 주문 등록
         Order order = Order.register(
                 memberId,
                 request.courseId(),
                 request.orderCount(),
-                coursePrice,
-                courseTitle
+                course.getPrice(),
+                course.getTitle()
         );
         return orderRepository.save(order);
     }
 
     /**
      * 동일 시간대 중복 예약 체크
-     * TODO: Course 도메인 구현 후 실제 시간대(Time Slot) 비교 로직 추가 필요
      */
-    private void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
-        log.info("동일 시간대 중복 예약 체크 중 (Placeholder): memberId={}, courseId={}", memberId, courseId);
+    @Transactional(readOnly = true)
+    public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
         
-        // 시나리오: 
-        // 1. 요청한 courseId의 시작/종료 시간을 조회
-        // 2. 해당 회원의 기존 PAID, PENDING 주문들 중 시간대가 겹치는 코스가 있는지 DB 조회
-        // 3. 존재한다면 OrderExceptionEnum.ERR_ALREADY_RESERVED 예외 발생
+        log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
+        
+        boolean hasOverlap = orderRepository.hasOverlappingReservation(
+                memberId, 
+                course.getStartAt(), 
+                course.getEndAt()
+        );
+
+        if (hasOverlap) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
+        }
     }
 
     /**

@@ -2,6 +2,8 @@ package four_tential.potential.application.order;
 
 import four_tential.potential.application.payment.RefundFacade;
 import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.*;
@@ -36,14 +38,13 @@ class OrderFacadeTest {
 
     private final UUID memberId = UUID.randomUUID();
     private final UUID courseId = UUID.randomUUID();
-    private final OrderCreateRequest request = new OrderCreateRequest(
-            courseId, 2, BigInteger.valueOf(50000), "테스트 강의"
-    );
+    private final OrderCreateRequest request = new OrderCreateRequest(courseId, 2);
 
     @Test
     @DisplayName("잔여석 점유 성공 시 주문을 생성하고 성공 응답을 반환한다")
     void placeOrder_success_occupy_seat() {
         // given
+        doNothing().when(orderService).checkDuplicateTimeCourse(memberId, courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(true);
         
         Order order = mock(Order.class);
@@ -58,13 +59,32 @@ class OrderFacadeTest {
 
         // then
         assertThat(result).isInstanceOf(OrderCreateResponse.class);
+        verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
         verify(orderService).createOrder(memberId, request);
     }
 
     @Test
-    @DisplayName("잔여석 점유 실패 시 대기열에 추가한다")
+    @DisplayName("중복 시간대에 이미 예약이 있는 경우 대기열 진입 시도조차 하지 않고 예외를 발생시킨다")
+    void placeOrder_fail_duplicate_time() {
+        // given
+        doThrow(new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED))
+                .when(orderService).checkDuplicateTimeCourse(memberId, courseId);
+
+        // when & then
+        assertThatThrownBy(() -> orderFacade.placeOrder(memberId, request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_ALREADY_RESERVED.getMessage());
+
+        verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
+        verify(waitingListService, never()).tryOccupyingSeat(any(), any(), anyInt());
+        verify(waitingListService, never()).addToWaitingList(any(), any());
+    }
+
+    @Test
+    @DisplayName("잔여석 점유 실패 시 대기열에 추가하기 전 중복 체크를 먼저 수행한다")
     void placeOrder_fail_to_waiting() {
         // given
+        doNothing().when(orderService).checkDuplicateTimeCourse(memberId, courseId);
         given(waitingListService.tryOccupyingSeat(courseId, memberId, 2)).willReturn(false);
 
         // when
@@ -72,6 +92,7 @@ class OrderFacadeTest {
 
         // then
         assertThat(result).isInstanceOf(OrderWaitingResponse.class);
+        verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
         verify(waitingListService).addToWaitingList(courseId, memberId);
     }
 

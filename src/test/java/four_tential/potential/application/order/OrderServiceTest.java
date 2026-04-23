@@ -4,6 +4,7 @@ import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -61,11 +62,11 @@ class OrderServiceTest {
         UUID courseId = UUID.randomUUID();
         OrderCreateRequest request = new OrderCreateRequest(
                 courseId,
-                2,
-                BigInteger.valueOf(50000),
-                "테스트 강의"
+                2
         );
+        Course course = CourseFixture.defaultCourse();
 
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
         given(orderRepository.save(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -76,9 +77,27 @@ class OrderServiceTest {
         assertThat(result.getMemberId()).isEqualTo(memberId);
         assertThat(result.getCourseId()).isEqualTo(courseId);
         assertThat(result.getOrderCount()).isEqualTo(2);
-        assertThat(result.getPriceSnap()).isEqualTo(BigInteger.valueOf(50000));
+        assertThat(result.getPriceSnap()).isEqualTo(course.getPrice());
         
         verify(orderRepository).save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("동일 시간대에 이미 예약된 코스가 있으면 예외가 발생한다")
+    void checkDuplicateTimeCourse_fail_duplicateTime() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderRepository.hasOverlappingReservation(memberId, course.getStartAt(), course.getEndAt()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> orderService.checkDuplicateTimeCourse(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_ALREADY_RESERVED.getMessage());
     }
 
     @Test
