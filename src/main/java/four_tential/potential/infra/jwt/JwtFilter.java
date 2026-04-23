@@ -69,6 +69,9 @@ public class JwtFilter extends OncePerRequestFilter {
             get("/v1/courses/{courseId}"),
             get("/v1/courses/{courseId}/reviews"),
 
+            // Review
+            get("/v1/reviews/{reviewId}"),
+
             // Instructor profile
             get("/v1/instructors/{instructorId}"),
 
