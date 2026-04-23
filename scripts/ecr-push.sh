@@ -22,19 +22,22 @@ echo "[ECR] Login to ${REG_URI}"
 aws ecr get-login-password --region "${AWS_REGION}" \
   | docker login --username AWS --password-stdin "${REG_URI}"
 
-# ===== Docker 이미지 빌드 =====
-# Dockerfile의 멀티스테이지 빌드가 내부에서 Gradle 빌드까지 수행함
-echo "[ECR] Build ${ECR_REPO}:${IMAGE_TAG}"
-docker build -t "${ECR_REPO}:${IMAGE_TAG}" .
+# ===== Buildx 빌더 생성 =====
+# buildx는 QEMU와 조합하여 크로스 플랫폼 빌드를 지원함
+# docker-container 드라이버를 사용해야 --platform + --push 조합이 가능
+docker buildx create --name multiarch --use 2>/dev/null || docker buildx use multiarch
 
-# ===== ECR 경로로 태그 추가 =====
-# docker build 시 로컬 이름으로 빌드했으므로 ECR 전체 경로로 태그를 달아줌
-echo "[ECR] Tag -> ${FULL_URI}"
-docker tag "${ECR_REPO}:${IMAGE_TAG}" "${FULL_URI}"
-
-# ===== ECR에 push =====
-echo "[ECR] Push -> ${FULL_URI}"
-docker push "${FULL_URI}"
+# ===== Docker 이미지 빌드 & push (buildx) =====
+# --platform: EC2(ARM/Graviton)용 이미지 빌드. amd64 추가 시 멀티 아키텍처 지원 가능
+# --push: 빌드 완료 후 ECR에 바로 push (별도 tag/push 불필요)
+# --provenance=false: ECR 호환성을 위해 provenance 메타데이터 비활성화
+echo "[ECR] Buildx & Push ${FULL_URI}"
+docker buildx build \
+  --platform linux/arm64 \
+  --tag "${FULL_URI}" \
+  --push \
+  --provenance=false \
+  .
 
 # ===== 다음 단계(deploy.sh)로 이미지 전체 경로 전달 =====
 # GitHub Actions에서 스텝 간 값을 넘길 때는 GITHUB_OUTPUT 파일에 기록
