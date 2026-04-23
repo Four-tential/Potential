@@ -1,20 +1,11 @@
-# Build stage
-FROM eclipse-temurin:21-jdk-alpine AS build
-WORKDIR /app
-
-COPY gradlew ./
-COPY gradle gradle
-COPY build.gradle settings.gradle ./
-RUN ./gradlew dependencies --no-daemon
-
-COPY src src
-RUN ./gradlew bootJar --no-daemon -x test
-
-# Runtime stage
+# Runtime-only Dockerfile
+# Gradle 빌드는 CI/CD에서 네이티브(amd64)로 수행하고, 여기서는 JAR만 패키징
+# ARM64(Graviton) EC2에서 실행되므로 buildx --platform linux/arm64로 빌드됨
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-COPY --from=build /app/build/libs/*.jar app.jar
+# CI/CD에서 빌드된 JAR 복사
+COPY build/libs/*.jar app.jar
 
 # 보안: root 대신 전용 비권한 유저로 실행
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
