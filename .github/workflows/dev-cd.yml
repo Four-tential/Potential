@@ -43,10 +43,12 @@ jobs:
           distribution: 'temurin'
 
       # 3. Gradle 빌드 (네이티브 amd64에서 실행 → 에뮬레이션 없이 빠름)
+      #    빌드된 JAR을 프로젝트 루트에 복사하여 Docker 컨텍스트에 포함시킴
       - name: Gradle 빌드
         run: |
           chmod +x gradlew
           ./gradlew bootJar --no-daemon -x test
+          cp build/libs/*.jar app.jar
 
       # 4. ARM64 크로스 빌드를 위한 QEMU 에뮬레이터 설정
       #    Dockerfile은 런타임 전용이므로 에뮬레이션 부담이 거의 없음
