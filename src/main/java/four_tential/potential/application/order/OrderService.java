@@ -26,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +36,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    // TODO: courseRepository를 주입하는게 아니라 courseFacade에서 받아와야함.
     private final CourseRepository courseRepository;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;

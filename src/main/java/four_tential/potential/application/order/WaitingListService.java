@@ -219,6 +219,14 @@ public class WaitingListService {
     }
 
     /**
+     * 잔여석 정보 초기화 여부 확인
+     */
+    public boolean isCapacityInitialized(UUID courseId) {
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        return redissonClient.getAtomicLong(capacityKey).isExists();
+    }
+
+    /**
      * 대기열에서 수동 이탈
      */
     @DistributedLock(key = "'order:course:' + #courseId")
