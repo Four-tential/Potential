@@ -49,7 +49,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin # 초기 비밀번호 admin
     volumes:
       - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
       - ./monitoring/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/grafana-dashboard.yml:ro
@@ -73,7 +73,7 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     entrypoint: ["k6"]
-    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/review/review-list-baseline.js"]
+    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/k6-test.js"]
     networks:
       network-potential:
 
