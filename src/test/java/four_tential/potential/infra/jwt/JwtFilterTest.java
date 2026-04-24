@@ -107,6 +107,20 @@ class JwtFilterTest {
 
             assertThat(jwtFilter.shouldNotFilter(request)).isFalse();
         }
+
+        @ParameterizedTest(name = "OPTIONS {0} → 필터 제외")
+        @CsvSource({
+                "/v1/auth/login",
+                "/v1/members/me",
+                "/v1/courses/00000000-0000-0000-0000-000000000001/wishlist-courses",
+        })
+        @DisplayName("OPTIONS 프리플라이트 요청은 경로와 무관하게 필터를 건너뛴다")
+        void optionsPreflight(String uri) {
+            request.setMethod("OPTIONS");
+            request.setRequestURI(uri);
+
+            assertThat(jwtFilter.shouldNotFilter(request)).isTrue();
+        }
     }
 
     @Nested

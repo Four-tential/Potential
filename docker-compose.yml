@@ -64,6 +64,7 @@ services:
     profiles: ["k6"]
     environment:
       BASE_URL: ${BASE_URL:-http://host.docker.internal:8080}
+      STAGE: ${STAGE:-load}
       K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
       K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),min,avg
     volumes:

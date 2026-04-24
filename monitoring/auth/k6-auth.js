@@ -3,10 +3,10 @@
 // 시나리오: 회원가입 -> 로그인 -> 토큰 재발급 -> 로그아웃
 //
 // 실행:
-//   STAGE=smoke BASE_URL=http://localhost:8080 k6 run monitoring/auth/k6-auth.js
-//   STAGE=load  BASE_URL=http://localhost:8080 k6 run monitoring/auth/k6-auth.js
-//   STAGE=stress BASE_URL=http://localhost:8080 k6 run monitoring/auth/k6-auth.js
-//   STAGE=spike  BASE_URL=http://localhost:8080 k6 run monitoring/auth/k6-auth.js
+//   K6_SCRIPT=auth/k6-auth.js STAGE=smoke docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=auth-smoke /scripts/auth/k6-auth.js
+//   K6_SCRIPT=auth/k6-auth.js STAGE=load docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=auth-load /scripts/auth/k6-auth.js
+//   K6_SCRIPT=auth/k6-auth.js STAGE=stress docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=auth-stress /scripts/auth/k6-auth.js
+//   K6_SCRIPT=auth/k6-auth.js STAGE=spike docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=auth-spike /scripts/auth/k6-auth.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
