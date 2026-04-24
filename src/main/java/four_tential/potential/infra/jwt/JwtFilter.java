@@ -129,6 +129,9 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         String method = request.getMethod();
         PathContainer path = PathContainer.parsePath(request.getRequestURI());
         return EXCLUDE_RULES.stream().anyMatch(rule -> rule.matches(method, path));

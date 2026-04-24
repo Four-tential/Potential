@@ -28,8 +28,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import org.mockito.ArgumentCaptor;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -37,7 +35,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class AuthServiceTest {
+class AuthFacadeTest {
 
     @Mock
     private MemberRepository memberRepository;
@@ -47,16 +45,15 @@ class AuthServiceTest {
     private JwtUtil jwtUtil;
     @Mock
     private JwtRepository jwtRepository;
-
-    @InjectMocks
+    @Mock
     private AuthService authService;
 
-    private static final String DEFAULT_PROFILE_IMAGE_URL = "https://bucketurl/default-profile-image.png";
+    @InjectMocks
+    private AuthFacade authFacade;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(authService, "refreshTokenExpire", 1_209_600_000L); // 14일(ms)
-        ReflectionTestUtils.setField(authService, "defaultProfileImageUrl", DEFAULT_PROFILE_IMAGE_URL);
+        ReflectionTestUtils.setField(authFacade, "refreshTokenExpire", 1_209_600_000L); // 14일(ms)
     }
 
     @Test
@@ -66,17 +63,20 @@ class AuthServiceTest {
         given(memberRepository.existsByEmail(request.email())).willReturn(false);
         given(passwordEncoder.encode(request.password())).willReturn("encodedPassword");
 
-        SignUpResponse response = authService.signUp(request);
+        SignUpResponse expectedResponse = new SignUpResponse(
+                request.email(), request.name(),
+                MemberRole.ROLE_STUDENT.name(), MemberStatus.ACTIVE.name()
+        );
+        given(authService.saveMember(request, "encodedPassword")).willReturn(expectedResponse);
+
+        SignUpResponse response = authFacade.signUp(request);
 
         assertThat(response.email()).isEqualTo(request.email());
         assertThat(response.name()).isEqualTo(request.name());
         assertThat(response.role()).isEqualTo(MemberRole.ROLE_STUDENT.name());
         assertThat(response.status()).isEqualTo(MemberStatus.ACTIVE.name());
 
-        // 저장되는 Member에 기본 프로필 이미지가 실제로 세팅됐는지 검증
-        ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
-        verify(memberRepository).save(memberCaptor.capture());
-        assertThat(memberCaptor.getValue().getProfileImageUrl()).isEqualTo(DEFAULT_PROFILE_IMAGE_URL);
+        verify(authService).saveMember(request, "encodedPassword");
     }
 
     @Test
@@ -85,10 +85,10 @@ class AuthServiceTest {
         SignUpRequest request = SignUpRequestFixture.defaultRequest();
         given(memberRepository.existsByEmail(request.email())).willReturn(true);
 
-        assertThatThrownBy(() -> authService.signUp(request))
+        assertThatThrownBy(() -> authFacade.signUp(request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("이미 사용 중인 이메일 입니다");
-        verify(memberRepository, never()).save(any(Member.class));
+        verify(authService, never()).saveMember(any(), any());
     }
 
 
@@ -102,7 +102,7 @@ class AuthServiceTest {
         given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("accessToken");
         given(jwtUtil.createRefreshToken(any())).willReturn("refreshToken");
 
-        LoginResult result = authService.login(request);
+        LoginResult result = authFacade.login(request);
 
         assertThat(result.accessToken()).isEqualTo("accessToken");
         assertThat(result.refreshToken()).isEqualTo("refreshToken");
@@ -120,7 +120,7 @@ class AuthServiceTest {
         given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("accessToken");
         given(jwtUtil.createRefreshToken(any())).willReturn("refreshToken");
 
-        LoginResult result = authService.login(request);
+        LoginResult result = authFacade.login(request);
 
         assertThat(result.hasOnboarding()).isFalse();
     }
@@ -131,7 +131,7 @@ class AuthServiceTest {
         LoginRequest request = LoginRequestFixture.defaultRequest();
         given(memberRepository.findByEmail(request.email())).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authFacade.login(request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("아이디와 비밀번호를 확인하시기 바랍니다");
     }
@@ -144,7 +144,7 @@ class AuthServiceTest {
         given(memberRepository.findByEmail(request.email())).willReturn(Optional.of(member));
         given(passwordEncoder.matches(request.password(), member.getPassword())).willReturn(false);
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authFacade.login(request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("아이디와 비밀번호를 확인하시기 바랍니다");
     }
@@ -158,7 +158,7 @@ class AuthServiceTest {
         given(memberRepository.findByEmail(request.email())).willReturn(Optional.of(member));
         given(passwordEncoder.matches(request.password(), member.getPassword())).willReturn(true);
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authFacade.login(request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("아이디와 비밀번호를 확인하시기 바랍니다");
     }
@@ -172,7 +172,7 @@ class AuthServiceTest {
         given(memberRepository.findByEmail(request.email())).willReturn(Optional.of(member));
         given(passwordEncoder.matches(request.password(), member.getPassword())).willReturn(true);
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authFacade.login(request))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("정지된 회원입니다, 관리자에게 문의 바랍니다");
     }
@@ -189,7 +189,7 @@ class AuthServiceTest {
         given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("newAccessToken");
         given(jwtUtil.createRefreshToken(any())).willReturn("newRefreshToken");
 
-        RefreshResult result = authService.refresh(oldRefreshToken);
+        RefreshResult result = authFacade.refresh(oldRefreshToken);
 
         assertThat(result.newAccessToken()).isEqualTo("newAccessToken");
         assertThat(result.newRefreshToken()).isEqualTo("newRefreshToken");
@@ -202,7 +202,7 @@ class AuthServiceTest {
         String invalidToken = "invalidToken";
         given(jwtUtil.validateToken(invalidToken)).willReturn(false);
 
-        assertThatThrownBy(() -> authService.refresh(invalidToken))
+        assertThatThrownBy(() -> authFacade.refresh(invalidToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }
@@ -215,7 +215,7 @@ class AuthServiceTest {
         given(jwtUtil.extractSubject(refreshToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
         given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(null);
 
-        assertThatThrownBy(() -> authService.refresh(refreshToken))
+        assertThatThrownBy(() -> authFacade.refresh(refreshToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }
@@ -228,7 +228,7 @@ class AuthServiceTest {
         given(jwtUtil.extractSubject(stolenToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
         given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn("differentToken");
 
-        assertThatThrownBy(() -> authService.refresh(stolenToken))
+        assertThatThrownBy(() -> authFacade.refresh(stolenToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
 
@@ -247,7 +247,7 @@ class AuthServiceTest {
         given(jwtRepository.getAndDeleteRefreshToken(MemberFixture.DEFAULT_EMAIL)).willReturn(refreshToken);
         given(memberRepository.findByEmail(MemberFixture.DEFAULT_EMAIL)).willReturn(Optional.of(member));
 
-        assertThatThrownBy(() -> authService.refresh(refreshToken))
+        assertThatThrownBy(() -> authFacade.refresh(refreshToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
     }
@@ -260,7 +260,7 @@ class AuthServiceTest {
         given(jwtUtil.extractSubjectAllowExpired(accessToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
         given(jwtUtil.getRemainingTime(accessToken)).willReturn(3600000L);
 
-        authService.logOut(accessToken);
+        authFacade.logOut(accessToken);
 
         verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
         verify(jwtRepository).addBlacklist(accessToken, 3600000L);
@@ -274,7 +274,7 @@ class AuthServiceTest {
         given(jwtUtil.isExpiredToken(expiredToken)).willReturn(true);
         given(jwtUtil.extractSubjectAllowExpired(expiredToken)).willReturn(MemberFixture.DEFAULT_EMAIL);
 
-        authService.logOut(expiredToken);
+        authFacade.logOut(expiredToken);
 
         verify(jwtRepository).deleteRefreshToken(MemberFixture.DEFAULT_EMAIL);
         verify(jwtRepository, never()).addBlacklist(any(), anyLong());
@@ -287,7 +287,7 @@ class AuthServiceTest {
         given(jwtUtil.validateToken(invalidToken)).willReturn(false);
         given(jwtUtil.isExpiredToken(invalidToken)).willReturn(false);
 
-        assertThatThrownBy(() -> authService.logOut(invalidToken))
+        assertThatThrownBy(() -> authFacade.logOut(invalidToken))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
 
