@@ -13,11 +13,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
@@ -48,8 +52,8 @@ public class ReviewController {
     @GetMapping("/courses/{courseId}/reviews")
     public ResponseEntity<BaseResponse<PageResponse<ReviewResponse>>> findAllByCourse(
             @PathVariable UUID courseId,
-            @RequestParam(defaultValue = "0")  int page,
-            @RequestParam(defaultValue = "20") int size
+            @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다") @RequestParam(defaultValue = "0")  int page,
+            @Positive(message = "페이지 크기는 1 이상이어야 합니다") @RequestParam(defaultValue = "20") int size
     ) {
         PageResponse<ReviewResponse> response = reviewService.findAllByCourse(courseId, page, size);
         return ResponseEntity.ok(
