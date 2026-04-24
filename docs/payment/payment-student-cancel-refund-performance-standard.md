@@ -21,9 +21,11 @@
 학생 주문 취소 환불은 내부에서 `PaymentGateway.cancelPayment()`를 호출한다.  
 local 환경에서 반복 가능한 baseline을 만들려면 외부 PG 네트워크 지연과 실패를 분리하는 편이 낫다.
 
-그래서 local 프로필에서는 아래 스텁을 사용한다.
+그래서 `local,perf` 프로필에서만 아래 스텁을 사용한다.
 
-- [LocalPaymentGatewayStub.java](/C:/Users/82109/nbc_project/Potential/src/main/java/four_tential/potential/infra/portone/LocalPaymentGatewayStub.java)
+- LocalPaymentGatewayStub.java
+
+앱은 `local,perf` 프로필로 실행해야 `db/migration-perf` fixture와 환불용 gateway stub이 함께 활성화된다.
 
 이렇게 분리한 이유는 다음과 같다.
 
@@ -40,7 +42,7 @@ local 환경에서 반복 가능한 baseline을 만들려면 외부 PG 네트워
 
 ## 3. 프로젝트 규모 기준
 
-튜터님 가이드 [SIZING-AND-SLO.md](/C:/Users/82109/nbc_project/loadlab/docs/SIZING-AND-SLO.md)를 기준으로 팀 프로젝트 규모를 다음처럼 본다.
+부트캠프 팀 프로젝트 규모로, 다음처럼 둔다.
 
 - DAU: `500 ~ 3000`
 - peak RPS: `15 ~ 45`
@@ -59,8 +61,7 @@ local 환경에서 반복 가능한 baseline을 만들려면 외부 PG 네트워
 ## 4. Fixture 전략
 
 local 전용 SQL fixture:
-
-- [R__seed_payment_student_cancel_refund.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_student_cancel_refund.sql)
+- R__seed_payment_student_cancel_refund.sql
 
 이 파일은 아래 데이터를 준비한다.
 

@@ -1,5 +1,5 @@
 -- Performance fixture seed for student cancel/refund scenario
--- local profile only
+-- local + perf profile only
 -- login password: testTEST123!@#
 
 SET SESSION cte_max_recursion_depth = 1000;

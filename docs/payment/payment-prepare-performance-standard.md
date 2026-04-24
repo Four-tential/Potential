@@ -25,13 +25,13 @@
 
 그래서 이번 시나리오는 아래 전제로 고정한다.
 
-> 결제 가능한 `PENDING` 주문은 [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_prepare.sql)로 미리 준비하고, k6는 그 주문을 받아 결제 준비/조회만 수행한다.
+> 결제 가능한 `PENDING` 주문은 R__seed_payment_prepare.sql로 미리 준비하고, k6는 그 주문을 받아 결제 준비/조회만 수행한다.
 
 ---
 
 ## 3. 프로젝트 규모 기준
 
-튜터님 가이드인 [SIZING-AND-SLO.md](/C:/Users/82109/nbc_project/loadlab/docs/SIZING-AND-SLO.md)를 기준으로 보면, 부트캠프 팀 프로젝트 규모는 대략 아래 범위로 볼 수 있다.
+부트캠프 팀 프로젝트 규모로, 대략 아래 범위로 볼 수 있다.
 
 - DAU: `500 ~ 3000`
 - peak RPS: `15 ~ 45`
@@ -58,9 +58,11 @@
 - 성능 테스트용 코스: 1개
 - fresh `PENDING` 주문 fixture: `500개`
 
-현재 Spring local 프로필은 아래 파일만 읽도록 설정한다.
+현재 Spring `local,perf` 프로필은 아래 파일을 함께 읽도록 설정한다.
 
-- [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_prepare.sql)
+- R__seed_payment_prepare.sql
+
+앱은 `local,perf` 프로필로 실행해서 `db/migration-perf` fixture가 함께 적재되도록 맞춘다.
 
 여기서 중요한 점은 `PaymentFacade`가 같은 주문의 기존 `PENDING` payment를 재사용한다는 점이다.
 
@@ -224,11 +226,11 @@
 
 ## 9. 실행 방법
 
-### 1. local 프로필로 앱 실행
+### 1. `local,perf` 프로필로 앱 실행
 
-[application-local.yml](/C:/Users/82109/nbc_project/Potential/src/main/resources/application-local.yml)에서 local 환경일 때만 아래 SQL이 실행되도록 설정해두었다.
+application-local.yml에서 local 환경일 때만 아래 SQL이 실행되도록 설정.
 
-- [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_prepare.sql)
+- R__seed_payment_prepare.sql
 
 ### 2. smoke
 

@@ -34,7 +34,7 @@ Paid 웹훅은 결제 준비가 끝난 뒤에 들어오는 후속 이벤트다.
 
 ## 3. 프로젝트 규모 기준
 
-튜터님 가이드 [SIZING-AND-SLO.md](/C:/Users/82109/nbc_project/loadlab/docs/SIZING-AND-SLO.md)를 기준으로 팀 프로젝트 규모를 다음처럼 둔다.
+부트캠프 팀 프로젝트 규모로, 다음처럼 둔다.
 
 - DAU: `500 ~ 3000`
 - peak RPS: `15 ~ 45`
@@ -53,7 +53,9 @@ Paid 웹훅은 결제 준비가 끝난 뒤에 들어오는 후속 이벤트다.
 
 local 전용 SQL fixture:
 
-- [R__seed_payment_webhook_paid.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_webhook_paid.sql)
+- R__seed_payment_webhook_paid.sql
+
+앱은 `local,perf` 프로필로 실행해서 `db/migration-perf` fixture가 함께 적재되도록 맞춘다.
 
 이 파일은 다음 데이터를 준비한다.
 
