@@ -71,7 +71,7 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     entrypoint: ["k6"]
-    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/k6-test.js"]
+    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/${K6_SCRIPT:-k6-test.js}"]
     networks:
       network-potential:
 

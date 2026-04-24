@@ -34,39 +34,63 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private static final PathPatternParser patternParser = new PathPatternParser();
 
-    // 통과 API 패턴 기록 (Path Pattern 사용)
-    private static final List<PathPattern> EXCLUDE_PATTERNS = List.of(
-            // Swagger
-            patternParser.parse("/swagger-ui/**"),
-            patternParser.parse("/swagger-ui.html"),
-            patternParser.parse("/v3/api-docs/**"),
+    private record ExcludeRule(String method, PathPattern pattern) {
+        boolean matches(String reqMethod, PathContainer reqPath) {
+            return (method == null || method.equalsIgnoreCase(reqMethod)) && pattern.matches(reqPath);
+        }
+    }
+
+    private static ExcludeRule any(String path) {
+        return new ExcludeRule(null, patternParser.parse(path));
+    }
+
+    private static ExcludeRule get(String path) {
+        return new ExcludeRule("GET", patternParser.parse(path));
+    }
+
+    private static ExcludeRule post(String path) {
+        return new ExcludeRule("POST", patternParser.parse(path));
+    }
+
+    private static final List<ExcludeRule> EXCLUDE_RULES = List.of(
+            // Swagger, Actuator
+            any("/swagger-ui/**"),
+            any("/swagger-ui.html"),
+            any("/v3/api-docs/**"),
+            any("/actuator/**"),
 
             // Auth
-            patternParser.parse("/v1/auth/signup"),
-            patternParser.parse("/v1/auth/login"),
-            patternParser.parse("/v1/auth/refresh"),
+            post("/v1/auth/signup"),
+            post("/v1/auth/login"),
+            post("/v1/auth/refresh"),
 
             // Course
-            patternParser.parse("/v1/courses"),
+            get("/v1/courses"),
+            get("/v1/courses/{courseId}"),
+            get("/v1/courses/{courseId}/reviews"),
 
-            // Actuator (Monitoring)
-            patternParser.parse("/actuator/**"),
+            // Review
+            get("/v1/reviews/{reviewId}"),
 
-            // 결제 테스트 관련 추가
-            patternParser.parse("/payment-test.html"),
-            patternParser.parse("/v1/payments/portone-config"),
-            patternParser.parse("/v1/webhooks/portone")
+            // Instructor profile
+            get("/v1/instructors/{instructorId}"),
+
+            // Payment
+            post("/v1/webhooks/portone"),
+            get("/v1/payments/portone-config"),
+
+            // 결제 테스트 페이지
+            any("/payment-test.html")
     );
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {
         log.info("JwtAuthFilter IN");
-        String Authorization = request.getHeader("Authorization");
+        String authorization = request.getHeader("Authorization");
         String token;
 
-        // Header 의 Authorization 확인
-        if (Authorization != null && Authorization.startsWith("Bearer ")) {
-            token = Authorization.substring("Bearer ".length());
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            token = authorization.substring("Bearer ".length());
         } else {
             BaseResponse<Void> baseResponse = BaseResponse.fail(HttpStatus.UNAUTHORIZED.name(), "인증 정보가 없습니다");
 
@@ -105,7 +129,8 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        String method = request.getMethod();
         PathContainer path = PathContainer.parsePath(request.getRequestURI());
-        return EXCLUDE_PATTERNS.stream().anyMatch(pattern -> pattern.matches(path));
+        return EXCLUDE_RULES.stream().anyMatch(rule -> rule.matches(method, path));
     }
 }
