@@ -53,6 +53,7 @@ public class OrderService {
         // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
                 memberId,
+                course.getId(),
                 course.getStartAt(),
                 course.getEndAt()
         );
@@ -83,7 +84,8 @@ public class OrderService {
         log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
         
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId, 
+                memberId,
+                course.getId(),
                 course.getStartAt(), 
                 course.getEndAt()
         );

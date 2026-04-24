@@ -91,7 +91,7 @@ class OrderServiceTest {
         Course course = CourseFixture.defaultCourse();
 
         given(courseFacade.getCourseEntity(courseId)).willReturn(course);
-        given(orderRepository.hasOverlappingReservation(memberId, course.getStartAt(), course.getEndAt()))
+        given(orderRepository.hasOverlappingReservation(memberId, course.getId(), course.getStartAt(), course.getEndAt()))
                 .willReturn(true);
 
         // when & then
