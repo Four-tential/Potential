@@ -300,7 +300,7 @@ public class OrderService {
 
     private void rollbackRedisSeatQuietly(Order order) {
         try {
-            waitingListService.rollbackOccupiedSeat(order.getCourseId(), order.getMemberId());
+            waitingListService.recoverCapacity(order.getCourseId(), order.getMemberId(), order.getOrderCount());
         } catch (Exception e) {
             log.error("Redis 재고 복구 실패: orderId={}, courseId={}, reason={}",
                     order.getId(), order.getCourseId(), e.getMessage());

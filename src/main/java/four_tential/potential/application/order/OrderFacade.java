@@ -54,7 +54,7 @@ public class OrderFacade {
         }
 
         // 잔여석 점유 실패 -> 대기열 진입
-        waitingListService.addToWaitingList(request.courseId(), memberId);
+        waitingListService.addToWaitingList(request.courseId(), memberId, request.orderCount());
         return new OrderWaitingResponse(
                 request.courseId(),
                 WaitingStatus.WAITING.name(),
