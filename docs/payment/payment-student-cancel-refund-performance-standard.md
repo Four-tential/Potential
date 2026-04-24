@@ -60,7 +60,7 @@ local 환경에서 반복 가능한 baseline을 만들려면 외부 PG 네트워
 
 local 전용 SQL fixture:
 
-- [R__seed_payment_student_cancel_refund.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/R__seed_payment_student_cancel_refund.sql)
+- [R__seed_payment_student_cancel_refund.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/payment/R__seed_payment_student_cancel_refund.sql)
 
 이 파일은 아래 데이터를 준비한다.
 
