@@ -62,8 +62,8 @@ public class AuthFacade {
 
         String role = member.getRole().name();
 
-        String accessToken = jwtUtil.createAccessToken(request.email(), member.getId(), role);
-        String refreshToken = jwtUtil.createRefreshToken(request.email());
+        String accessToken = jwtUtil.createAccessToken(member.getEmail(), member.getId(), role);
+        String refreshToken = jwtUtil.createRefreshToken(member.getEmail());
 
         jwtRepository.saveRefreshToken(member.getEmail(), refreshToken, refreshTokenExpire);
 
