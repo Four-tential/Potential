@@ -10,31 +10,76 @@ DELETE r
 FROM refunds r
          JOIN payments p ON r.payment_id = p.id
          JOIN orders o ON p.order_id = o.id
+         JOIN members m ON o.member_id = m.id
+WHERE m.email = 'perf.payment.prepare@example.com';
+
+DELETE r
+FROM refunds r
+         JOIN payments p ON r.payment_id = p.id
+         JOIN orders o ON p.order_id = o.id
 WHERE o.member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009911');
+
+DELETE p
+FROM payments p
+         JOIN orders o ON p.order_id = o.id
+         JOIN members m ON o.member_id = m.id
+WHERE m.email = 'perf.payment.prepare@example.com';
 
 DELETE p
 FROM payments p
          JOIN orders o ON p.order_id = o.id
 WHERE o.member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009911');
 
+DELETE o
+FROM orders o
+         JOIN members m ON o.member_id = m.id
+WHERE m.email = 'perf.payment.prepare@example.com';
+
 DELETE FROM orders
 WHERE member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009911')
   AND course_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009921');
 
+DELETE ci
+FROM course_images ci
+         JOIN courses c ON ci.course_id = c.id
+         JOIN instructor_members im ON c.member_instructor_id = im.id
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.instructor@example.com';
+
 DELETE FROM course_images
 WHERE course_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009921');
+
+DELETE c
+FROM courses c
+         JOIN instructor_members im ON c.member_instructor_id = im.id
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.instructor@example.com';
 
 DELETE FROM courses
 WHERE id = UUID_TO_BIN('00000000-0000-0000-0000-000000009921');
 
+DELETE im
+FROM instructor_members im
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.instructor@example.com';
+
 DELETE FROM instructor_members
 WHERE id = UUID_TO_BIN('00000000-0000-0000-0000-000000009903');
+
+DELETE FROM members
+WHERE email IN (
+                'perf.instructor@example.com',
+                'perf.payment.prepare@example.com'
+    );
 
 DELETE FROM members
 WHERE id IN (
              UUID_TO_BIN('00000000-0000-0000-0000-000000009902'),
              UUID_TO_BIN('00000000-0000-0000-0000-000000009911')
     );
+
+DELETE FROM course_categories
+WHERE code = 'PERF_PAYMENT';
 
 DELETE FROM course_categories
 WHERE id = UUID_TO_BIN('00000000-0000-0000-0000-000000009901');

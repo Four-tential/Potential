@@ -10,10 +10,26 @@ SET SESSION cte_max_recursion_depth = 1000;
 DELETE r
 FROM refunds r
          JOIN payments p ON r.payment_id = p.id
+         JOIN members m ON p.member_id = m.id
+WHERE m.email = 'perf.payment.refund@example.com';
+
+DELETE r
+FROM refunds r
+         JOIN payments p ON r.payment_id = p.id
 WHERE p.member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009964');
+
+DELETE p
+FROM payments p
+         JOIN members m ON p.member_id = m.id
+WHERE m.email = 'perf.payment.refund@example.com';
 
 DELETE FROM payments
 WHERE member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009964');
+
+DELETE o
+FROM orders o
+         JOIN members m ON o.member_id = m.id
+WHERE m.email = 'perf.payment.refund@example.com';
 
 DELETE FROM orders
 WHERE member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009964');
@@ -21,19 +37,46 @@ WHERE member_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009964');
 DELETE ci
 FROM course_images ci
          JOIN courses c ON ci.course_id = c.id
+         JOIN instructor_members im ON c.member_instructor_id = im.id
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.refund.instructor@example.com';
+
+DELETE ci
+FROM course_images ci
+         JOIN courses c ON ci.course_id = c.id
 WHERE c.member_instructor_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009963');
+
+DELETE c
+FROM courses c
+         JOIN instructor_members im ON c.member_instructor_id = im.id
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.refund.instructor@example.com';
 
 DELETE FROM courses
 WHERE member_instructor_id = UUID_TO_BIN('00000000-0000-0000-0000-000000009963');
 
+DELETE im
+FROM instructor_members im
+         JOIN members m ON im.member_id = m.id
+WHERE m.email = 'perf.refund.instructor@example.com';
+
 DELETE FROM instructor_members
 WHERE id = UUID_TO_BIN('00000000-0000-0000-0000-000000009963');
+
+DELETE FROM members
+WHERE email IN (
+                'perf.refund.instructor@example.com',
+                'perf.payment.refund@example.com'
+    );
 
 DELETE FROM members
 WHERE id IN (
              UUID_TO_BIN('00000000-0000-0000-0000-000000009962'),
              UUID_TO_BIN('00000000-0000-0000-0000-000000009964')
     );
+
+DELETE FROM course_categories
+WHERE code = 'PERF_REFUND';
 
 DELETE FROM course_categories
 WHERE id = UUID_TO_BIN('00000000-0000-0000-0000-000000009961');
