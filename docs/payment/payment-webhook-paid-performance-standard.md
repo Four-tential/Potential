@@ -53,7 +53,7 @@ Paid 웹훅은 결제 준비가 끝난 뒤에 들어오는 후속 이벤트다.
 
 local 전용 SQL fixture:
 
-- [payment-webhook-paid-data.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/sql/payment/payment-webhook-paid-data.sql)
+- [R__seed_payment_webhook_paid.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/R__seed_payment_webhook_paid.sql)
 
 이 파일은 다음 데이터를 준비한다.
 

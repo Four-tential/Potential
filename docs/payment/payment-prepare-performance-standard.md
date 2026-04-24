@@ -25,7 +25,7 @@
 
 그래서 이번 시나리오는 아래 전제로 고정한다.
 
-> 결제 가능한 `PENDING` 주문은 [payment-prepare-data.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/sql/payment/payment-prepare-data.sql)로 미리 준비하고, k6는 그 주문을 받아 결제 준비/조회만 수행한다.
+> 결제 가능한 `PENDING` 주문은 [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/R__seed_payment_prepare.sql)로 미리 준비하고, k6는 그 주문을 받아 결제 준비/조회만 수행한다.
 
 ---
 
@@ -60,7 +60,7 @@
 
 현재 Spring local 프로필은 아래 파일만 읽도록 설정한다.
 
-- [payment-prepare-data.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/sql/payment/payment-prepare-data.sql)
+- [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/R__seed_payment_prepare.sql)
 
 여기서 중요한 점은 `PaymentFacade`가 같은 주문의 기존 `PENDING` payment를 재사용한다는 점이다.
 
@@ -228,7 +228,7 @@
 
 [application-local.yml](/C:/Users/82109/nbc_project/Potential/src/main/resources/application-local.yml)에서 local 환경일 때만 아래 SQL이 실행되도록 설정해두었다.
 
-- [payment-prepare-data.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/sql/payment/payment-prepare-data.sql)
+- [R__seed_payment_prepare.sql](/C:/Users/82109/nbc_project/Potential/src/main/resources/db/migration-perf/R__seed_payment_prepare.sql)
 
 ### 2. smoke
 
