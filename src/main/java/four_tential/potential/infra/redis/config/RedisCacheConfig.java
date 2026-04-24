@@ -6,9 +6,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.data.redis.serializer.RedisSerializer;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -19,17 +18,14 @@ import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACH
 @Configuration
 @EnableCaching
 public class RedisCacheConfig {
+
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory redisConnectionFactory,
-                                          ObjectMapper objectMapper) {
-
-        GenericJacksonJsonRedisSerializer serializer =
-                new GenericJacksonJsonRedisSerializer(objectMapper);
-
+    public RedisCacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))
                 .serializeValuesWith(
-                        RedisSerializationContext.SerializationPair.fromSerializer(serializer)
+                        RedisSerializationContext.SerializationPair
+                                .fromSerializer(RedisSerializer.json())
                 );
 
         Map<String, RedisCacheConfiguration> configs = new HashMap<>();

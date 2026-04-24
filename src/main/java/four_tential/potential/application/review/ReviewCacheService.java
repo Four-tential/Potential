@@ -1,5 +1,6 @@
 package four_tential.potential.application.review;
 
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.review.review.Review;
 import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.review.review_image.ReviewImage;
@@ -32,9 +33,9 @@ import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACH
  *    - 별도 빈으로 분리하여 프록시를 통해 호출되도록 설계
  *
  * 2. 직렬화 안정성
- *    - PageResponse<ReviewResponse> (제네릭 record) 대신 List<ReviewResponse>만 캐싱
- *    - 제네릭 타입은 Jackson 역직렬화 시 타입 소거로 실패할 수 있음
- *    - List<ReviewResponse>는 단순 타입으로 안정적으로 직렬화/역직렬화 가능
+ *    - PageResponse<ReviewResponse>를 캐싱
+ *    - PageResponse, ReviewResponse 모두 record 타입
+ *    - record는 Jackson이 생성자 기반으로 역직렬화하므로 별도 설정 없이 안정적으로 동작
  */
 @Service
 @RequiredArgsConstructor
@@ -53,12 +54,12 @@ public class ReviewCacheService {
             key = "#courseId + ':' + #page + ':' + #size"
     )
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getCachedReviews(UUID courseId, int page, int size) {
+    public PageResponse<ReviewResponse> getCachedReviews(UUID courseId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Review> reviewPage = reviewRepository.findAllByCourseId(courseId, pageable);
 
         if (reviewPage.isEmpty()) {
-            return List.of();
+            return PageResponse.register(reviewPage.map(r -> ReviewResponse.of(r, List.of())));
         }
 
         // 이미지 일괄 조회 (N+1 방지)
@@ -70,12 +71,12 @@ public class ReviewCacheService {
         Map<UUID, List<ReviewImage>> imagesByReviewId = allImages.stream()
                 .collect(Collectors.groupingBy(image -> image.getReview().getId()));
 
-        return reviewPage.getContent().stream()
-                .map(review -> ReviewResponse.of(
+        return PageResponse.register(
+                reviewPage.map(review -> ReviewResponse.of(
                         review,
                         imagesByReviewId.getOrDefault(review.getId(), List.of())
                 ))
-                .toList();
+        );
     }
 
     /**

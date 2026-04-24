@@ -106,14 +106,10 @@ public class ReviewService {
 
     // 코스별 후기 목록 페이지 조회
     // - 캐싱은 ReviewCacheService에 위임 (self-invocation 방지)
-    // - 페이지 메타정보는 캐싱 외부에서 별도 조회
+    // - PageResponse<ReviewResponse> 단위로 캐싱 (record 타입으로 역직렬화 안정성 확보)
     @Transactional(readOnly = true)
     public PageResponse<ReviewResponse> findAllByCourse(UUID courseId, int page, int size) {
-        List<ReviewResponse> content = reviewCacheService.getCachedReviews(courseId, page, size);
-        long total = reviewRepository.countByCourseId(courseId);
-        int totalPages = size > 0 ? (int) Math.ceil((double) total / size) : 0;
-        boolean isLast = (long) (page + 1) * size >= total;
-        return new PageResponse<>(content, page, totalPages, total, size, isLast);
+        return reviewCacheService.getCachedReviews(courseId, page, size);
     }
 
     // 후기 단건 조회
