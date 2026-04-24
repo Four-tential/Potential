@@ -3,13 +3,13 @@ package four_tential.potential.application.member;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
-import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.member.follow.Follow;
 import four_tential.potential.domain.member.follow.FollowRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
+import four_tential.potential.domain.member.instructor_member.InstructorProfileQueryResult;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.member.member.MemberStatus;
@@ -19,9 +19,14 @@ import four_tential.potential.domain.member.onboard_category.MemberOnBoardCatego
 import four_tential.potential.domain.member.onboard_category.OnBoardCategoryRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
-import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+
+import static four_tential.potential.infra.redis.RedisConstants.INSTRUCTOR_PROFILE_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.MY_FOLLOWS_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.MY_PAGE_CACHE;
 import four_tential.potential.presentation.member.model.request.ChangePasswordRequest;
 import four_tential.potential.presentation.member.model.request.ChangeMemberStatusRequest;
 import four_tential.potential.presentation.member.model.request.OnBoardRequest;
@@ -68,13 +73,13 @@ public class MemberService {
     private final CourseRepository courseRepository;
     private final InstructorMemberRepository instructorMemberRepository;
     private final FollowRepository followRepository;
-    private final ReviewRepository reviewRepository;
     private final JwtRepository jwtRepository;
     private final JwtUtil jwtUtil;
 
     @Value("${member.default-profile-image-url}")
     private String defaultProfileImageUrl;
 
+    @Cacheable(cacheNames = MY_PAGE_CACHE, key = "#memberId")
     @Transactional(readOnly = true)
     public MyPageResponse getMyPageInfo(UUID memberId) {
         Member member = memberRepository.findById(memberId)
@@ -83,6 +88,7 @@ public class MemberService {
         return MyPageResponse.register(member, getProfileImageUrlOrDefault(member));
     }
 
+    @CacheEvict(cacheNames = MY_PAGE_CACHE, key = "#memberId")
     @Transactional
     public UpdateMyPageResponse updateMyPageInfo(UUID memberId, UpdateMyPageRequest request) {
         if (request.phone() == null && request.profileImageUrl() == null) {
@@ -200,6 +206,7 @@ public class MemberService {
         return OnBoardResponse.register(onBoard, resultCategoryCodes);
     }
 
+    @CacheEvict(cacheNames = MY_PAGE_CACHE, key = "#memberId")
     @Transactional
     public void withdrawMember(UUID memberId, String email, String accessToken, WithdrawalRequest request) {
         Member member = memberRepository.findById(memberId)
@@ -247,6 +254,7 @@ public class MemberService {
         }
     }
 
+    @CacheEvict(cacheNames = MY_PAGE_CACHE, key = "#memberId")
     @Transactional
     public ChangeMemberStatusResponse changeMemberStatus(UUID memberId, ChangeMemberStatusRequest request) {
         Member member = memberRepository.findById(memberId)
@@ -275,6 +283,7 @@ public class MemberService {
         member.changePassword(passwordEncoder.encode(request.newPassword()));
     }
 
+    @CacheEvict(cacheNames = MY_FOLLOWS_CACHE, allEntries = true)
     @Transactional
     public FollowResponse followInstructor(UUID followerId, UUID instructorMemberId) {
         // 본인 팔로우 방지
@@ -295,6 +304,7 @@ public class MemberService {
         return FollowResponse.register(instructorMemberId, true);
     }
 
+    @Cacheable(cacheNames = MY_FOLLOWS_CACHE, key = "#memberId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize")
     @Transactional(readOnly = true)
     public PageResponse<FollowedInstructorItem> getMyFollows(UUID memberId, Pageable pageable) {
         return PageResponse.register(
@@ -303,49 +313,26 @@ public class MemberService {
         );
     }
 
+    @Cacheable(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#instructorId")
     @Transactional(readOnly = true)
     public InstructorProfileResponse getInstructorProfile(UUID instructorId) {
-        // 승인된 강사 존재 확인
-        InstructorMember instructorMember = findApprovedInstructor(instructorId);
-
-        // 활성 회원만 공개 강사 프로필에 노출
-        Member member = memberRepository.findById(instructorId)
-                .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
+        InstructorProfileQueryResult result = instructorMemberRepository.findInstructorProfile(instructorId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
-        // 카테고리 조회
-        CourseCategory category = courseCategoryRepository.findByCode(instructorMember.getCategoryCode())
-                .orElseThrow(() -> new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
-
-        // 강사 개설 코스 조회
-        long courseCount = courseRepository.countByMemberInstructorId(instructorMember.getId());
-
-        // 별점 평균 조회
-        double averageRating = Optional.ofNullable(
-                reviewRepository.findAverageRatingByMemberInstructorId(instructorMember.getId())
-        ).orElse(0.0);
-
-        // 총 수강생 조회
-        long totalStudentCount = Optional.ofNullable(
-                orderRepository.sumStudentCountByMemberInstructorIdAndStatusIn(
-                        instructorMember.getId(),
-                        List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)
-                )
-        ).orElse(0L);
-
         return new InstructorProfileResponse(
-                member.getId(),
-                member.getName(),
-                instructorMember.getImageUrl(),
-                instructorMember.getCategoryCode(),
-                category.getName(),
-                instructorMember.getContent(),
-                courseCount,
-                averageRating,
-                totalStudentCount
+                result.memberId(),
+                result.memberName(),
+                result.instructorImageUrl(),
+                result.categoryCode(),
+                result.categoryName(),
+                result.content(),
+                result.courseCount(),
+                result.averageRating(),
+                result.totalStudentCount()
         );
     }
 
+    @CacheEvict(cacheNames = MY_FOLLOWS_CACHE, allEntries = true)
     @Transactional
     public FollowResponse unfollowInstructor(UUID followerId, UUID instructorMemberId) {
         // 승인된 강사 존재 확인
