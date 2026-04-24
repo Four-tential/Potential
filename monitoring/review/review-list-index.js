@@ -85,7 +85,7 @@ export function handleSummary(data) {
     const errorPct = ((e?.values?.rate ?? 0) * 100).toFixed(2);
 
     console.log('\n========================================');
-    console.log('  [Stage 3] 인덱스 적용 (인덱스O / 캐싱X)');
+    console.log('  [Stage 3] 인덱스 적용 (인덱스O / 캐싱O)');
     console.log('========================================');
     console.log(`  총 요청 수    : ${r?.values?.count ?? '-'}`);
     console.log(`  평균 응답시간 : ${d?.values?.avg?.toFixed(2) ?? '-'} ms`);

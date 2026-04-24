@@ -23,20 +23,6 @@ import java.util.stream.Collectors;
 
 import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACHE;
 
-/**
- * 후기 목록 캐싱 전담 컴포넌트 (Cache-Aside 전략)
- *
- * [설계 이유]
- * 1. Self-invocation 문제 방지
- *    - Spring @Cacheable은 AOP 프록시 기반으로 동작
- *    - 같은 클래스(ReviewService) 내에서 직접 호출하면 프록시를 거치지 않아 캐시 미적용
- *    - 별도 빈으로 분리하여 프록시를 통해 호출되도록 설계
- *
- * 2. 직렬화 안정성
- *    - PageResponse<ReviewResponse>를 캐싱
- *    - PageResponse, ReviewResponse 모두 record 타입
- *    - record는 Jackson이 생성자 기반으로 역직렬화하므로 별도 설정 없이 안정적으로 동작
- */
 @Service
 @RequiredArgsConstructor
 public class ReviewCacheService {
@@ -44,11 +30,8 @@ public class ReviewCacheService {
     private final ReviewRepository reviewRepository;
     private final ReviewImageRepository reviewImageRepository;
 
-    /**
-     * 후기 목록 페이지 조회 (캐시 적용)
-     * 캐시 키: reviewList::{courseId}:{page}:{size}
-     * TTL: 10분
-     */
+     // 후기 목록 페이지 조회 (캐시 적용)
+     // 캐시 키: reviewList::{courseId}:{page}:{size}
     @Cacheable(
             cacheNames = REVIEW_LIST_CACHE,
             key = "#courseId + ':' + #page + ':' + #size"
@@ -79,10 +62,7 @@ public class ReviewCacheService {
         );
     }
 
-    /**
-     * 후기 쓰기(작성/수정/삭제) 시 전체 페이지 캐시 무효화
-     * allEntries = true: 해당 캐시 이름의 모든 키 삭제
-     */
+     //후기 쓰기(작성/수정/삭제) 시 전체 페이지 캐시 무효화
     @CacheEvict(cacheNames = REVIEW_LIST_CACHE, allEntries = true)
     public void evictAll() {
         // AOP가 캐시 삭제 처리 - 메서드 본문 불필요
