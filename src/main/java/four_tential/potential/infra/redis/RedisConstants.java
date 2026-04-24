@@ -25,4 +25,8 @@ public class RedisConstants {
     public static final String PAYMENT_ORDER_LOCK_PREFIX = "payment:order:";
     public static final String PAYMENT_COURSE_LOCK_PREFIX = "payment:course:";
     public static final String PAYMENT_PG_LOCK_PREFIX = "payment:pg:";
+
+    // Review 캐시
+    public static final String REVIEW_LIST_CACHE = "reviewList";  // 후기 목록 캐시
+
 }

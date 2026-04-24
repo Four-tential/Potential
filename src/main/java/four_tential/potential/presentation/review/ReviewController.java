@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.review;
 
 import four_tential.potential.application.review.ReviewService;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.review.dto.request.ReviewCreateRequest;
@@ -12,11 +13,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
@@ -43,12 +47,14 @@ public class ReviewController {
                 .body(BaseResponse.success(HttpStatus.CREATED.name(), "후기가 등록되었습니다", response));
     }
 
-    // 코스별 후기 목록 조회
+    // 코스별 후기 목록 조회 (페이지네이션)
     @GetMapping("/courses/{courseId}/reviews")
-    public ResponseEntity<BaseResponse<List<ReviewResponse>>> findAllByCourse(
-            @PathVariable UUID courseId
+    public ResponseEntity<BaseResponse<PageResponse<ReviewResponse>>> findAllByCourse(
+            @PathVariable UUID courseId,
+            @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다") @RequestParam(defaultValue = "0")  int page,
+            @Positive(message = "페이지 크기는 1 이상이어야 합니다") @RequestParam(defaultValue = "20") int size
     ) {
-        List<ReviewResponse> response = reviewService.findAllByCourse(courseId);
+        PageResponse<ReviewResponse> response = reviewService.findAllByCourse(courseId, page, size);
         return ResponseEntity.ok(
                 BaseResponse.success(HttpStatus.OK.name(), "후기 목록 조회가 완료되었습니다", response)
         );

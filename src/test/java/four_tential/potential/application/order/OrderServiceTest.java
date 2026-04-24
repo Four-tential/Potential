@@ -1,9 +1,10 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
-import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
@@ -48,7 +49,7 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
-    @Mock private CourseRepository courseRepository;
+    @Mock private CourseFacade courseFacade;
     @Mock private WaitingListService waitingListService;
     @Mock private ApplicationContext applicationContext;
     @InjectMocks @Spy private OrderService orderService;
@@ -61,11 +62,11 @@ class OrderServiceTest {
         UUID courseId = UUID.randomUUID();
         OrderCreateRequest request = new OrderCreateRequest(
                 courseId,
-                2,
-                BigInteger.valueOf(50000),
-                "테스트 강의"
+                2
         );
+        Course course = CourseFixture.defaultCourse();
 
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(orderRepository.save(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -76,9 +77,27 @@ class OrderServiceTest {
         assertThat(result.getMemberId()).isEqualTo(memberId);
         assertThat(result.getCourseId()).isEqualTo(courseId);
         assertThat(result.getOrderCount()).isEqualTo(2);
-        assertThat(result.getPriceSnap()).isEqualTo(BigInteger.valueOf(50000));
+        assertThat(result.getPriceSnap()).isEqualTo(course.getPrice());
         
         verify(orderRepository).save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("동일 시간대에 이미 예약된 코스가 있으면 예외가 발생한다")
+    void checkDuplicateTimeCourse_fail_duplicateTime() {
+        // given
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
+        given(orderRepository.hasOverlappingReservation(memberId, course.getStartAt(), course.getEndAt()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> orderService.checkDuplicateTimeCourse(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_ALREADY_RESERVED.getMessage());
     }
 
     @Test
@@ -308,7 +327,7 @@ class OrderServiceTest {
         Course course = mock(Course.class);
 
         given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(10));
 
         // when
@@ -331,7 +350,7 @@ class OrderServiceTest {
         Course course = mock(Course.class);
 
         given(orderRepository.findOrderDetailsById(orderId, memberId)).willReturn(Optional.of(order));
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         given(course.getStartAt()).willReturn(LocalDateTime.now().plusDays(6));
 
         // when & then
@@ -468,7 +487,7 @@ class OrderServiceTest {
         UUID courseId = UUID.randomUUID();
         Course course = mock(Course.class);
         given(course.getCapacity()).willReturn(100);
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
         
         // DB 점유 좌석 수 합계 모킹 (PENDING 2 + PAID 3 + CONFIRMED 5 = 10)
         given(orderRepository.sumOrderCountByCourseIdAndStatuses(
@@ -491,4 +510,71 @@ class OrderServiceTest {
         );
         verify(waitingListService).updateCapacity(courseId, 90L);
     }
-}
+
+    @Test
+    @DisplayName("재고가 초기화되지 않은 경우 reconcileInventory를 호출한다")
+    void reconcileInventoryIfNecessary_calls_reconcile_when_not_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(false);
+        given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
+        doNothing().when(orderService).reconcileInventoryLocked(courseId);
+
+        // when
+        orderService.reconcileInventoryIfNecessary(courseId);
+
+        // then
+        verify(orderService).reconcileInventoryLocked(courseId);
+    }
+
+    @Test
+    @DisplayName("강사가 코스 취소 시 주문 상태를 CANCELLED로 변경한다")
+    void cancelOrderForInstructor_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = spy(Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "강사취소테스트"));
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        // when
+        orderService.cancelOrderForInstructor(orderId);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).findById(orderId);
+    }
+
+    @Test
+    @DisplayName("재고가 초기화되지 않은 경우 reconcileInventoryLocked가 복구를 수행한다")
+    void reconcileInventoryLocked_calls_reconcile_when_not_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        Course course = mock(Course.class);
+        given(course.getCapacity()).willReturn(100);
+        given(courseFacade.getCourseEntity(courseId)).willReturn(course);
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(false);
+
+        // performReconcile 내부 동작 검증을 위해 stub
+        given(orderRepository.sumOrderCountByCourseIdAndStatuses(any(), any())).willReturn(10);
+
+        // when
+        orderService.reconcileInventoryLocked(courseId);
+
+        // then
+        verify(waitingListService).updateCapacity(eq(courseId), eq(90L));
+    }
+
+    @Test
+    @DisplayName("재고가 이미 초기화된 경우 reconcileInventoryLocked가 복구를 건너뛴다")
+    void reconcileInventoryLocked_skips_reconcile_when_already_initialized() {
+        // given
+        UUID courseId = UUID.randomUUID();
+        given(waitingListService.isCapacityInitialized(courseId)).willReturn(true);
+
+        // when
+        orderService.reconcileInventoryLocked(courseId);
+
+        // then
+        verify(waitingListService, never()).updateCapacity(any(), anyLong());
+    }
+    }
+

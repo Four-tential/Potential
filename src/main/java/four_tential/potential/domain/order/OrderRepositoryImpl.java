@@ -164,4 +164,20 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
 
         return totalOrderCount != null ? Math.toIntExact(totalOrderCount) : 0;
     }
+
+    @Override
+    public boolean hasOverlappingReservation(UUID memberId, LocalDateTime startAt, LocalDateTime endAt) {
+        Integer exists = queryFactory.selectOne()
+                .from(order)
+                .join(course).on(course.id.eq(order.courseId))
+                .where(
+                        order.memberId.eq(memberId),
+                        order.status.in(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED),
+                        course.startAt.lt(endAt),
+                        course.endAt.gt(startAt)
+                )
+                .fetchFirst();
+
+        return exists != null;
+    }
 }

@@ -48,9 +48,7 @@ class OrderControllerTest {
         studentPrincipal = new MemberPrincipal(MEMBER_ID, "student@test.com", "ROLE_STUDENT");
         orderCreateRequest = new OrderCreateRequest(
                 COURSE_ID,
-                1,
-                BigInteger.valueOf(10000),
-                "테스트 강의"
+                1
         );
     }
 
