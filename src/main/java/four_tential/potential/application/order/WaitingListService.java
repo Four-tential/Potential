@@ -275,4 +275,12 @@ public class WaitingListService {
             promoteNextInWaitingList(courseId);
         }
     }
+
+    /**
+     * 잔여석 정보 초기화 여부 확인
+     */
+    public boolean isCapacityInitialized(UUID courseId) {
+        String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        return redissonClient.getAtomicLong(capacityKey).isExists();
+    }
 }

@@ -385,4 +385,13 @@ public class CourseService {
 
         course.reapply();
     }
+
+    /**
+     * 코스 엔티티 조회 (내부 서비스용)
+     */
+    @Transactional(readOnly = true)
+    public Course getCourseEntity(UUID courseId) {
+        return courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+    }
 }

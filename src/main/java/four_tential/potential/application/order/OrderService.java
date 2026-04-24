@@ -1,9 +1,8 @@
 package four_tential.potential.application.order;
 
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
-import four_tential.potential.domain.course.course.CourseRepository;
-import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
@@ -26,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -37,7 +35,7 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final CourseRepository courseRepository;
+    private final CourseFacade courseFacade;
     private final WaitingListService waitingListService;
     private final ApplicationContext applicationContext;
 
@@ -49,8 +47,7 @@ public class OrderService {
     @DistributedLock(key = "'order:member:' + #memberId")
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
         // 코스 정보 조회
-        Course course = courseRepository.findById(request.courseId())
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(request.courseId());
 
         // 동일 시간대 중복 예약 재검증
         // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
@@ -81,8 +78,7 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(courseId);
         
         log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
         
@@ -134,8 +130,7 @@ public class OrderService {
         Order order = orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
 
-        Course course = courseRepository.findById(order.getCourseId())
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        Course course = courseFacade.getCourseEntity(order.getCourseId());
 
         order.cancel(course.getStartAt(), LocalDateTime.now());
 
@@ -315,13 +310,42 @@ public class OrderService {
     /**
      * 특정 코스의 재고 정합성 복구
      * DB의 유효 주문 좌석 수를 기준으로 Redis의 잔여석 수치를 강제 업데이트합니다.
-     * 분산 락을 통해 복구 과정 중 새로운 주문이 발생하는 것을 방지
      */
     @DistributedLock(key = "'order:course:' + #courseId")
     @Transactional(readOnly = true)
     public OrderInventoryReconcileResponse reconcileInventory(UUID courseId) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
+        return performReconcile(courseId);
+    }
+
+    /**
+     * 재고 정보가 초기화되지 않은 경우에만 정합성 복구를 수행합니다.
+     * Happy Path(이미 초기화됨)에서의 성능을 위해 락 없이 1차 확인을 수행합니다.
+     */
+    public void reconcileInventoryIfNecessary(UUID courseId) {
+        if (!waitingListService.isCapacityInitialized(courseId)) {
+            // 1차 체크 통과 시에만 분산 락을 획득하고 다시 확인(Double-Check)
+            applicationContext.getBean(OrderService.class).reconcileInventoryLocked(courseId);
+        }
+    }
+
+    /**
+     * 분산 락 범위 내에서 안전하게 재고를 초기화합니다.
+     * 락 내부에서 실행되므로 트랜잭션과 락 설정을 명시적으로 가져갑니다.
+     */
+    @DistributedLock(key = "'order:course:' + #courseId")
+    @Transactional(readOnly = true)
+    public void reconcileInventoryLocked(UUID courseId) {
+        if (!waitingListService.isCapacityInitialized(courseId)) {
+            log.info("재고 미초기화 감지, 복구 프로세스 시작: courseId={}", courseId);
+            performReconcile(courseId);
+        }
+    }
+
+    /**
+     * 실제 재고 복구 로직을 수행하는 내부 메서드
+     */
+    private OrderInventoryReconcileResponse performReconcile(UUID courseId) {
+        Course course = courseFacade.getCourseEntity(courseId);
 
         // DB에서 유효한 주문(PENDING, PAID, CONFIRMED)의 좌석 합계 조회
         int occupiedSeats = orderRepository.sumOrderCountByCourseIdAndStatuses(
