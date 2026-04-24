@@ -50,14 +50,7 @@ class ReviewControllerTest {
     }
 
     private ReviewResponse stubResponse() {
-        return ReviewResponse.builder()
-                .reviewId(REVIEW_ID)
-                .memberId(MEMBER_ID)
-                .courseId(COURSE_ID)
-                .rating(5)
-                .content("좋아요")
-                .imageUrls(List.of())
-                .build();
+        return new ReviewResponse(REVIEW_ID, MEMBER_ID, COURSE_ID, 5, "좋아요", List.of(), null, null);
     }
 
     private ReviewCreateRequest createRequest(int rating, String content, List<String> imageUrls) {
@@ -212,9 +205,7 @@ class ReviewControllerTest {
         @DisplayName("후기 수정 성공 시 200 과 수정된 ReviewResponse 를 반환한다")
         void update_success() {
             ReviewUpdateRequest request = updateRequest(3, "수정된 내용", List.of());
-            ReviewResponse updated = ReviewResponse.builder()
-                    .reviewId(REVIEW_ID).memberId(MEMBER_ID).courseId(COURSE_ID)
-                    .rating(3).content("수정된 내용").imageUrls(List.of()).build();
+            ReviewResponse updated = new ReviewResponse(REVIEW_ID, MEMBER_ID, COURSE_ID, 3, "수정된 내용", List.of(), null, null);
 
             when(reviewService.update(eq(MEMBER_ID), eq(REVIEW_ID), eq(3), eq("수정된 내용"), any()))
                     .thenReturn(updated);

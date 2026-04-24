@@ -1,6 +1,6 @@
-package four_tential.potential.infra.redis.config;
+package four_tential.potential.application.review;
 
-import four_tential.potential.application.review.ReviewCacheService;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.review.fixture.ReviewFixture;
 import four_tential.potential.domain.review.fixture.ReviewImageFixture;
 import four_tential.potential.domain.review.review.Review;
@@ -43,35 +43,32 @@ class ReviewCacheServiceTest {
     class GetCachedReviewsTest {
 
         @Test
-        @DisplayName("후기 목록을 페이지 단위로 반환한다")
+        @DisplayName("후기 목록을 PageResponse 로 반환한다")
         void getCachedReviews_success() {
-            // given
             Review review = ReviewFixture.defaultReview();
             Page<Review> reviewPage = new PageImpl<>(List.of(review));
 
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(reviewPage);
             when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
 
-            // when
-            List<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
+            PageResponse<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
 
-            // then
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0).getRating()).isEqualTo(ReviewFixture.DEFAULT_RATING);
-            assertThat(result.get(0).getContent()).isEqualTo(ReviewFixture.DEFAULT_CONTENT);
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.currentPage()).isEqualTo(0);
+            assertThat(result.totalElements()).isEqualTo(1L);
+            assertThat(result.content().get(0).rating()).isEqualTo(ReviewFixture.DEFAULT_RATING);
+            assertThat(result.content().get(0).content()).isEqualTo(ReviewFixture.DEFAULT_CONTENT);
         }
 
         @Test
-        @DisplayName("후기가 없으면 빈 리스트를 반환한다")
+        @DisplayName("후기가 없으면 빈 PageResponse 를 반환한다")
         void getCachedReviews_empty() {
-            // given
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(Page.empty());
 
-            // when
-            List<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
+            PageResponse<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
 
-            // then
-            assertThat(result).isEmpty();
+            assertThat(result.content()).isEmpty();
+            assertThat(result.totalElements()).isEqualTo(0L);
             // 후기가 없으면 이미지 조회 쿼리가 발생하지 않아야 한다
             verify(reviewImageRepository, never()).findAllByReviewIdIn(any());
         }
@@ -79,7 +76,6 @@ class ReviewCacheServiceTest {
         @Test
         @DisplayName("이미지를 리뷰 ID 목록으로 한 번에 일괄 조회한다 (N+1 방지)")
         void getCachedReviews_queriesImagesInBatch() {
-            // given
             Review r1 = ReviewFixture.defaultReview();
             Review r2 = ReviewFixture.reviewWithRating(3);
             Page<Review> reviewPage = new PageImpl<>(List.of(r1, r2));
@@ -87,51 +83,41 @@ class ReviewCacheServiceTest {
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(reviewPage);
             when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of());
 
-            // when
             reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
 
-            // then: 리뷰가 2개여도 이미지 쿼리는 1번만 나가야 한다
+            // 리뷰가 2개여도 이미지 쿼리는 1번만 나가야 한다
             verify(reviewImageRepository, times(1)).findAllByReviewIdIn(any());
         }
 
         @Test
         @DisplayName("이미지가 있는 후기는 imageUrls 를 포함해 반환한다")
         void getCachedReviews_withImages() throws Exception {
-            // given
             Review review = ReviewFixture.defaultReview();
-            // @UuidGenerator는 DB INSERT 시점에 id 생성 → 단위 테스트에서 리플렉션으로 주입
             UUID reviewId = UUID.randomUUID();
             java.lang.reflect.Field idField = Review.class.getDeclaredField("id");
             idField.setAccessible(true);
             idField.set(review, reviewId);
 
             Page<Review> reviewPage = new PageImpl<>(List.of(review));
-
-            // 동일한 review 객체를 사용하는 이미지 생성
             ReviewImage image = ReviewImage.register(review, ReviewImageFixture.DEFAULT_IMAGE_URL);
 
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(reviewPage);
             when(reviewImageRepository.findAllByReviewIdIn(any())).thenReturn(List.of(image));
 
-            // when
-            List<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
+            PageResponse<ReviewResponse> result = reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
 
-            // then
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0).getImageUrls()).hasSize(1);
-            assertThat(result.get(0).getImageUrls().get(0)).isEqualTo(ReviewImageFixture.DEFAULT_IMAGE_URL);
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content().get(0).imageUrls()).hasSize(1);
+            assertThat(result.content().get(0).imageUrls().get(0)).isEqualTo(ReviewImageFixture.DEFAULT_IMAGE_URL);
         }
 
         @Test
         @DisplayName("page, size 파라미터가 Pageable 로 올바르게 전달된다")
         void getCachedReviews_pageableApplied() {
-            // given
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(Page.empty());
 
-            // when
             reviewCacheService.getCachedReviews(COURSE_ID, 2, 10);
 
-            // then
             verify(reviewRepository).findAllByCourseId(eq(COURSE_ID), argThat(pageable ->
                     pageable.getPageNumber() == 2 && pageable.getPageSize() == 10
             ));
@@ -140,13 +126,10 @@ class ReviewCacheServiceTest {
         @Test
         @DisplayName("created_at DESC 정렬이 적용된다")
         void getCachedReviews_sortByCreatedAtDesc() {
-            // given
             when(reviewRepository.findAllByCourseId(eq(COURSE_ID), any(Pageable.class))).thenReturn(Page.empty());
 
-            // when
             reviewCacheService.getCachedReviews(COURSE_ID, 0, 20);
 
-            // then
             verify(reviewRepository).findAllByCourseId(eq(COURSE_ID), argThat(pageable ->
                     pageable.getSort().getOrderFor("createdAt") != null &&
                             pageable.getSort().getOrderFor("createdAt").isDescending()
@@ -161,10 +144,7 @@ class ReviewCacheServiceTest {
         @Test
         @DisplayName("evictAll 호출 시 예외 없이 정상 종료된다")
         void evictAll_success() {
-            // @CacheEvict는 AOP 프록시를 통해 동작하므로 단위 테스트에서는 메서드 자체 실행만 검증
-            // 실제 캐시 삭제는 통합 테스트에서 검증
             reviewCacheService.evictAll();
-            // 예외 없이 정상 종료되면 통과
         }
     }
 }

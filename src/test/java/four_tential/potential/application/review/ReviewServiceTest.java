@@ -137,8 +137,8 @@ class ReviewServiceTest {
             ReviewResponse response = reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
 
             // then
-            assertThat(response.getRating()).isEqualTo(5);
-            assertThat(response.getContent()).isEqualTo("좋아요");
+            assertThat(response.rating()).isEqualTo(5);
+            assertThat(response.content()).isEqualTo("좋아요");
             verify(reviewRepository).save(any(Review.class));
         }
 
@@ -340,11 +340,9 @@ class ReviewServiceTest {
         @Test
         @DisplayName("해당 코스의 후기 목록을 페이지 단위로 반환한다")
         void findAllByCourse_success() {
-            ReviewResponse stubResponse = ReviewResponse.builder()
-                    .reviewId(UUID.randomUUID()).memberId(MEMBER_ID).courseId(COURSE_ID)
-                    .rating(5).content("좋아요").imageUrls(List.of()).build();
-            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of(stubResponse));
-            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(1L);
+            ReviewResponse stubResponse = new ReviewResponse(UUID.randomUUID(), MEMBER_ID, COURSE_ID, 5, "좋아요", List.of(), null, null);
+            PageResponse<ReviewResponse> pageResponse = new PageResponse<>(List.of(stubResponse), 0, 1, 1L, 20, true);
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(pageResponse);
 
             PageResponse<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
@@ -357,8 +355,8 @@ class ReviewServiceTest {
         @Test
         @DisplayName("후기가 없으면 빈 페이지를 반환한다")
         void findAllByCourse_empty() {
-            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of());
-            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(0L);
+            PageResponse<ReviewResponse> emptyPage = new PageResponse<>(List.of(), 0, 0, 0L, 20, true);
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(emptyPage);
 
             PageResponse<ReviewResponse> result = reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
@@ -369,8 +367,8 @@ class ReviewServiceTest {
         @Test
         @DisplayName("캐싱은 ReviewCacheService에 위임한다 (self-invocation 방지)")
         void findAllByCourse_delegatesToCacheService() {
-            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(List.of());
-            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(0L);
+            PageResponse<ReviewResponse> emptyPage = new PageResponse<>(List.of(), 0, 0, 0L, 20, true);
+            when(reviewCacheService.getCachedReviews(COURSE_ID, 0, 20)).thenReturn(emptyPage);
 
             reviewService.findAllByCourse(COURSE_ID, 0, 20);
 
@@ -391,8 +389,8 @@ class ReviewServiceTest {
 
             ReviewResponse result = reviewService.findById(REVIEW_ID);
 
-            assertThat(result.getRating()).isEqualTo(ReviewFixture.DEFAULT_RATING);
-            assertThat(result.getContent()).isEqualTo(ReviewFixture.DEFAULT_CONTENT);
+            assertThat(result.rating()).isEqualTo(ReviewFixture.DEFAULT_RATING);
+            assertThat(result.content()).isEqualTo(ReviewFixture.DEFAULT_CONTENT);
         }
 
         @Test
@@ -415,8 +413,8 @@ class ReviewServiceTest {
 
             ReviewResponse result = reviewService.findById(REVIEW_ID);
 
-            assertThat(result.getImageUrls()).hasSize(1);
-            assertThat(result.getImageUrls().get(0)).isEqualTo("https://cdn.test/img.jpg");
+            assertThat(result.imageUrls()).hasSize(1);
+            assertThat(result.imageUrls().get(0)).isEqualTo("https://cdn.test/img.jpg");
         }
     }
 
@@ -437,8 +435,8 @@ class ReviewServiceTest {
 
             ReviewResponse result = reviewService.update(MEMBER_ID, REVIEW_ID, 3, "수정된 내용", List.of());
 
-            assertThat(result.getRating()).isEqualTo(3);
-            assertThat(result.getContent()).isEqualTo("수정된 내용");
+            assertThat(result.rating()).isEqualTo(3);
+            assertThat(result.content()).isEqualTo("수정된 내용");
         }
 
         @Test
