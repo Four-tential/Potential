@@ -8,6 +8,7 @@ const ORDER_ID = __ENV.K6_REFUND_ORDER_ID || '94000000-0000-0000-0000-0000000000
 const PAYMENT_ID = __ENV.K6_REFUND_PAYMENT_ID || '95000000-0000-0000-0000-000000000001';
 const REFUND_LIST_PAGE_SIZE = 100;
 
+// 주석 작성
 export const options = {
   vus: 1,
   iterations: 1,
