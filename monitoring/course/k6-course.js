@@ -3,10 +3,10 @@
 // 시나리오: 코스 목록 -> 카테고리 필터 -> 코스 상세 -> 코스 찜 추가/제거
 //
 // 실행:
-//   STAGE=smoke BASE_URL=http://localhost:8080 k6 run monitoring/course/k6-course.js
-//   STAGE=load  BASE_URL=http://localhost:8080 k6 run monitoring/course/k6-course.js
-//   STAGE=stress BASE_URL=http://localhost:8080 k6 run monitoring/course/k6-course.js
-//   STAGE=spike  BASE_URL=http://localhost:8080 k6 run monitoring/course/k6-course.js
+//   K6_SCRIPT=course/k6-course.js STAGE=smoke docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=course-smoke /scripts/course/k6-course.js
+//   K6_SCRIPT=course/k6-course.js STAGE=load docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=course-load /scripts/course/k6-course.js
+//   K6_SCRIPT=course/k6-course.js STAGE=stress docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=course-stress /scripts/course/k6-course.js
+//   K6_SCRIPT=course/k6-course.js STAGE=spike docker compose --profile k6 run --rm k6 run -o experimental-prometheus-rw --tag testid=course-spike /scripts/course/k6-course.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';

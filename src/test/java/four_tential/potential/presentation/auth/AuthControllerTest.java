@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.auth;
 
-import four_tential.potential.application.auth.AuthService;
+import four_tential.potential.application.auth.AuthFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.verify;
 class AuthControllerTest {
 
     @Mock
-    private AuthService authService;
+    private AuthFacade authFacade;
 
     @Mock
     private HttpServletResponse httpServletResponse;
@@ -52,7 +52,7 @@ class AuthControllerTest {
     void signUp_success() {
         var request = SignUpRequestFixture.defaultRequest();
         var serviceResponse = new SignUpResponse(request.email(), request.name(), "ROLE_STUDENT", "ACTIVE");
-        given(authService.signUp(request)).willReturn(serviceResponse);
+        given(authFacade.signUp(request)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<SignUpResponse>> response = authController.signUp(request);
 
@@ -68,7 +68,7 @@ class AuthControllerTest {
     @DisplayName("로그인 성공 - 200 OK, accessToken Body 반환")
     void login_success() {
         LoginRequest request = LoginRequestFixture.defaultRequest();
-        given(authService.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
+        given(authFacade.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
 
         ResponseEntity<BaseResponse<LoginResponse>> response = authController.login(request, httpServletResponse);
 
@@ -82,7 +82,7 @@ class AuthControllerTest {
     @DisplayName("로그인 성공 - refreshToken을 HttpOnly Cookie로 설정")
     void login_setsRefreshTokenCookie() {
         LoginRequest request = LoginRequestFixture.defaultRequest();
-        given(authService.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
+        given(authFacade.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
 
         authController.login(request, httpServletResponse);
 
@@ -93,7 +93,7 @@ class AuthControllerTest {
     @DisplayName("로그인 성공 - 온보딩 완료 회원은 hasOnboarding true 반환")
     void login_withOnboarding() {
         LoginRequest request = LoginRequestFixture.defaultRequest();
-        given(authService.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", true));
+        given(authFacade.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", true));
 
         ResponseEntity<BaseResponse<LoginResponse>> response = authController.login(request, httpServletResponse);
 
@@ -105,7 +105,7 @@ class AuthControllerTest {
     @DisplayName("로그인 성공 - 온보딩 미완료 회원은 hasOnboarding false 반환")
     void login_withoutOnboarding() {
         LoginRequest request = LoginRequestFixture.defaultRequest();
-        given(authService.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
+        given(authFacade.login(request)).willReturn(new LoginResult("accessToken", "refreshToken", false));
 
         ResponseEntity<BaseResponse<LoginResponse>> response = authController.login(request, httpServletResponse);
 
@@ -116,7 +116,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("토큰 재발급 성공 - 200 OK, 새 accessToken Body 반환")
     void refresh_success() {
-        given(authService.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
+        given(authFacade.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
 
         ResponseEntity<BaseResponse<RefreshResponse>> response = authController.refresh("oldRefreshToken", httpServletResponse);
 
@@ -129,7 +129,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("토큰 재발급 성공 - 새 refreshToken을 HttpOnly Cookie로 교체")
     void refresh_setsNewCookie() {
-        given(authService.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
+        given(authFacade.refresh("oldRefreshToken")).willReturn(new RefreshResult("newAccessToken", "newRefreshToken"));
 
         authController.refresh("oldRefreshToken", httpServletResponse);
 
@@ -150,7 +150,7 @@ class AuthControllerTest {
         ResponseEntity<BaseResponse<Void>> response = authController.logOut("Bearer validAccessToken", httpServletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(authService).logOut("validAccessToken");
+        verify(authFacade).logOut("validAccessToken");
     }
 
     @Test

@@ -66,6 +66,7 @@ services:
     profiles: ["k6"]
     environment:
       BASE_URL: ${BASE_URL:-http://host.docker.internal:8080}
+      STAGE: ${STAGE:-load}
       PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET}
       PORTONE_STORE_ID: ${PORTONE_STORE_ID}
       K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write

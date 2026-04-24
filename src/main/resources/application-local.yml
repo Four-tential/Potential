@@ -113,3 +113,7 @@ management:
     metrics:
       export:
         enabled: true
+
+# CORS
+cors:
+  allowed-origins: http://localhost:3000, https://frontend.url.com # 프론트엔드 CORS 연결
