@@ -22,10 +22,6 @@ public class AuthService {
 
     @Transactional
     public SignUpResponse saveMember(SignUpRequest request, String encodedPassword) {
-        if (memberRepository.existsByEmail(request.email())) {
-            throw new ServiceErrorException(MemberExceptionEnum.ERR_DUPLICATED_EMAIL);
-        }
-
         Member newMember = Member.register(
                 request.email(),
                 encodedPassword,
