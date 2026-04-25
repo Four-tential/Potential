@@ -59,6 +59,12 @@ public class ImageController {
                 }
                 yield request.resourceId();
             }
+            case REVIEW -> {
+                if (request.resourceId() == null) {
+                    throw new IllegalArgumentException("REVIEW 타입은 resourceId가 필수입니다");
+                }
+                yield request.resourceId();
+            }
         };
 
         List<PresignedUrlResult> results = s3Service.generatePresignedUrls(
