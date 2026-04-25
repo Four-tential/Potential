@@ -202,6 +202,48 @@ class ImageControllerTest {
     }
 
     @Test
+    @DisplayName("Presigned URL 발급 - 후기 이미지 성공 (resourceId 포함)")
+    void getPresignedUrls_review_success() throws Exception {
+        UUID reviewId = UUID.randomUUID();
+        PresignedUrlRequest request = new PresignedUrlRequest(
+                ImageType.REVIEW, reviewId, List.of("image/jpeg")
+        );
+
+        given(s3Service.generatePresignedUrls(eq("review-image"), eq(reviewId), eq(List.of("image/jpeg"))))
+                .willReturn(List.of(
+                        new PresignedUrlResult("https://s3.presigned/1", "https://cdn.example.com/review-image/" + reviewId + "/1.jpg")
+                ));
+
+        mockMvc.perform(post("/v1/images/presigned-urls")
+                        .with(memberAuth())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.urls.length()").value(1));
+
+        then(s3Service).should().generatePresignedUrls(
+                eq("review-image"), eq(reviewId), eq(List.of("image/jpeg"))
+        );
+    }
+
+    @Test
+    @DisplayName("Presigned URL 발급 - REVIEW 타입 resourceId 누락 시 400")
+    void getPresignedUrls_review_missingResourceId() throws Exception {
+        String body = """
+                {"type": "REVIEW", "contentTypes": ["image/jpeg"]}
+                """;
+
+        mockMvc.perform(post("/v1/images/presigned-urls")
+                        .with(memberAuth())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("Presigned URL 발급 - COURSE 타입 resourceId 누락 시 400")
     void getPresignedUrls_course_missingResourceId() throws Exception {
         String body = """
