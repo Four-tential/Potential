@@ -78,7 +78,7 @@ class OrderServiceTest {
         assertThat(result.getCourseId()).isEqualTo(courseId);
         assertThat(result.getOrderCount()).isEqualTo(2);
         assertThat(result.getPriceSnap()).isEqualTo(course.getPrice());
-        
+
         verify(orderRepository).save(any(Order.class));
     }
 
@@ -91,7 +91,7 @@ class OrderServiceTest {
         Course course = CourseFixture.defaultCourse();
 
         given(courseFacade.getCourseEntity(courseId)).willReturn(course);
-        given(orderRepository.hasOverlappingReservation(memberId, course.getStartAt(), course.getEndAt()))
+        given(orderRepository.hasOverlappingReservation(memberId, course.getId(), course.getStartAt(), course.getEndAt()))
                 .willReturn(true);
 
         // when & then
@@ -139,7 +139,7 @@ class OrderServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         Order order = mock(Order.class);
         Page<Order> orderPage = new PageImpl<>(List.of(order), pageable, 1);
-        
+
         given(orderRepository.findMyOrders(memberId, pageable)).willReturn(orderPage);
 
         // when
@@ -178,7 +178,7 @@ class OrderServiceTest {
             UUID memberId = UUID.randomUUID();
             Order order = spy(Order.register(memberId, courseId, 1, BigInteger.valueOf(10000), "만료대상"));
             ReflectionTestUtils.setField(order, "id", orderId);
-            
+
             given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
             mockedStatic.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
 
@@ -195,7 +195,7 @@ class OrderServiceTest {
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
             captor.getValue().afterCommit();
 
-            verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+            verify(waitingListService).recoverCapacity(eq(courseId), eq(memberId), eq(1));
         }
     }
 
@@ -222,10 +222,10 @@ class OrderServiceTest {
         UUID orderId = UUID.randomUUID();
         Order expiredOrder = mock(Order.class);
         given(expiredOrder.getId()).willReturn(orderId);
-        
+
         Slice<Order> expiredSlice = new SliceImpl<>(List.of(expiredOrder));
         given(orderRepository.findAllByStatusAndExpireAtBefore(any(), any(), any())).willReturn(expiredSlice);
-        
+
         // Self-invocation 모킹
         given(applicationContext.getBean(OrderService.class)).willReturn(orderService);
         doReturn(true).when(orderService).expireOrderInNewTransaction(orderId);
@@ -409,7 +409,7 @@ class OrderServiceTest {
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
             captor.getValue().afterCommit();
 
-            verify(waitingListService).rollbackOccupiedSeat(courseId, memberId);
+            verify(waitingListService).recoverCapacity(eq(courseId), eq(memberId), eq(1));
         }
     }
 
@@ -430,7 +430,7 @@ class OrderServiceTest {
             // then
             assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()), never());
-            verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
+            verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
         }
     }
 
@@ -452,7 +452,7 @@ class OrderServiceTest {
             // then
             assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
             mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()), never());
-            verify(waitingListService, never()).rollbackOccupiedSeat(any(), any());
+            verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
         }
     }
 
@@ -476,7 +476,13 @@ class OrderServiceTest {
 
             // then
             assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(any()));
+
+            // TransactionSynchronizationManager.registerSynchronization 에 전달된 콜백 실행 유도
+            var captor = org.mockito.ArgumentCaptor.forClass(TransactionSynchronization.class);
+            mockedStatic.verify(() -> TransactionSynchronizationManager.registerSynchronization(captor.capture()));
+            captor.getValue().afterCommit();
+
+            verify(waitingListService).recoverCapacity(eq(courseId), eq(memberId), eq(1));
         }
     }
 
@@ -488,7 +494,7 @@ class OrderServiceTest {
         Course course = mock(Course.class);
         given(course.getCapacity()).willReturn(100);
         given(courseFacade.getCourseEntity(courseId)).willReturn(course);
-        
+
         // DB 점유 좌석 수 합계 모킹 (PENDING 2 + PAID 3 + CONFIRMED 5 = 10)
         given(orderRepository.sumOrderCountByCourseIdAndStatuses(
                 eq(courseId),
@@ -576,5 +582,4 @@ class OrderServiceTest {
         // then
         verify(waitingListService, never()).updateCapacity(any(), anyLong());
     }
-    }
-
+}

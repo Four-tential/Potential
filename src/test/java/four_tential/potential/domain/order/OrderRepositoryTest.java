@@ -593,7 +593,7 @@ class OrderRepositoryTest extends RedisTestContainer {
 
         // when: 15:00 ~ 17:00 시간대로 중복 조회 (1시간 겹침)
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId, baseTime.withHour(15), baseTime.withHour(17));
+                memberId, UUID.randomUUID(), baseTime.withHour(15), baseTime.withHour(17));
 
         // then
         assertThat(hasOverlap).isTrue();
@@ -613,7 +613,7 @@ class OrderRepositoryTest extends RedisTestContainer {
 
         // when: 14:00 ~ 16:00 동일 시간대 조회
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId, baseTime.withHour(14), baseTime.withHour(16));
+                memberId, UUID.randomUUID(), baseTime.withHour(14), baseTime.withHour(16));
 
         // then
         assertThat(hasOverlap).isFalse();
@@ -632,7 +632,7 @@ class OrderRepositoryTest extends RedisTestContainer {
 
         // when: 16:00 ~ 18:00 시간대로 조회 (종료 시간과 시작 시간이 같음)
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId, baseTime.withHour(16), baseTime.withHour(18));
+                memberId, UUID.randomUUID(), baseTime.withHour(16), baseTime.withHour(18));
 
         // then
         assertThat(hasOverlap).isFalse();
@@ -651,7 +651,7 @@ class OrderRepositoryTest extends RedisTestContainer {
 
         // when: 동일 시간대 조회
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId, baseTime.withHour(14), baseTime.withHour(16));
+                memberId, UUID.randomUUID(), baseTime.withHour(14), baseTime.withHour(16));
 
         // then
         assertThat(hasOverlap).isFalse();

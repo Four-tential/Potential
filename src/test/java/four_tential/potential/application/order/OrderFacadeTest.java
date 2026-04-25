@@ -80,7 +80,7 @@ class OrderFacadeTest {
         verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
         verify(orderService, never()).reconcileInventoryIfNecessary(any());
         verify(waitingListService, never()).tryOccupyingSeat(any(), any(), anyInt());
-        verify(waitingListService, never()).addToWaitingList(any(), any());
+        verify(waitingListService, never()).addToWaitingList(any(), any(), anyInt());
     }
 
     @Test
@@ -98,7 +98,7 @@ class OrderFacadeTest {
         assertThat(result).isInstanceOf(OrderWaitingResponse.class);
         verify(orderService).checkDuplicateTimeCourse(memberId, courseId);
         verify(orderService).reconcileInventoryIfNecessary(courseId);
-        verify(waitingListService).addToWaitingList(courseId, memberId);
+        verify(waitingListService).addToWaitingList(courseId, memberId, request.orderCount());
     }
 
     @Test
