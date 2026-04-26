@@ -10,4 +10,5 @@ public interface InstructorMemberQueryRepository {
     Page<InstructorApplicationItemResult> findInstructorApplications(InstructorMemberStatus status, Pageable pageable);
     Optional<InstructorApplicationDetailResult> findInstructorApplicationDetail(UUID memberId);
     Optional<MyInstructorApplicationResult> findMyInstructorApplication(UUID memberId);
+    Optional<InstructorProfileQueryResult> findInstructorProfile(UUID memberId);
 }

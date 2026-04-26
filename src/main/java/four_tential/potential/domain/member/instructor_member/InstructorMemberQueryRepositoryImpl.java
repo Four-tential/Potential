@@ -2,7 +2,11 @@ package four_tential.potential.domain.member.instructor_member;
 
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import four_tential.potential.domain.member.member.MemberStatus;
+import four_tential.potential.domain.order.OrderStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -12,9 +16,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.domain.course.course.QCourse.course;
 import static four_tential.potential.domain.course.course_category.QCourseCategory.courseCategory;
 import static four_tential.potential.domain.member.instructor_member.QInstructorMember.instructorMember;
 import static four_tential.potential.domain.member.member.QMember.member;
+import static four_tential.potential.domain.order.QOrder.order;
+import static four_tential.potential.domain.review.review.QReview.review;
 
 @RequiredArgsConstructor
 public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQueryRepository {
@@ -94,6 +101,48 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
                         .from(instructorMember)
                         .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
                         .where(instructorMember.memberId.eq(memberId))
+                        .fetchOne()
+        );
+    }
+
+    @Override
+    public Optional<InstructorProfileQueryResult> findInstructorProfile(UUID memberId) {
+        return Optional.ofNullable(
+                queryFactory
+                        .select(Projections.constructor(InstructorProfileQueryResult.class,
+                                member.id,
+                                member.name,
+                                instructorMember.imageUrl,
+                                instructorMember.categoryCode,
+                                courseCategory.name,
+                                instructorMember.content,
+                                JPAExpressions.select(course.count())
+                                        .from(course)
+                                        .where(course.memberInstructorId.eq(instructorMember.id)),
+                                Expressions.asNumber(
+                                        JPAExpressions.select(review.rating.avg().coalesce(0.0))
+                                                .from(review)
+                                                .join(course).on(course.id.eq(review.courseId))
+                                                .where(course.memberInstructorId.eq(instructorMember.id))
+                                ).doubleValue(),
+                                Expressions.asNumber(
+                                        JPAExpressions.select(order.orderCount.sumLong().coalesce(0L))
+                                                .from(order)
+                                                .join(course).on(course.id.eq(order.courseId))
+                                                .where(
+                                                        course.memberInstructorId.eq(instructorMember.id),
+                                                        order.status.in(OrderStatus.PAID, OrderStatus.CONFIRMED)
+                                                )
+                                ).longValue()
+                        ))
+                        .from(instructorMember)
+                        .join(member).on(member.id.eq(instructorMember.memberId))
+                        .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
+                        .where(
+                                instructorMember.memberId.eq(memberId),
+                                instructorMember.status.eq(InstructorMemberStatus.APPROVED),
+                                member.status.eq(MemberStatus.ACTIVE)
+                        )
                         .fetchOne()
         );
     }

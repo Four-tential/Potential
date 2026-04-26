@@ -33,7 +33,14 @@ export const options = {
   stages: (STAGES[stage] || STAGES.load).stages,
   summaryTrendStats: ['avg', 'min', 'med', 'p(95)', 'p(99)', 'max'],
   thresholds: {
-    http_req_failed: ['rate<0.01'],
+    'http_req_failed{name:members-me}':          ['rate<0.01'],
+    'http_req_failed{name:update-me}':            ['rate<0.01'],
+    'http_req_failed{name:wishlist}':              ['rate<0.01'],
+    'http_req_failed{name:follows}':               ['rate<0.01'],
+    'http_req_failed{name:instructor-profile}':    ['rate<0.01'],
+    'http_req_failed{name:instructor-courses}':    ['rate<0.01'],
+    'http_req_failed{name:my-courses}':            ['rate<0.01'],
+    'http_req_failed{name:my-students}':           ['rate<0.01'],
     'http_req_duration{name:members-me}':         ['p(95)<2000'],
     'http_req_duration{name:update-me}':           ['p(95)<2000'],
     'http_req_duration{name:wishlist}':             ['p(95)<2000'],
@@ -57,8 +64,8 @@ function login(email) {
   return res.json('data.accessToken');
 }
 
-function sampleInstructorMemberId(iter) {
-  const n = (iter % 100) + 1;
+function sampleInstructorMemberId(vu, iter) {
+  const n = ((vu * 1000 + iter) % 100) + 1;
   return `00000000-0000-0000-0000-02${n.toString(16).padStart(10, '0')}`;
 }
 
@@ -72,7 +79,7 @@ export default function (data) {
   const token = data.studentTokens[__VU % data.studentTokens.length];
   const studentHeaders = { Authorization: `Bearer ${token}` };
   const instructorHeaders = { Authorization: `Bearer ${data.instructorToken}` };
-  const instructorId = sampleInstructorMemberId(__ITER);
+  const instructorId = sampleInstructorMemberId(__VU, __ITER);
   const page = __ITER % 20;
 
   // 마이페이지 조회
@@ -121,19 +128,27 @@ export default function (data) {
   );
   check(instCoursesRes, { 'instructor-courses 2xx': (r) => r.status >= 200 && r.status < 300 });
 
-  // 팔로우 해제 (시드 데이터에 이미 팔로우가 있을 수 있으므로 먼저 해제)
+  // 팔로우 해제 (동시성 환경에서 4xx는 정상 비즈니스 응답 — http_req_failed 집계 제외)
   const unfollowRes = http.del(
     `${BASE}/v1/instructors/${instructorId}/follows`,
     null,
-    { headers: studentHeaders, tags: { name: 'unfollow-instructor' } },
+    {
+      headers: studentHeaders,
+      tags: { name: 'unfollow-instructor' },
+      responseCallback: http.expectedStatuses({ min: 200, max: 499 }),
+    },
   );
   check(unfollowRes, { 'unfollow ok': (r) => r.status >= 200 && r.status < 500 });
 
-  // 팔로우
+  // 팔로우 (동시성 환경에서 4xx는 정상 비즈니스 응답 — http_req_failed 집계 제외)
   const followRes = http.post(
     `${BASE}/v1/instructors/${instructorId}/follows`,
     null,
-    { headers: studentHeaders, tags: { name: 'follow-instructor' } },
+    {
+      headers: studentHeaders,
+      tags: { name: 'follow-instructor' },
+      responseCallback: http.expectedStatuses({ min: 200, max: 499 }),
+    },
   );
   check(followRes, { 'follow ok': (r) => r.status >= 200 && r.status < 500 });
 
