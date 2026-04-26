@@ -29,4 +29,13 @@ public class RedisConstants {
     // Review 캐시
     public static final String REVIEW_LIST_CACHE = "reviewList";  // 후기 목록 캐시
 
+    // Instructor Profile 캐시
+    public static final String INSTRUCTOR_PROFILE_CACHE = "instructorProfile";
+
+    // 팔로우 목록 캐시
+    public static final String MY_FOLLOWS_CACHE = "myFollows";
+
+    // 마이페이지 캐시
+    public static final String MY_PAGE_CACHE = "myPage";
+
 }

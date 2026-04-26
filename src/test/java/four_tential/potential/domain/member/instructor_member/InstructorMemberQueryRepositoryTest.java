@@ -1,9 +1,17 @@
 package four_tential.potential.domain.member.instructor_member;
 
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseLevel;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.order.Order;
+import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.domain.review.review.Review;
+import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,8 +22,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Field;
+import java.math.BigInteger;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.within;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,15 +45,25 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
     @Autowired
     private CourseCategoryRepository courseCategoryRepository;
 
+    @Autowired
+    private CourseRepository courseRepository;
+
+    @Autowired
+    private ReviewRepository reviewRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
     private Member savedMember;
     private InstructorMember savedInstructorMember;
+    private CourseCategory savedCategory;
 
     @BeforeEach
     void setUp() {
         savedMember = memberRepository.save(
                 Member.register("instructor@test.com", "encodedPassword123!", "홍길동", "010-1234-5678")
         );
-        courseCategoryRepository.save(CourseCategory.register("FITNESS", "피트니스"));
+        savedCategory = courseCategoryRepository.save(CourseCategory.register("FITNESS", "피트니스"));
         savedInstructorMember = instructorMemberRepository.save(
                 InstructorMember.register(
                         savedMember.getId(),
@@ -51,7 +74,6 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
         );
     }
 
-    // region findInstructorApplications
     @Test
     @DisplayName("findInstructorApplications - status 필터 없이 전체 목록 조회")
     void findInstructorApplications_noFilter_returnsAll() {
@@ -119,9 +141,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.getTotalElements()).isEqualTo(2);
         assertThat(result.getTotalPages()).isEqualTo(2);
     }
-    // endregion
 
-    // region findInstructorApplicationDetail
     @Test
     @DisplayName("findInstructorApplicationDetail - memberId로 상세 조회 성공")
     void findInstructorApplicationDetail_success() {
@@ -164,9 +184,7 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
 
         assertThat(result).isEmpty();
     }
-    // endregion
 
-    // region findMyInstructorApplication
     @Test
     @DisplayName("findMyInstructorApplication - 본인 신청 조회 성공")
     void findMyInstructorApplication_success() {
@@ -205,4 +223,123 @@ class InstructorMemberQueryRepositoryTest extends RedisTestContainer {
         assertThat(result).isEmpty();
     }
     // endregion
+
+    // region findInstructorProfile
+    @Test
+    @DisplayName("findInstructorProfile - 승인된 강사의 프로필 정보를 반환한다")
+    void findInstructorProfile_approved_returnsProfile() {
+        savedInstructorMember.approve();
+
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(savedMember.getId());
+
+        assertThat(result).isPresent();
+        InstructorProfileQueryResult profile = result.get();
+        assertThat(profile.memberId()).isEqualTo(savedMember.getId());
+        assertThat(profile.memberName()).isEqualTo("홍길동");
+        assertThat(profile.categoryCode()).isEqualTo("FITNESS");
+        assertThat(profile.categoryName()).isEqualTo("피트니스");
+        assertThat(profile.content()).isEqualTo("10년 경력의 피트니스 강사입니다");
+        assertThat(profile.courseCount()).isZero();
+        assertThat(profile.averageRating()).isEqualTo(0.0);
+        assertThat(profile.totalStudentCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("findInstructorProfile - 미승인 강사는 빈 Optional 반환")
+    void findInstructorProfile_pending_returnsEmpty() {
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(savedMember.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findInstructorProfile - 탈퇴한 회원의 강사 프로필은 빈 Optional 반환")
+    void findInstructorProfile_withdrawnMember_returnsEmpty() {
+        savedInstructorMember.approve();
+        savedMember.withdraw();
+
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(savedMember.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findInstructorProfile - 코스, 리뷰, 주문이 있으면 집계값이 반영된다")
+    void findInstructorProfile_withStats_returnsAggregatedValues() {
+        savedInstructorMember.approve();
+        LocalDateTime now = LocalDateTime.now();
+
+        Course course = courseRepository.save(Course.register(
+                savedCategory.getId(), savedInstructorMember.getId(),
+                "테스트 코스", "설명", "서울", "상세주소", 10,
+                BigInteger.valueOf(50000), CourseLevel.BEGINNER,
+                now.plusDays(1), now.plusDays(3), now.plusDays(4), now.plusDays(5)
+        ));
+
+        UUID studentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        reviewRepository.save(Review.register(studentId, course.getId(), orderId, 4, "좋아요"));
+        reviewRepository.save(Review.register(studentId, course.getId(), orderId, 5, "최고"));
+
+        Order order = orderRepository.save(Order.register(studentId, course.getId(), 3, BigInteger.valueOf(50000), "테스트 코스"));
+        setOrderStatus(order, OrderStatus.PAID);
+
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(savedMember.getId());
+
+        assertThat(result).isPresent();
+        InstructorProfileQueryResult profile = result.get();
+        assertThat(profile.courseCount()).isEqualTo(1L);
+        assertThat(profile.averageRating()).isCloseTo(4.5, within(0.01));
+        assertThat(profile.totalStudentCount()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("findInstructorProfile - 존재하지 않는 memberId면 빈 Optional 반환")
+    void findInstructorProfile_notFound_returnsEmpty() {
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(UUID.randomUUID());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findInstructorProfile - CANCELLED 주문은 totalStudentCount에 포함되지 않는다")
+    void findInstructorProfile_cancelledOrder_excludedFromStudentCount() {
+        savedInstructorMember.approve();
+        LocalDateTime now = LocalDateTime.now();
+
+        Course course = courseRepository.save(Course.register(
+                savedCategory.getId(), savedInstructorMember.getId(),
+                "테스트 코스", "설명", "서울", "상세주소", 10,
+                BigInteger.valueOf(50000), CourseLevel.BEGINNER,
+                now.plusDays(1), now.plusDays(3), now.plusDays(4), now.plusDays(5)
+        ));
+
+        UUID studentId = UUID.randomUUID();
+        Order paidOrder = orderRepository.save(Order.register(studentId, course.getId(), 2, BigInteger.valueOf(50000), "테스트 코스"));
+        setOrderStatus(paidOrder, OrderStatus.PAID);
+
+        Order cancelledOrder = orderRepository.save(Order.register(UUID.randomUUID(), course.getId(), 5, BigInteger.valueOf(50000), "테스트 코스"));
+        setOrderStatus(cancelledOrder, OrderStatus.CANCELLED);
+
+        Optional<InstructorProfileQueryResult> result =
+                instructorMemberRepository.findInstructorProfile(savedMember.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().totalStudentCount()).isEqualTo(2L);
+    }
+
+    private void setOrderStatus(Order order, OrderStatus status) {
+        try {
+            Field field = Order.class.getDeclaredField("status");
+            field.setAccessible(true);
+            field.set(order, status);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

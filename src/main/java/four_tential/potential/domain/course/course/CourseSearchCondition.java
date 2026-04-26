@@ -1,6 +1,7 @@
 package four_tential.potential.domain.course.course;
 
 import java.math.BigInteger;
+import java.util.UUID;
 
 public record CourseSearchCondition(
         String categoryCode,
@@ -9,6 +10,7 @@ public record CourseSearchCondition(
         String keyword,
         BigInteger minPrice,
         BigInteger maxPrice,
-        CourseSort sort
+        CourseSort sort,
+        UUID cursorId
 ) {
 }

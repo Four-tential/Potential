@@ -46,7 +46,7 @@ public class CourseController {
 
     private final CourseService courseService;
 
-    @Operation(summary = "코스 목록 조회", description = "조건·정렬 기반 코스 목록을 페이지로 조회합니다. 비인증 사용자도 조회 가능합니다.")
+    @Operation(summary = "코스 목록 조회", description = "조건·정렬 기반 코스 목록을 페이지로 조회합니다. 비인증 사용자도 조회 가능합니다. cursorId와 sort=LATEST가 함께 제공되면 커서 기반 조회가 적용되며, 이 경우 page 값은 무시됩니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공")
     })
@@ -60,10 +60,11 @@ public class CourseController {
             @RequestParam(required = false) BigInteger minPrice,
             @RequestParam(required = false) BigInteger maxPrice,
             @RequestParam(required = false) CourseSort sort,
+            @RequestParam(required = false) UUID cursorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
+        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort, cursorId);
         Pageable pageable = PageRequest.of(page, size);
         UUID memberId = principal != null ? principal.memberId() : null;
 

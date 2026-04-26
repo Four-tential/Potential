@@ -8,6 +8,8 @@ import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.review.review.Review;
+import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,8 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest
 @Transactional
@@ -33,13 +38,15 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     @Autowired private MemberRepository memberRepository;
     @Autowired private InstructorMemberRepository instructorMemberRepository;
     @Autowired private CourseCategoryRepository courseCategoryRepository;
+    @Autowired private ReviewRepository reviewRepository;
 
     private InstructorMember instructor;
+    private Member instructorMember;
     private CourseCategory category;
 
     @BeforeEach
     void setUp() {
-        Member instructorMember = memberRepository.save(
+        instructorMember = memberRepository.save(
                 Member.register("instructor@test.com", "encodedPwd!", "테스트강사", "010-1111-0000")
         );
         category = courseCategoryRepository.save(CourseCategory.register("TEST_CAT", "테스트카테고리"));
@@ -84,7 +91,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("테스트카테고리 코스");
         saveOpenCourseWithCategory("다른카테고리 코스", otherCategory);
 
-        CourseSearchCondition condition = new CourseSearchCondition("TEST_CAT", null, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition("TEST_CAT", null, null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -96,7 +103,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_categoryCode_no_match() {
         saveOpenCourse("코스 A");
 
-        CourseSearchCondition condition = new CourseSearchCondition("NO_SUCH_CAT", null, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition("NO_SUCH_CAT", null, null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -108,7 +115,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("OPEN 코스");
         saveClosedCourse("CLOSED 코스");
 
-        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.OPEN, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.OPEN, null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -121,7 +128,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("OPEN 코스");
         saveClosedCourse("CLOSED 코스");
 
-        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.CLOSED, null, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, CourseStatus.CLOSED, null, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -134,7 +141,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithLevel("입문 코스", CourseLevel.BEGINNER);
         saveOpenCourseWithLevel("중급 코스", CourseLevel.INTERMEDIATE);
 
-        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.BEGINNER, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.BEGINNER, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -146,7 +153,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_level_no_match() {
         saveOpenCourseWithLevel("입문 코스", CourseLevel.BEGINNER);
 
-        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.ADVANCE, null, null, null, null);
+        CourseSearchCondition condition = new CourseSearchCondition(null, null, CourseLevel.ADVANCE, null, null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -158,7 +165,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("필라테스 입문반");
         saveOpenCourse("요가 기초반");
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "필라테스", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "필라테스", null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -170,7 +177,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_keyword_case_insensitive() {
         saveOpenCourse("Spring Boot 입문");
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "spring boot", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "spring boot", null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -181,7 +188,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     void findCourses_filter_by_keyword_no_match() {
         saveOpenCourse("필라테스 입문반");
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "요가", null, null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, "요가", null, null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
@@ -193,7 +200,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저렴한 코스", BigInteger.valueOf(30000));
         saveOpenCourseWithPrice("비싼 코스", BigInteger.valueOf(80000));
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, BigInteger.valueOf(50000), null, null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, BigInteger.valueOf(50000), null, null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -206,7 +213,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저렴한 코스", BigInteger.valueOf(30000));
         saveOpenCourseWithPrice("비싼 코스", BigInteger.valueOf(80000));
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, BigInteger.valueOf(50000), null);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, BigInteger.valueOf(50000), null, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
@@ -221,7 +228,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("10만원 코스", BigInteger.valueOf(100000));
 
         CourseSearchCondition req = new CourseSearchCondition(
-                null, null, null, null, BigInteger.valueOf(30000), BigInteger.valueOf(70000), null
+                null, null, null, null, BigInteger.valueOf(30000), BigInteger.valueOf(70000), null, null
         );
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
@@ -236,7 +243,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저가 코스", BigInteger.valueOf(10000));
         saveOpenCourseWithPrice("중가 코스", BigInteger.valueOf(50000));
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_ASC);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_ASC, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         List<BigInteger> prices = result.getContent().stream()
@@ -254,7 +261,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourseWithPrice("저가 코스", BigInteger.valueOf(10000));
         saveOpenCourseWithPrice("중가 코스", BigInteger.valueOf(50000));
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_DESC);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.PRICE_DESC, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         List<BigInteger> prices = result.getContent().stream()
@@ -271,7 +278,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveOpenCourse("코스 B");
         saveOpenCourse("코스 C");
 
-        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.LATEST);
+        CourseSearchCondition req = new CourseSearchCondition(null, null, null, null, null, null, CourseSort.LATEST, null);
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(3);
@@ -380,7 +387,7 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         saveCourse("고가 코스", category, CourseLevel.BEGINNER, BigInteger.valueOf(100000), true);
 
         CourseSearchCondition req = new CourseSearchCondition(
-                "TEST_CAT", null, CourseLevel.BEGINNER, null, null, BigInteger.valueOf(70000), null
+                "TEST_CAT", null, CourseLevel.BEGINNER, null, null, BigInteger.valueOf(70000), null, null
         );
         Page<CourseListQueryResult> result = courseRepository.findCourses(req, PageRequest.of(0, 10));
 
@@ -567,8 +574,151 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.isLast()).isFalse();
     }
 
+    @Test
+    @DisplayName("코스 상세 조회 - OPEN 코스의 모든 필드가 올바르게 매핑된다")
+    void findCourseDetail_open_course_all_fields_mapped() {
+        Course course = saveOpenCourse("상세 조회 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        CourseDetailQueryResult detail = result.get();
+        assertThat(detail.courseId()).isEqualTo(course.getId());
+        assertThat(detail.title()).isEqualTo("상세 조회 코스");
+        assertThat(detail.description()).isEqualTo("코스 설명");
+        assertThat(detail.categoryCode()).isEqualTo("TEST_CAT");
+        assertThat(detail.categoryName()).isEqualTo("테스트카테고리");
+        assertThat(detail.instructorMemberId()).isEqualTo(instructorMember.getId());
+        assertThat(detail.instructorName()).isEqualTo("테스트강사");
+        assertThat(detail.addressMain()).isEqualTo("서울특별시 강남구");
+        assertThat(detail.addressDetail()).isEqualTo("테헤란로 123");
+        assertThat(detail.price()).isEqualByComparingTo(BigInteger.valueOf(50000));
+        assertThat(detail.capacity()).isEqualTo(20);
+        assertThat(detail.confirmCount()).isZero();
+        assertThat(detail.status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(detail.level()).isEqualTo(CourseLevel.BEGINNER);
+        assertThat(detail.instructorProfileImageUrl()).isNull();
+        assertThat(detail.orderOpenAt()).isNotNull();
+        assertThat(detail.orderCloseAt()).isNotNull();
+        assertThat(detail.startAt()).isNotNull();
+        assertThat(detail.endAt()).isNotNull();
+        assertThat(detail.instructorAvgRating()).isEqualTo(0.0);
+        assertThat(detail.courseAvgRating()).isEqualTo(0.0);
+        assertThat(detail.reviewCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - CLOSED 코스도 조회 가능하다")
+    void findCourseDetail_closed_course_returns_result() {
+        Course course = saveClosedCourse("종료된 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().status()).isEqualTo(CourseStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - PREPARATION 코스는 조회되지 않는다")
+    void findCourseDetail_preparation_course_returns_empty() {
+        Course course = savePreparationCourse("승인 대기 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 존재하지 않는 courseId이면 빈 Optional 반환")
+    void findCourseDetail_nonexistent_id_returns_empty() {
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(UUID.randomUUID());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 리뷰가 없으면 평균 평점 0.0, 리뷰 수 0")
+    void findCourseDetail_no_reviews_zero_stats() {
+        Course course = saveOpenCourse("리뷰 없는 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().courseAvgRating()).isEqualTo(0.0);
+        assertThat(result.get().instructorAvgRating()).isEqualTo(0.0);
+        assertThat(result.get().reviewCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 리뷰가 있으면 코스 평균 평점과 리뷰 수가 반영된다")
+    void findCourseDetail_with_reviews_returns_stats() {
+        Course course = saveOpenCourse("리뷰 있는 코스");
+        UUID studentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        reviewRepository.save(Review.register(studentId, course.getId(), orderId, 4, "좋아요"));
+        reviewRepository.save(Review.register(studentId, course.getId(), UUID.randomUUID(), 5, "최고"));
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        CourseDetailQueryResult detail = result.get();
+        assertThat(detail.courseAvgRating()).isCloseTo(4.5, within(0.01));
+        assertThat(detail.reviewCount()).isEqualTo(2L);
+        assertThat(detail.instructorAvgRating()).isCloseTo(4.5, within(0.01));
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 강사의 다른 코스 리뷰도 강사 평균 평점에 포함된다")
+    void findCourseDetail_instructor_avg_includes_other_courses() {
+        Course courseA = saveOpenCourse("코스 A");
+        Course courseB = saveOpenCourse("코스 B");
+        UUID studentId = UUID.randomUUID();
+        reviewRepository.save(Review.register(studentId, courseA.getId(), UUID.randomUUID(), 5, "A코스 최고"));
+        reviewRepository.save(Review.register(studentId, courseB.getId(), UUID.randomUUID(), 3, "B코스 보통"));
+
+        Optional<CourseDetailQueryResult> resultA = courseRepository.findCourseDetail(courseA.getId());
+
+        assertThat(resultA).isPresent();
+        CourseDetailQueryResult detailA = resultA.get();
+        assertThat(detailA.courseAvgRating()).isCloseTo(5.0, within(0.01));
+        assertThat(detailA.instructorAvgRating()).isCloseTo(4.0, within(0.01));
+        assertThat(detailA.reviewCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("커서 기반 페이지네이션 - cursorId보다 작은 ID의 코스만 반환된다")
+    void findCourses_cursor_based_pagination() {
+        Course courseA = saveOpenCourse("코스 A");
+        Course courseB = saveOpenCourse("코스 B");
+        Course courseC = saveOpenCourse("코스 C");
+
+        CourseSearchCondition condition = new CourseSearchCondition(
+                null, null, null, null, null, null, CourseSort.LATEST, courseC.getId()
+        );
+        Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent().stream().map(CourseListQueryResult::courseId).toList())
+                .doesNotContain(courseC.getId());
+    }
+
+    @Test
+    @DisplayName("커서 기반 페이지네이션 - LATEST 외 정렬에서는 cursorId가 무시된다")
+    void findCourses_cursor_ignored_for_non_latest_sort() {
+        Course courseA = saveOpenCourseWithPrice("코스 A", BigInteger.valueOf(10000));
+        Course courseB = saveOpenCourseWithPrice("코스 B", BigInteger.valueOf(50000));
+        Course courseC = saveOpenCourseWithPrice("코스 C", BigInteger.valueOf(90000));
+
+        CourseSearchCondition condition = new CourseSearchCondition(
+                null, null, null, null, null, null, CourseSort.PRICE_ASC, courseC.getId()
+        );
+        Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(3);
+    }
+
     private CourseSearchCondition emptyCondition() {
-        return new CourseSearchCondition(null, null, null, null, null, null, null);
+        return new CourseSearchCondition(null, null, null, null, null, null, null, null);
     }
 
     private Course saveOpenCourse(String title) {
