@@ -8,6 +8,8 @@ import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
+import four_tential.potential.domain.review.review.Review;
+import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,8 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest
 @Transactional
@@ -33,13 +38,15 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
     @Autowired private MemberRepository memberRepository;
     @Autowired private InstructorMemberRepository instructorMemberRepository;
     @Autowired private CourseCategoryRepository courseCategoryRepository;
+    @Autowired private ReviewRepository reviewRepository;
 
     private InstructorMember instructor;
+    private Member instructorMember;
     private CourseCategory category;
 
     @BeforeEach
     void setUp() {
-        Member instructorMember = memberRepository.save(
+        instructorMember = memberRepository.save(
                 Member.register("instructor@test.com", "encodedPwd!", "테스트강사", "010-1111-0000")
         );
         category = courseCategoryRepository.save(CourseCategory.register("TEST_CAT", "테스트카테고리"));
@@ -565,6 +572,112 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(result.getTotalPages()).isEqualTo(2);
         assertThat(result.isFirst()).isTrue();
         assertThat(result.isLast()).isFalse();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - OPEN 코스의 모든 필드가 올바르게 매핑된다")
+    void findCourseDetail_open_course_all_fields_mapped() {
+        Course course = saveOpenCourse("상세 조회 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        CourseDetailQueryResult detail = result.get();
+        assertThat(detail.courseId()).isEqualTo(course.getId());
+        assertThat(detail.title()).isEqualTo("상세 조회 코스");
+        assertThat(detail.description()).isEqualTo("코스 설명");
+        assertThat(detail.categoryCode()).isEqualTo("TEST_CAT");
+        assertThat(detail.categoryName()).isEqualTo("테스트카테고리");
+        assertThat(detail.instructorMemberId()).isEqualTo(instructorMember.getId());
+        assertThat(detail.instructorName()).isEqualTo("테스트강사");
+        assertThat(detail.addressMain()).isEqualTo("서울특별시 강남구");
+        assertThat(detail.addressDetail()).isEqualTo("테헤란로 123");
+        assertThat(detail.price()).isEqualByComparingTo(BigInteger.valueOf(50000));
+        assertThat(detail.capacity()).isEqualTo(20);
+        assertThat(detail.status()).isEqualTo(CourseStatus.OPEN);
+        assertThat(detail.level()).isEqualTo(CourseLevel.BEGINNER);
+        assertThat(detail.orderOpenAt()).isNotNull();
+        assertThat(detail.orderCloseAt()).isNotNull();
+        assertThat(detail.startAt()).isNotNull();
+        assertThat(detail.endAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - CLOSED 코스도 조회 가능하다")
+    void findCourseDetail_closed_course_returns_result() {
+        Course course = saveClosedCourse("종료된 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().status()).isEqualTo(CourseStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - PREPARATION 코스는 조회되지 않는다")
+    void findCourseDetail_preparation_course_returns_empty() {
+        Course course = savePreparationCourse("승인 대기 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 존재하지 않는 courseId이면 빈 Optional 반환")
+    void findCourseDetail_nonexistent_id_returns_empty() {
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(UUID.randomUUID());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 리뷰가 없으면 평균 평점 0.0, 리뷰 수 0")
+    void findCourseDetail_no_reviews_zero_stats() {
+        Course course = saveOpenCourse("리뷰 없는 코스");
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().courseAvgRating()).isEqualTo(0.0);
+        assertThat(result.get().instructorAvgRating()).isEqualTo(0.0);
+        assertThat(result.get().reviewCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 리뷰가 있으면 코스 평균 평점과 리뷰 수가 반영된다")
+    void findCourseDetail_with_reviews_returns_stats() {
+        Course course = saveOpenCourse("리뷰 있는 코스");
+        UUID studentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        reviewRepository.save(Review.register(studentId, course.getId(), orderId, 4, "좋아요"));
+        reviewRepository.save(Review.register(studentId, course.getId(), UUID.randomUUID(), 5, "최고"));
+
+        Optional<CourseDetailQueryResult> result = courseRepository.findCourseDetail(course.getId());
+
+        assertThat(result).isPresent();
+        CourseDetailQueryResult detail = result.get();
+        assertThat(detail.courseAvgRating()).isCloseTo(4.5, within(0.01));
+        assertThat(detail.reviewCount()).isEqualTo(2L);
+        assertThat(detail.instructorAvgRating()).isCloseTo(4.5, within(0.01));
+    }
+
+    @Test
+    @DisplayName("코스 상세 조회 - 강사의 다른 코스 리뷰도 강사 평균 평점에 포함된다")
+    void findCourseDetail_instructor_avg_includes_other_courses() {
+        Course courseA = saveOpenCourse("코스 A");
+        Course courseB = saveOpenCourse("코스 B");
+        UUID studentId = UUID.randomUUID();
+        reviewRepository.save(Review.register(studentId, courseA.getId(), UUID.randomUUID(), 5, "A코스 최고"));
+        reviewRepository.save(Review.register(studentId, courseB.getId(), UUID.randomUUID(), 3, "B코스 보통"));
+
+        Optional<CourseDetailQueryResult> resultA = courseRepository.findCourseDetail(courseA.getId());
+
+        assertThat(resultA).isPresent();
+        CourseDetailQueryResult detailA = resultA.get();
+        assertThat(detailA.courseAvgRating()).isCloseTo(5.0, within(0.01));
+        assertThat(detailA.instructorAvgRating()).isCloseTo(4.0, within(0.01));
+        assertThat(detailA.reviewCount()).isEqualTo(1L);
     }
 
     private CourseSearchCondition emptyCondition() {
