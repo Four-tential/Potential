@@ -60,10 +60,11 @@ public class CourseController {
             @RequestParam(required = false) BigInteger minPrice,
             @RequestParam(required = false) BigInteger maxPrice,
             @RequestParam(required = false) CourseSort sort,
+            @RequestParam(required = false) UUID cursorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
+        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort, cursorId);
         Pageable pageable = PageRequest.of(page, size);
         UUID memberId = principal != null ? principal.memberId() : null;
 

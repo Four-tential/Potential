@@ -4,6 +4,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +19,10 @@ public interface CourseWishlistRepository extends JpaRepository<CourseWishlist, 
 
     @Query("SELECT cw.courseId FROM CourseWishlist cw WHERE cw.memberId = :memberId AND cw.courseId IN :courseIds")
     List<UUID> findWishlistedCourseIds(@Param("memberId") UUID memberId, @Param("courseIds") Collection<UUID> courseIds);
+
+    @Modifying
+    @Query("DELETE FROM CourseWishlist cw WHERE cw.memberId = :memberId AND cw.courseId = :courseId")
+    int deleteByMemberIdAndCourseIdQuery(@Param("memberId") UUID memberId, @Param("courseId") UUID courseId);
 
     void deleteByCourseId(UUID courseId);
 }
