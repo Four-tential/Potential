@@ -5,6 +5,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import four_tential.potential.domain.member.member.MemberStatus;
 import four_tential.potential.domain.order.OrderStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -140,7 +141,7 @@ public class InstructorMemberQueryRepositoryImpl implements InstructorMemberQuer
                         .where(
                                 instructorMember.memberId.eq(memberId),
                                 instructorMember.status.eq(InstructorMemberStatus.APPROVED),
-                                member.status.eq(four_tential.potential.domain.member.member.MemberStatus.ACTIVE)
+                                member.status.eq(MemberStatus.ACTIVE)
                         )
                         .fetchOne()
         );
