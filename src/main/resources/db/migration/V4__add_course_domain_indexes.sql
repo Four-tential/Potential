@@ -14,7 +14,7 @@ CREATE INDEX idx_courses_status
 
 -- 코스별 이미지 조회
 CREATE INDEX idx_course_images_course_id
-    ON course_images (course_id);
+    ON course_images (course_id, id);
 
 -- 코스별 찜 조회/삭제
 CREATE INDEX idx_course_wishlists_course_id

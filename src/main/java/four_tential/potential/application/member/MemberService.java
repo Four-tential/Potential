@@ -206,7 +206,7 @@ public class MemberService {
         return OnBoardResponse.register(onBoard, resultCategoryCodes);
     }
 
-    @CacheEvict(cacheNames = MY_PAGE_CACHE, key = "#memberId")
+    @CacheEvict(cacheNames = {MY_PAGE_CACHE, INSTRUCTOR_PROFILE_CACHE}, key = "#memberId")
     @Transactional
     public void withdrawMember(UUID memberId, String email, String accessToken, WithdrawalRequest request) {
         Member member = memberRepository.findById(memberId)
@@ -254,7 +254,7 @@ public class MemberService {
         }
     }
 
-    @CacheEvict(cacheNames = MY_PAGE_CACHE, key = "#memberId")
+    @CacheEvict(cacheNames = {MY_PAGE_CACHE, INSTRUCTOR_PROFILE_CACHE}, key = "#memberId")
     @Transactional
     public ChangeMemberStatusResponse changeMemberStatus(UUID memberId, ChangeMemberStatusRequest request) {
         Member member = memberRepository.findById(memberId)
@@ -304,7 +304,7 @@ public class MemberService {
         return FollowResponse.register(instructorMemberId, true);
     }
 
-    @Cacheable(cacheNames = MY_FOLLOWS_CACHE, key = "#memberId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize")
+    @Cacheable(cacheNames = MY_FOLLOWS_CACHE, key = "#memberId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     @Transactional(readOnly = true)
     public PageResponse<FollowedInstructorItem> getMyFollows(UUID memberId, Pageable pageable) {
         return PageResponse.register(

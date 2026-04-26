@@ -594,12 +594,17 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(detail.addressDetail()).isEqualTo("테헤란로 123");
         assertThat(detail.price()).isEqualByComparingTo(BigInteger.valueOf(50000));
         assertThat(detail.capacity()).isEqualTo(20);
+        assertThat(detail.confirmCount()).isZero();
         assertThat(detail.status()).isEqualTo(CourseStatus.OPEN);
         assertThat(detail.level()).isEqualTo(CourseLevel.BEGINNER);
+        assertThat(detail.instructorProfileImageUrl()).isNull();
         assertThat(detail.orderOpenAt()).isNotNull();
         assertThat(detail.orderCloseAt()).isNotNull();
         assertThat(detail.startAt()).isNotNull();
         assertThat(detail.endAt()).isNotNull();
+        assertThat(detail.instructorAvgRating()).isEqualTo(0.0);
+        assertThat(detail.courseAvgRating()).isEqualTo(0.0);
+        assertThat(detail.reviewCount()).isZero();
     }
 
     @Test
@@ -678,6 +683,38 @@ class CourseQueryRepositoryTest extends RedisTestContainer {
         assertThat(detailA.courseAvgRating()).isCloseTo(5.0, within(0.01));
         assertThat(detailA.instructorAvgRating()).isCloseTo(4.0, within(0.01));
         assertThat(detailA.reviewCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("커서 기반 페이지네이션 - cursorId보다 작은 ID의 코스만 반환된다")
+    void findCourses_cursor_based_pagination() {
+        Course courseA = saveOpenCourse("코스 A");
+        Course courseB = saveOpenCourse("코스 B");
+        Course courseC = saveOpenCourse("코스 C");
+
+        CourseSearchCondition condition = new CourseSearchCondition(
+                null, null, null, null, null, null, CourseSort.LATEST, courseC.getId()
+        );
+        Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent().stream().map(CourseListQueryResult::courseId).toList())
+                .doesNotContain(courseC.getId());
+    }
+
+    @Test
+    @DisplayName("커서 기반 페이지네이션 - LATEST 외 정렬에서는 cursorId가 무시된다")
+    void findCourses_cursor_ignored_for_non_latest_sort() {
+        Course courseA = saveOpenCourseWithPrice("코스 A", BigInteger.valueOf(10000));
+        Course courseB = saveOpenCourseWithPrice("코스 B", BigInteger.valueOf(50000));
+        Course courseC = saveOpenCourseWithPrice("코스 C", BigInteger.valueOf(90000));
+
+        CourseSearchCondition condition = new CourseSearchCondition(
+                null, null, null, null, null, null, CourseSort.PRICE_ASC, courseC.getId()
+        );
+        Page<CourseListQueryResult> result = courseRepository.findCourses(condition, PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).hasSize(3);
     }
 
     private CourseSearchCondition emptyCondition() {
