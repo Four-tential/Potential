@@ -52,7 +52,9 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin # 초기 비밀번호 admin
     volumes:
       - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
-      - ./grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/grafana-dashboard.yml:ro
+      - ./monitoring/k6-dashboard.json:/etc/grafana/provisioning/dashboards/k6-dashboard.json:ro
+      - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
     networks:
@@ -64,6 +66,9 @@ services:
     profiles: ["k6"]
     environment:
       BASE_URL: ${BASE_URL:-http://host.docker.internal:8080}
+      STAGE: ${STAGE:-load}
+      PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET}
+      PORTONE_STORE_ID: ${PORTONE_STORE_ID}
       K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
       K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),min,avg
     volumes:
@@ -71,9 +76,12 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     entrypoint: ["k6"]
-    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/k6-test.js"]
+    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/${K6_SCRIPT:-k6-test.js}"]
     networks:
       network-potential:
 
 networks:
   network-potential:
+
+volumes:
+  grafana-data:

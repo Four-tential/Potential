@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.auth;
 
-import four_tential.potential.application.auth.AuthService;
+import four_tential.potential.application.auth.AuthFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.presentation.auth.model.LoginResult;
@@ -28,14 +28,14 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
-    private final AuthService authService;
+    private final AuthFacade authFacade;
 
     @Value("${jwt.secret.refreshExpire}")
     private Long refreshTokenExpire;
 
     @PostMapping("/signup")
     public ResponseEntity<BaseResponse<SignUpResponse>> signUp(@Valid @RequestBody SignUpRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(HttpStatus.CREATED.name(), "회원 가입 성공", authService.signUp(request)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(HttpStatus.CREATED.name(), "회원 가입 성공", authFacade.signUp(request)));
     }
 
     @PostMapping("/login")
@@ -43,7 +43,7 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
-        LoginResult result = authService.login(request);
+        LoginResult result = authFacade.login(request);
 
         // Refresh Token 은 쿠키에 담기
         response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.refreshToken()).toString());
@@ -60,7 +60,7 @@ public class AuthController {
             throw new ServiceErrorException(ERR_TOKEN_NULL);
         }
 
-        RefreshResult result = authService.refresh(refreshToken);
+        RefreshResult result = authFacade.refresh(refreshToken);
 
         // Refresh Token 은 쿠키에 담기
         response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.newRefreshToken()).toString());
@@ -78,7 +78,7 @@ public class AuthController {
         }
 
         String accessToken = authorization.substring("Bearer ".length());
-        authService.logOut(accessToken);
+        authFacade.logOut(accessToken);
 
         // refreshToken 쿠키 만료
         response.addHeader(HttpHeaders.SET_COOKIE, expireRefreshTokenCookie().toString());

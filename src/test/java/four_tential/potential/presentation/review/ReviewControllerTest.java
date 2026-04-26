@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import four_tential.potential.common.dto.PageResponse;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,14 +50,7 @@ class ReviewControllerTest {
     }
 
     private ReviewResponse stubResponse() {
-        return ReviewResponse.builder()
-                .reviewId(REVIEW_ID)
-                .memberId(MEMBER_ID)
-                .courseId(COURSE_ID)
-                .rating(5)
-                .content("좋아요")
-                .imageUrls(List.of())
-                .build();
+        return new ReviewResponse(REVIEW_ID, MEMBER_ID, COURSE_ID, 5, "좋아요", List.of(), null, null);
     }
 
     private ReviewCreateRequest createRequest(int rating, String content, List<String> imageUrls) {
@@ -145,26 +139,32 @@ class ReviewControllerTest {
     }
 
     @Nested
-    @DisplayName("findAllByCourse() - 코스별 후기 목록 조회")
+    @DisplayName("findAllByCourse() - 코스별 후기 목록 페이지 조회")
     class FindAllByCourseTest {
 
         @Test
-        @DisplayName("후기 목록 조회 성공 시 200 과 리스트를 반환한다")
+        @DisplayName("후기 목록 조회 성공 시 200 과 PageResponse 를 반환한다")
         void findAllByCourse_success() {
-            when(reviewService.findAllByCourse(COURSE_ID)).thenReturn(List.of(stubResponse()));
+            PageResponse<ReviewResponse> pageResponse = new PageResponse<>(
+                    List.of(stubResponse()), 0, 1, 1L, 20, true
+            );
+            when(reviewService.findAllByCourse(COURSE_ID, 0, 20)).thenReturn(pageResponse);
 
-            ResponseEntity<?> response = reviewController.findAllByCourse(COURSE_ID);
+            ResponseEntity<?> response = reviewController.findAllByCourse(COURSE_ID, 0, 20);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            verify(reviewService).findAllByCourse(COURSE_ID);
+            verify(reviewService).findAllByCourse(COURSE_ID, 0, 20);
         }
 
         @Test
-        @DisplayName("후기가 없으면 빈 리스트와 200 을 반환한다")
+        @DisplayName("후기가 없으면 빈 content 와 200 을 반환한다")
         void findAllByCourse_empty() {
-            when(reviewService.findAllByCourse(COURSE_ID)).thenReturn(List.of());
+            PageResponse<ReviewResponse> emptyPage = new PageResponse<>(
+                    List.of(), 0, 0, 0L, 20, true
+            );
+            when(reviewService.findAllByCourse(COURSE_ID, 0, 20)).thenReturn(emptyPage);
 
-            ResponseEntity<?> response = reviewController.findAllByCourse(COURSE_ID);
+            ResponseEntity<?> response = reviewController.findAllByCourse(COURSE_ID, 0, 20);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         }
@@ -205,9 +205,7 @@ class ReviewControllerTest {
         @DisplayName("후기 수정 성공 시 200 과 수정된 ReviewResponse 를 반환한다")
         void update_success() {
             ReviewUpdateRequest request = updateRequest(3, "수정된 내용", List.of());
-            ReviewResponse updated = ReviewResponse.builder()
-                    .reviewId(REVIEW_ID).memberId(MEMBER_ID).courseId(COURSE_ID)
-                    .rating(3).content("수정된 내용").imageUrls(List.of()).build();
+            ReviewResponse updated = new ReviewResponse(REVIEW_ID, MEMBER_ID, COURSE_ID, 3, "수정된 내용", List.of(), null, null);
 
             when(reviewService.update(eq(MEMBER_ID), eq(REVIEW_ID), eq(3), eq("수정된 내용"), any()))
                     .thenReturn(updated);
