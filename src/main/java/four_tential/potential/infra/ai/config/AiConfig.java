@@ -19,13 +19,14 @@ import org.springframework.core.io.ClassPathResource;
  *   터미널: ./gradlew bootRun --args='--spring.profiles.active=local,ollama'
  */
 @Configuration
+@Profile("!test")  // 테스트 환경에서는 LLM Bean 로드 제외
 public class AiConfig {
 
     //  PromptTemplate Bean — .st 파일 로드
     //  변수 치환: {courseId}, {reviews}
     @Bean
     public PromptTemplate reviewSummaryPromptTemplate() {
-        return new PromptTemplate(new ClassPathResource("prompts/review-summary.st"));
+        return new PromptTemplate(new ClassPathResource("ai/prompts/review-summary.st"));
     }
 
     //  기본 프로필: OpenAI (dev / prod)
