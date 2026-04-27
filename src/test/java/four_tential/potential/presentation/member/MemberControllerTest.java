@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.member;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
@@ -71,7 +71,7 @@ class MemberControllerTest {
     private CourseWishlistService courseWishlistService;
 
     @Mock
-    private CourseService courseService;
+    private CourseFacade courseFacade;
 
     @Mock
     private HttpServletResponse httpServletResponse;
@@ -669,7 +669,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
-        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getMyInstructorCourses(PRINCIPAL, 0, 10);
@@ -689,7 +689,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getMyInstructorCourses(PRINCIPAL, 0, 10);
@@ -706,7 +706,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(1, 5);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getMyInstructorCourses(MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getMyInstructorCourses(PRINCIPAL, 1, 5);
@@ -721,7 +721,7 @@ class MemberControllerTest {
     @DisplayName("강사 본인 코스 목록 조회 - 승인된 강사 아니면 ServiceErrorException 전파")
     void getMyInstructorCourses_instructorNotFound() {
         PageRequest pageRequest = PageRequest.of(0, 10);
-        given(courseService.getMyInstructorCourses(MEMBER_ID, pageRequest))
+        given(courseFacade.getMyInstructorCourses(MEMBER_ID, pageRequest))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         assertThatThrownBy(() -> memberController.getMyInstructorCourses(PRINCIPAL, 0, 10))
@@ -742,7 +742,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
-        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getInstructorCourses(instructorId, 0, 10);
@@ -763,7 +763,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getInstructorCourses(instructorId, 0, 10);
@@ -781,7 +781,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(1, 5);
         PageResponse<InstructorCourseListItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getInstructorCourses(instructorId, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<InstructorCourseListItem>>> response =
                 memberController.getInstructorCourses(instructorId, 1, 5);
@@ -796,7 +796,7 @@ class MemberControllerTest {
     @DisplayName("강사 코스 목록 조회 - 존재하지 않는 강사면 ServiceErrorException 전파")
     void getInstructorCourses_instructorNotFound() {
         UUID instructorId = UUID.randomUUID();
-        given(courseService.getInstructorCourses(instructorId, PageRequest.of(0, 10)))
+        given(courseFacade.getInstructorCourses(instructorId, PageRequest.of(0, 10)))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         assertThatThrownBy(() -> memberController.getInstructorCourses(instructorId, 0, 10))
@@ -817,7 +817,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<CourseStudentItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
                 memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10);
@@ -838,7 +838,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<CourseStudentItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
                 memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10);
@@ -856,7 +856,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(1, 5);
         PageResponse<CourseStudentItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, pageRequest)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<CourseStudentItem>>> response =
                 memberController.getCourseStudents(courseId, PRINCIPAL, 1, 5);
@@ -871,7 +871,7 @@ class MemberControllerTest {
     @DisplayName("수강생 명단 조회 - 코스가 없으면 ServiceErrorException 전파 (404)")
     void getCourseStudents_courseNotFound() {
         UUID courseId = UUID.randomUUID();
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
@@ -883,7 +883,7 @@ class MemberControllerTest {
     @DisplayName("수강생 명단 조회 - 본인 코스가 아니면 ServiceErrorException 전파 (403)")
     void getCourseStudents_forbiddenCourse() {
         UUID courseId = UUID.randomUUID();
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
                 .willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE));
 
         assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
@@ -895,7 +895,7 @@ class MemberControllerTest {
     @DisplayName("수강생 명단 조회 - 승인된 강사가 아니면 ServiceErrorException 전파")
     void getCourseStudents_instructorNotFound() {
         UUID courseId = UUID.randomUUID();
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))
@@ -907,7 +907,7 @@ class MemberControllerTest {
     @DisplayName("수강생 명단 조회 - PREPARATION 코스면 ServiceErrorException 전파 (400)")
     void getCourseStudents_courseInPreparation() {
         UUID courseId = UUID.randomUUID();
-        given(courseService.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
+        given(courseFacade.getCourseStudents(courseId, MEMBER_ID, PageRequest.of(0, 10)))
                 .willThrow(new ServiceErrorException(ERR_COURSE_IN_PREPARATION));
 
         assertThatThrownBy(() -> memberController.getCourseStudents(courseId, PRINCIPAL, 0, 10))

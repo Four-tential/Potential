@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalAction;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CourseAdminController {
 
-    private final CourseService courseService;
+    private final CourseFacade courseFacade;
 
     @Operation(summary = "코스 개설 신청 승인/반려", description = "PREPARATION 상태의 코스를 승인(OPEN) 또는 반려(REJECTED)합니다.")
     @ApiResponses({
@@ -42,7 +42,7 @@ public class CourseAdminController {
             @PathVariable UUID courseId,
             @Valid @RequestBody CourseRequestActionRequest request
     ) {
-        CourseRequestActionResponse response = courseService.handleCourseRequest(courseId, request);
+        CourseRequestActionResponse response = courseFacade.handleCourseRequest(courseId, request);
         String message = request.action() == CourseApprovalAction.APPROVE ? "코스 승인 성공" : "코스 반려 성공";
         return ResponseEntity.ok(BaseResponse.success("OK", message, response));
     }
