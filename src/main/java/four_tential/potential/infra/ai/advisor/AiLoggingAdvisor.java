@@ -15,7 +15,7 @@ import reactor.core.publisher.Flux;
  * 토큰 사용량 추적, 특정 조건에서만 접근 차단, 모니터링 연동 기능과 같이 확장 가능
  */
 @Slf4j
-class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
+public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
 
     private final int order;
 
