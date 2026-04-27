@@ -21,8 +21,9 @@ import java.util.UUID;
                 @UniqueConstraint(name = "uk_payments_order_id", columnNames = {"order_id"})
         },
         indexes = {
-                @Index(name = "idx_payments_member_id", columnList = "member_id"),
-                @Index(name = "idx_payments_member_id_status", columnList = "member_id, status")
+                @Index(name = "idx_payments_member_id_created_at", columnList = "member_id, created_at"),
+                @Index(name = "idx_payments_member_id_status_created_at", columnList = "member_id, status, created_at")
+
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

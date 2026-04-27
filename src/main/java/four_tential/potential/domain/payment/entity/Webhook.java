@@ -14,7 +14,12 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "webhooks")
+@Table(name = "webhooks", indexes = {
+        @Index(
+                name = "idx_webhooks_pg_key_event_status_status_received_at",
+                columnList = "pg_key, event_status, status, received_at"
+        )
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Webhook {
 
