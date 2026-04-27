@@ -79,6 +79,9 @@ public class SecurityConfig {
                 // PortOne 클라이언트 설정값
                 .requestMatchers(HttpMethod.GET, "/v1/payments/portone-config").permitAll()
 
+                // 결제 테스트 페이지
+                .requestMatchers(HttpMethod.GET, "/payment-test.html").permitAll()
+
                 // Course
                 .requestMatchers(HttpMethod.GET, "/v1/courses", "/v1/courses/*").permitAll()
 
