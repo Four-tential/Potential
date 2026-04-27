@@ -150,10 +150,24 @@ public class WaitingListService {
             String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + nextMemberId;
             RBucket<String> countBucket = redissonClient.getBucket(countKey, StringCodec.INSTANCE);
             String countStr = countBucket.get();
-            int requiredCount = (countStr != null) ? Integer.parseInt(countStr) : 1;
+
+            int requiredCount;
+            try {
+                requiredCount = (countStr != null) ? Integer.parseInt(countStr) : 1;
+                if (requiredCount <= 0) {
+                    throw new NumberFormatException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
+                }
+            } catch (NumberFormatException e) {
+                log.warn("유효하지 않은 대기 수량으로 대기자를 건너뜁니다. 이유: {}, courseId={}, memberId={}, raw={}", 
+                        e.getMessage(), courseId, nextMemberId, countStr);
+                waitingList.pollFirst();
+                countBucket.delete();
+                promoteNextInWaitingList(courseId);
+                return;
+            }
 
             if (capacity.get() < requiredCount) {
-                log.info("승격 보류: 다음 대기자 요구 수량({})이 잔여석({})보다 커서 승격을 보류합니다. courseId={}, memberId={}", 
+                log.info("다음 대기자 요구 수량({})이 잔여석({})보다 커서 승격을 보류합니다. courseId={}, memberId={}",
                         requiredCount, capacity.get(), courseId, nextMemberId);
                 return;
             }
@@ -164,7 +178,7 @@ public class WaitingListService {
 
             // SSE 연결 확인 (연결이 없으면 다음 대기자로 넘어감)
             if (sseWaitingRoomRepository.find(courseId, nextMemberId).isEmpty()) {
-                log.warn("승격 대상 SSE 연결 없음, 다음 대기자 시도: courseId={}, memberId={}", courseId, nextMemberId);
+                log.warn("승격 대상 SSE 연결 없음. 다음 대기자 시도: courseId={}, memberId={}", courseId, nextMemberId);
                 promoteNextInWaitingList(courseId);
                 return;
             }
