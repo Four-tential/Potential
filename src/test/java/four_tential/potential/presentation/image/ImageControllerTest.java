@@ -271,5 +271,6 @@ class ImageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
+        then(s3Service).shouldHaveNoInteractions();
     }
 }
