@@ -3,6 +3,7 @@ package four_tential.potential.domain.course.course;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.support.PageableExecutionUtils;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static four_tential.potential.domain.course.course.QCourse.course;
@@ -20,6 +22,7 @@ import static four_tential.potential.domain.course.course_category.QCourseCatego
 import static four_tential.potential.domain.course.course_image.QCourseImage.courseImage;
 import static four_tential.potential.domain.member.instructor_member.QInstructorMember.instructorMember;
 import static four_tential.potential.domain.member.member.QMember.member;
+import static four_tential.potential.domain.review.review.QReview.review;
 
 @RequiredArgsConstructor
 public class CourseQueryRepositoryImpl implements CourseQueryRepository {
@@ -28,14 +31,14 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
 
     @Override
     public Page<CourseListQueryResult> findCourses(CourseSearchCondition condition, Pageable pageable) {
-        // UUID v7 은 시간 정렬(time-ordered) - id.min() = 가장 먼저 등록된 이미지 (썸네일)
-        // TODO 코스 수가 증가하면(예: 1만 건 이상) 아래 서브쿼리가 코스마다 실행되어 성능 병목이 될 수 있음
-        //   - 확인 방법: EXPLAIN 으로 쿼리 실행 계획 확인, Nested Loop 발생 시 대안 검토
-        //   - 대안 1: course_thumbnail_url 컬럼을 Course 엔티티에 추가해 이미지 조회 자체를 제거
-        //   - 대안 2: 코스 ID 목록으로 이미지를 한 번에 조회한 뒤 애플리케이션에서 매핑 (N+1 제거)
         QCourseImage courseImageSub = new QCourseImage("courseImageSub");
 
         BooleanBuilder whereConditions = buildWhereConditions(condition);
+
+        boolean useCursor = condition.cursorId() != null && isLatestSort(condition.sort());
+        if (useCursor) {
+            whereConditions.and(course.id.lt(condition.cursorId()));
+        }
 
         List<CourseListQueryResult> content = queryFactory
                 .select(Projections.constructor(CourseListQueryResult.class,
@@ -67,7 +70,7 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
                         ))
                 .where(whereConditions)
                 .orderBy(buildOrderSpecifier(condition.sort()))
-                .offset(pageable.getOffset())
+                .offset(useCursor ? 0 : pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
 
@@ -77,9 +80,67 @@ public class CourseQueryRepositoryImpl implements CourseQueryRepository {
                 .join(instructorMember).on(instructorMember.id.eq(course.memberInstructorId))
                 .join(member).on(member.id.eq(instructorMember.memberId))
                 .leftJoin(courseCategory).on(courseCategory.id.eq(course.courseCategoryId))
-                .where(whereConditions);
+                .where(buildWhereConditions(condition));
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
+    }
+
+    private boolean isLatestSort(CourseSort sort) {
+        return sort == null || sort == CourseSort.LATEST;
+    }
+
+    @Override
+    public Optional<CourseDetailQueryResult> findCourseDetail(UUID courseId) {
+        return Optional.ofNullable(
+                queryFactory
+                        .select(Projections.constructor(CourseDetailQueryResult.class,
+                                course.id,
+                                course.title,
+                                course.description,
+                                courseCategory.code,
+                                courseCategory.name,
+                                member.id,
+                                member.name,
+                                member.profileImageUrl,
+                                course.addressMain,
+                                course.addressDetail,
+                                course.price,
+                                course.capacity,
+                                course.confirmCount,
+                                course.status,
+                                course.level,
+                                course.orderOpenAt,
+                                course.orderCloseAt,
+                                course.startAt,
+                                course.endAt,
+                                Expressions.asNumber(
+                                        JPAExpressions.select(review.rating.avg().coalesce(0.0))
+                                                .from(review)
+                                                .where(review.courseId.in(
+                                                        JPAExpressions.select(course.id)
+                                                                .from(course)
+                                                                .where(course.memberInstructorId.eq(instructorMember.id))
+                                                ))
+                                ).doubleValue(),
+                                Expressions.asNumber(
+                                        JPAExpressions.select(review.rating.avg().coalesce(0.0))
+                                                .from(review)
+                                                .where(review.courseId.eq(courseId))
+                                ).doubleValue(),
+                                JPAExpressions.select(review.count())
+                                        .from(review)
+                                        .where(review.courseId.eq(courseId))
+                        ))
+                        .from(course)
+                        .join(instructorMember).on(instructorMember.id.eq(course.memberInstructorId))
+                        .join(member).on(member.id.eq(instructorMember.memberId))
+                        .leftJoin(courseCategory).on(courseCategory.id.eq(course.courseCategoryId))
+                        .where(
+                                course.id.eq(courseId),
+                                course.status.ne(CourseStatus.PREPARATION)
+                        )
+                        .fetchOne()
+        );
     }
 
     @Override

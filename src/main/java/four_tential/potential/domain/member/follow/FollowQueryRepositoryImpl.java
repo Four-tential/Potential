@@ -1,6 +1,8 @@
 package four_tential.potential.domain.member.follow;
 
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,18 +33,22 @@ public class FollowQueryRepositoryImpl implements FollowQueryRepository {
                         member.profileImageUrl,
                         instructorMember.categoryCode,
                         courseCategory.name,
-                        course.id.countDistinct(),
-                        review.rating.avg(),
+                        JPAExpressions.select(course.count())
+                                .from(course)
+                                .where(course.memberInstructorId.eq(instructorMember.id)),
+                        Expressions.asNumber(
+                                JPAExpressions.select(review.rating.avg().coalesce(0.0))
+                                        .from(review)
+                                        .join(course).on(course.id.eq(review.courseId))
+                                        .where(course.memberInstructorId.eq(instructorMember.id))
+                        ).doubleValue(),
                         follow.createdAt
                 ))
                 .from(follow)
                 .join(instructorMember).on(instructorMember.id.eq(follow.memberInstructorId))
                 .join(member).on(member.id.eq(instructorMember.memberId))
                 .join(courseCategory).on(courseCategory.code.eq(instructorMember.categoryCode))
-                .leftJoin(course).on(course.memberInstructorId.eq(instructorMember.id))
-                .leftJoin(review).on(review.courseId.eq(course.id))
                 .where(follow.memberId.eq(followerId))
-                .groupBy(follow.id, instructorMember.id, member.id, courseCategory.code)
                 .orderBy(follow.createdAt.desc())
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())

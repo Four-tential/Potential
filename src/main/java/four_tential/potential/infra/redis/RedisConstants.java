@@ -12,6 +12,7 @@ public class RedisConstants {
     public static final String COURSE_CAPACITY_PREFIX = "Course:Capacity:";
     public static final String WAITING_LIST_PREFIX = "WaitingList:";
     public static final String USER_COURSE_OCCUPANCY_PREFIX = "User:Occupancy:";
+    public static final String WAITING_ORDER_COUNT_PREFIX = "WaitingCount:";
 
     // QR 출석
     public static final String QR_ATTENDANCE_PREFIX = "qr:attendance:"; // courseId 기준 중복 생성 방지
@@ -28,6 +29,15 @@ public class RedisConstants {
 
     // Review 캐시
     public static final String REVIEW_LIST_CACHE = "reviewList";  // 후기 목록 캐시
+
+    // Instructor Profile 캐시
+    public static final String INSTRUCTOR_PROFILE_CACHE = "instructorProfile";
+
+    // 팔로우 목록 캐시
+    public static final String MY_FOLLOWS_CACHE = "myFollows";
+
+    // 마이페이지 캐시
+    public static final String MY_PAGE_CACHE = "myPage";
 
     // Attendance 캐시
     public static final String ATTENDANCE_LIST_CACHE = "attendanceList";  // 출석 현황 캐시
