@@ -47,9 +47,9 @@ class AttendanceQueryServiceTest {
             AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(COURSE_ID);
 
             // then
-            assertThat(snapshot.getTotalCount()).isEqualTo(2);
-            assertThat(snapshot.getAttendCount()).isEqualTo(1);
-            assertThat(snapshot.getAbsentCount()).isEqualTo(1);
+            assertThat(snapshot.totalCount()).isEqualTo(2);
+            assertThat(snapshot.attendCount()).isEqualTo(1);
+            assertThat(snapshot.absentCount()).isEqualTo(1);
         }
 
         @Test
@@ -63,9 +63,9 @@ class AttendanceQueryServiceTest {
             AttendanceListResponse snapshot = attendanceQueryService.getAttendanceSnapshot(COURSE_ID);
 
             // then
-            assertThat(snapshot.getTotalCount()).isZero();
-            assertThat(snapshot.getAttendCount()).isZero();
-            assertThat(snapshot.getAbsentCount()).isZero();
+            assertThat(snapshot.totalCount()).isZero();
+            assertThat(snapshot.attendCount()).isZero();
+            assertThat(snapshot.absentCount()).isZero();
         }
     }
 }

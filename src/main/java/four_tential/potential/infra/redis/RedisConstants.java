@@ -43,4 +43,6 @@ public class RedisConstants {
     // 마이페이지 캐시
     public static final String MY_PAGE_CACHE = "myPage";
 
+    // Attendance 캐시
+    public static final String ATTENDANCE_LIST_CACHE = "attendanceList";  // 출석 현황 캐시
 }

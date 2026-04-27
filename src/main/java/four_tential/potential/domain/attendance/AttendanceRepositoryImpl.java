@@ -41,20 +41,15 @@ public class AttendanceRepositoryImpl implements AttendanceRepositoryCustom {
         int absent = total - attend;
 
         List<AttendanceListResponse.AttendanceDetail> details = attendances.stream()
-                .map(a -> AttendanceListResponse.AttendanceDetail.builder()
-                        .attendanceId(a.getId())
-                        .memberId(a.getMemberId())
-                        .status(a.getStatus())
-                        .attendanceAt(a.getAttendanceAt())
-                        .build())
+                .map(a -> new AttendanceListResponse.AttendanceDetail(
+                        a.getId(),
+                        a.getMemberId(),
+                        a.getStatus(),
+                        a.getAttendanceAt()
+                ))
                 .toList();
 
-        return AttendanceListResponse.builder()
-                .totalCount(total)
-                .attendCount(attend)
-                .absentCount(absent)
-                .attendances(details)
-                .build();
+        return new AttendanceListResponse(total, attend, absent, details);
     }
 
     // 수강생 본인 출석 단건 조회

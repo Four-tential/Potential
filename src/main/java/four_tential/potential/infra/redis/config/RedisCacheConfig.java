@@ -18,6 +18,7 @@ import static four_tential.potential.infra.redis.RedisConstants.MY_FOLLOWS_CACHE
 import static four_tential.potential.infra.redis.RedisConstants.MY_PAGE_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ATTENDANCE_LIST_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACHE;
 
 @Configuration
@@ -52,6 +53,9 @@ public class RedisCacheConfig {
 
         // 마이페이지 캐시: TTL 5분
         configs.put(MY_PAGE_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+
+        // 출석 현황 캐시: TTL 30초
+        configs.put(ATTENDANCE_LIST_CACHE, defaultConfig.entryTtl(Duration.ofSeconds(30)));
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)
