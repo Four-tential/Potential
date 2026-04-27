@@ -12,18 +12,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * 후기 요약 AI 서비스(프로토 타입)
- *
- * <p><b>스터디 week2 PromptService 패턴 기반:</b>
- * {@code resources/prompts/review-summary.st} 파일을 로드하여
- * {@code {courseId}}, {@code {reviews}} 변수를 치환 후 LLM에 전달합니다.</p>
- *
- * <pre>
- * // 사용 예시
- * String summary = reviewSummaryService.summarize(courseId, reviewContents);
- * </pre>
- */
+
+//후기 요약 AI 서비스(테스트 버전)
 @Slf4j
 @Service
 public class ReviewSummaryService {
