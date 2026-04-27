@@ -41,7 +41,7 @@ public class RedisCacheConfig {
         // 주문 상세 캐시: TTL 10분
         configs.put(ORDER_DETAILS_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(10)));
 
-        // 주문 목록 캐시: TTL 5분
+        // 주문 목록 캐시: TTL 10분
         configs.put(ORDER_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(10)));
 
         // 강사 프로필 캐시: TTL 5분

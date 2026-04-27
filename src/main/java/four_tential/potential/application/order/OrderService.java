@@ -50,7 +50,7 @@ public class OrderService {
      */
     @Transactional
     @DistributedLock(key = "'order:member:' + #memberId")
-    @CacheEvict(cacheNames = ORDER_LIST_CACHE, key = "#memberId")
+    @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
         // 코스 정보 조회
         Course course = courseFacade.getCourseEntity(request.courseId());
