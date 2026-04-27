@@ -291,8 +291,8 @@ class AttendanceServiceTest {
 
             AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
 
-            assertThat(result.getTotalCount()).isEqualTo(2);
-            assertThat(result.getAttendances()).hasSize(2);
+            assertThat(result.totalCount()).isEqualTo(2);
+            assertThat(result.attendances()).hasSize(2);
         }
 
         @Test
@@ -326,8 +326,8 @@ class AttendanceServiceTest {
 
             AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
 
-            assertThat(result.getTotalCount()).isZero();
-            assertThat(result.getAttendances()).isEmpty();
+            assertThat(result.totalCount()).isZero();
+            assertThat(result.attendances()).isEmpty();
         }
     }
 
