@@ -9,6 +9,8 @@ import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
+import four_tential.potential.domain.member.instructor_member.InstructorMember;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
@@ -48,6 +50,7 @@ class AttendanceServiceTest {
     @Mock private SseAttendanceEventPublisher sseAttendanceEventPublisher;
     @Mock private CourseRepository courseRepository;
     @Mock private OrderRepository orderRepository;
+    @Mock private InstructorMemberRepository instructorMemberRepository;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -57,6 +60,14 @@ class AttendanceServiceTest {
     private static final UUID ORDER_ID   = UUID.randomUUID();
     private static final String QR_TOKEN = "test-qr-token";
     private static final byte[] QR_IMAGE = new byte[]{1, 2, 3};
+    private static final UUID INSTRUCTOR_MEMBER_ID = UUID.randomUUID();
+
+    // instructorMemberRepository mock 설정 헬퍼
+    private void mockInstructorMember(UUID memberId, UUID instructorMemberId) {
+        InstructorMember instructorMember = mock(InstructorMember.class);
+        when(instructorMember.getId()).thenReturn(instructorMemberId);
+        when(instructorMemberRepository.findByMemberId(memberId)).thenReturn(Optional.of(instructorMember));
+    }
 
     private Course makeCourse(UUID instructorId, LocalDateTime startAt, CourseStatus status) {
         try {
@@ -87,6 +98,7 @@ class AttendanceServiceTest {
         void createQr_success() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
@@ -112,6 +124,7 @@ class AttendanceServiceTest {
         void createQr_notOwnCourse_throwsException() {
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);  // instructorMemberId != course.memberInstructorId
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -123,6 +136,7 @@ class AttendanceServiceTest {
         void createQr_courseNotOpen_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.PREPARATION);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -136,6 +150,7 @@ class AttendanceServiceTest {
         void createQr_courseClosed_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.CLOSED);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -147,6 +162,7 @@ class AttendanceServiceTest {
         void createQr_beforeStart_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().plusHours(1), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -158,6 +174,7 @@ class AttendanceServiceTest {
         void createQr_expiredWindow_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(11), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -169,6 +186,7 @@ class AttendanceServiceTest {
         void createQr_alreadyActive_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(false);
 
             assertThatThrownBy(() -> attendanceService.createQr(COURSE_ID, MEMBER_ID))
@@ -183,6 +201,7 @@ class AttendanceServiceTest {
         void createQr_savesToRedis() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(qrTokenRepository.saveIfAbsent(eq(COURSE_ID), any())).thenReturn(true);
             when(qrCodeGenerator.generate(any())).thenReturn(QR_IMAGE);
 
@@ -282,11 +301,12 @@ class AttendanceServiceTest {
         void findAllByCourse_success() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             List<Attendance> attendances = List.of(
                     Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID),
                     Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID)
             );
-            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenReturn(AttendanceListResponse.ofInstructor(attendances));
 
             AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
@@ -310,6 +330,7 @@ class AttendanceServiceTest {
         void findAllByCourse_notOwnCourse_throwsException() {
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);  // instructorMemberId != course.memberInstructorId
 
             assertThatThrownBy(() -> attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -321,7 +342,8 @@ class AttendanceServiceTest {
         void findAllByCourse_empty() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findStatsByCourseId(COURSE_ID))
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
+            when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
             AttendanceListResponse result = attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID);
@@ -370,6 +392,7 @@ class AttendanceServiceTest {
         void stream_success() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenReturn(AttendanceListResponse.ofInstructor(List.of(
                             Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID)
@@ -396,6 +419,7 @@ class AttendanceServiceTest {
         void stream_notOwnCourse_throwsException() {
             Course course = makeCourse(UUID.randomUUID(), LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);  // instructorMemberId != course.memberInstructorId
 
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -407,6 +431,7 @@ class AttendanceServiceTest {
         void stream_courseNotOpen_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.CLOSED);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
 
             assertThatThrownBy(() -> attendanceService.stream(COURSE_ID, MEMBER_ID))
                     .isInstanceOf(ServiceErrorException.class)
@@ -420,6 +445,7 @@ class AttendanceServiceTest {
         void stream_emptySnapshot() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
 
@@ -434,6 +460,7 @@ class AttendanceServiceTest {
         void stream_snapshotException_throwsException() {
             Course course = makeCourse(MEMBER_ID, LocalDateTime.now().minusMinutes(5), CourseStatus.OPEN);
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            mockInstructorMember(MEMBER_ID, MEMBER_ID);
             when(attendanceQueryService.getAttendanceSnapshot(COURSE_ID))
                     .thenThrow(new RuntimeException("DB 오류"));
 
