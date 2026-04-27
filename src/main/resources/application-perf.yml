@@ -5,6 +5,6 @@ spring:
 payment:
   gateway:
     stub:
-      enabled: true
+      enabled: false
       get-payment-delay: 120ms
       cancel-payment-delay: 250ms
