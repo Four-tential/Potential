@@ -16,6 +16,7 @@ import org.redisson.api.*;
 import org.redisson.client.codec.StringCodec;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -374,6 +375,138 @@ class WaitingListServiceTest {
 
         // then
         verify(capacityAtomic).set(newCapacity);
+        verify(sseWaitingEventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("잔여석 점유 확정 시 점유 정보가 삭제된다")
+    void completeOccupyingSeat_success() {
+        // given
+        given(occupancyBucket.isExists()).willReturn(true);
+
+        // when
+        waitingListService.completeOccupyingSeat(courseId, memberId);
+
+        // then
+        verify(occupancyBucket).delete();
+    }
+
+    @Test
+    @DisplayName("잔여석 정보 초기화 여부를 확인한다")
+    void isCapacityInitialized_success() {
+        // given
+        given(capacityAtomic.isExists()).willReturn(true);
+
+        // when
+        boolean result = waitingListService.isCapacityInitialized(courseId);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("현재 활성화된 코스 ID 목록을 조회한다")
+    void getActiveCourseIds_success() {
+        // given
+        RKeys rKeys = mock(RKeys.class);
+        given(redissonClient.getKeys()).willReturn(rKeys);
+        String courseKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        given(rKeys.getKeysByPattern(anyString())).willReturn(List.of(courseKey));
+
+        // when
+        var result = waitingListService.getActiveCourseIds();
+
+        // then
+        assertThat(result).containsExactly(courseId);
+    }
+
+    @Test
+    @DisplayName("대기열 수량이 숫자가 아니면 해당 대기자를 제거하고 다음 대기자를 승격시킨다")
+    void promoteNextInWaitingList_invalid_count_parsing_fail() {
+        // given
+        given(waitingListSet.isEmpty()).willReturn(false);
+        given(capacityAtomic.get()).willReturn(1L);
+
+        UUID invalidMemberId = UUID.randomUUID();
+        UUID nextMemberId = UUID.randomUUID();
+
+        // 첫 번째 시도: invalidMemberId (Parsing Fail)
+        // 두 번째 시도: nextMemberId (Success)
+        given(waitingListSet.first()).willReturn(invalidMemberId.toString(), nextMemberId.toString());
+        given(waitingListSet.pollFirst()).willReturn(invalidMemberId.toString(), nextMemberId.toString());
+        
+        // 첫 번째 유저의 버킷은 "INVALID" 반환
+        RBucket<String> invalidCountBucket = mock(RBucket.class);
+        given(invalidCountBucket.get()).willReturn("INVALID");
+        String invalidCountKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + invalidMemberId;
+        doReturn(invalidCountBucket).when(redissonClient).getBucket(eq(invalidCountKey), eq(StringCodec.INSTANCE));
+
+        // 두 번째 유저의 버킷은 "1" 반환
+        RBucket<String> nextCountBucket = mock(RBucket.class);
+        given(nextCountBucket.get()).willReturn("1");
+        String nextCountKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + nextMemberId;
+        doReturn(nextCountBucket).when(redissonClient).getBucket(eq(nextCountKey), eq(StringCodec.INSTANCE));
+        
+        given(sseWaitingRoomRepository.find(courseId, nextMemberId)).willReturn(Optional.of(mock(SseEmitter.class)));
+
+        // when
+        waitingListService.recoverCapacity(courseId, memberId, 1);
+
+        // then
+        verify(waitingListSet, times(2)).pollFirst(); // 잘못된 유저 제거 + 성공 유저 제거
+        verify(sseWaitingEventPublisher).publish(eq(courseId), eq(nextMemberId), any());
+    }
+
+    @Test
+    @DisplayName("대기열 수량이 0 이하이면 해당 대기자를 제거하고 다음 대기자를 승격시킨다")
+    void promoteNextInWaitingList_invalid_count_zero_or_less() {
+        // given
+        given(waitingListSet.isEmpty()).willReturn(false);
+        given(capacityAtomic.get()).willReturn(1L);
+
+        UUID invalidMemberId = UUID.randomUUID();
+        given(waitingListSet.first()).willReturn(invalidMemberId.toString());
+        given(waitingListSet.pollFirst()).willReturn(invalidMemberId.toString());
+        
+        // countStr이 "0"
+        RBucket<String> invalidCountBucket = mock(RBucket.class);
+        given(invalidCountBucket.get()).willReturn("0");
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + invalidMemberId;
+        doReturn(invalidCountBucket).when(redissonClient).getBucket(eq(countKey), eq(StringCodec.INSTANCE));
+        
+        // 재귀 호출 시 다음 대기자가 없음을 알리기 위해
+        when(waitingListSet.isEmpty()).thenReturn(false, true);
+
+        // when
+        waitingListService.recoverCapacity(courseId, memberId, 1);
+
+        // then
+        verify(waitingListSet).pollFirst();
+        verify(invalidCountBucket).delete();
+        verify(sseWaitingEventPublisher, never()).publish(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("잔여석이 대기자의 요구 수량보다 적으면 승격을 보류한다")
+    void promoteNextInWaitingList_insufficient_capacity_for_required_count() {
+        // given
+        given(waitingListSet.isEmpty()).willReturn(false);
+        given(capacityAtomic.get()).willReturn(2L); // 잔여석 2
+
+        UUID nextMemberId = UUID.randomUUID();
+        given(waitingListSet.first()).willReturn(nextMemberId.toString());
+        
+        // 요구 수량 3
+        RBucket<String> requiredCountBucket = mock(RBucket.class);
+        given(requiredCountBucket.get()).willReturn("3");
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + nextMemberId;
+        doReturn(requiredCountBucket).when(redissonClient).getBucket(eq(countKey), eq(StringCodec.INSTANCE));
+
+        // when
+        waitingListService.recoverCapacity(courseId, memberId, 1);
+
+        // then
+        verify(waitingListSet, never()).pollFirst(); // 승격되지 않음
         verify(sseWaitingEventPublisher, never()).publish(any(), any(), any());
     }
 }
