@@ -229,7 +229,8 @@ public class WaitingListService {
 
         // 수량 정보 저장
         String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
-        redissonClient.getBucket(countKey, StringCodec.INSTANCE).set(String.valueOf(orderCount));
+        redissonClient.getBucket(countKey, StringCodec.INSTANCE)
+                .set(String.valueOf(orderCount), Duration.ofHours(1));
 
         waitingList.add(System.currentTimeMillis(), memberId.toString());
         log.info("대기열 진입 완료: courseId={}, memberId={}, 수량={}", courseId, memberId, orderCount);
