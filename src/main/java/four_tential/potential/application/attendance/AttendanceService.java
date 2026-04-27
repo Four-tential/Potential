@@ -5,6 +5,7 @@ import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
 import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.attendance.Attendance;
 import four_tential.potential.domain.attendance.AttendanceRepository;
+import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
+    private final InstructorMemberRepository instructorMemberRepository;
     private final QrTokenRepository qrTokenRepository;
     private final QrCodeGenerator qrCodeGenerator;
     private final SseEmitterRepository sseEmitterRepository;
@@ -47,12 +49,16 @@ public class AttendanceService {
     private static final long QR_OPEN_MINUTES   = 10L;  // QR 생성 가능 시간
 
     // QR 생성(강사 전용)
-    public byte[] createQr(UUID courseId, UUID instructorId) {
+    public byte[] createQr(UUID courseId, UUID memberId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        // 강사 본인 코스인지 검증
-        if (!course.getMemberInstructorId().equals(instructorId)) {
+        // memberId -> instructor_members.id 조회 후 코스 소유자 검증
+        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
+                .getId();
+
+        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
         }
 
@@ -110,6 +116,8 @@ public class AttendanceService {
                     @Override
                     public void afterCommit() {
                         sseAttendanceEventPublisher.publish(courseId, attendance);
+                        // 출석 현황 캐시 무효화 (REST 조회 클라이언트 대비)
+                        attendanceQueryService.evict(courseId);
                     }
                 }
         );
@@ -117,15 +125,20 @@ public class AttendanceService {
 
     // 출석 현황 조회 (강사 -> 전체)
     @Transactional(readOnly = true)
-    public AttendanceListResponse findAllByCourse(UUID courseId, UUID instructorId) {
+    public AttendanceListResponse findAllByCourse(UUID courseId, UUID memberId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        if (!course.getMemberInstructorId().equals(instructorId)) {
+        // memberId -> instructor_members.id 조회 후 코스 소유자 검증
+        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
+                .getId();
+
+        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
         }
 
-        return attendanceRepository.findStatsByCourseId(courseId);
+        return attendanceQueryService.getAttendanceSnapshot(courseId);
     }
 
     // 출석 현황 조회 (수강생 -> 본인)
@@ -136,12 +149,16 @@ public class AttendanceService {
     }
 
     // SSE 스트림 연결 (강사 전용)
-    public SseEmitter stream(UUID courseId, UUID instructorId) {
+    public SseEmitter stream(UUID courseId, UUID memberId) {
         // 강사 본인 코스인지 검증
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        if (!course.getMemberInstructorId().equals(instructorId)) {
+        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
+                .getId();
+
+        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
             throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
         }
 
