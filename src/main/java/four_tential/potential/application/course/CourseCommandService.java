@@ -25,8 +25,6 @@ import static four_tential.potential.infra.redis.RedisConstants.INSTRUCTOR_PROFI
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_INSTRUCTOR;
 
@@ -70,7 +68,7 @@ public class CourseCommandService {
         if (request.imageUrls() != null && !request.imageUrls().isEmpty()) {
             List<CourseImage> images = request.imageUrls().stream()
                     .map(url -> CourseImage.register(course, url))
-                    .collect(Collectors.toList());
+                    .toList();
             courseImageRepository.saveAll(images);
         }
 

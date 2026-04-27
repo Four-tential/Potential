@@ -106,6 +106,19 @@ class CourseApprovalServiceTest {
                 .hasMessage("PREPARATION 상태의 코스만 승인 또는 반려할 수 있습니다");
     }
 
+    @Test
+    @DisplayName("코스 개설 신청 처리 실패 - 존재하지 않는 코스이면 ERR_NOT_FOUND_COURSE")
+    void courseRequest_courseNotFound() {
+        UUID courseId = UUID.randomUUID();
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseApprovalService.courseRequest(courseId, new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
     private Course courseWithId(UUID courseId) {
         Course course = CourseFixture.defaultCourse();
         ReflectionTestUtils.setField(course, "id", courseId);

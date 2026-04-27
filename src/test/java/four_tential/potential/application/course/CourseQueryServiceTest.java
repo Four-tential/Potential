@@ -294,6 +294,115 @@ class CourseQueryServiceTest {
                 .hasMessage("본인 코스만 조회 가능합니다");
     }
 
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 강사 등록이 없으면 ERR_NOT_FOUND_INSTRUCTOR")
+    void getCourseStudents_instructorNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseQueryService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - 코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE")
+    void getCourseStudents_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseQueryService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
+    @Test
+    @DisplayName("수강생 명단 조회 실패 - PREPARATION 상태 코스이면 ERR_COURSE_IN_PREPARATION")
+    void getCourseStudents_preparationStatus() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        InstructorMember instructor = approvedInstructorMember();
+
+        Course course = courseWithId(courseId);
+        ReflectionTestUtils.setField(course, "memberInstructorId", instructor.getId());
+
+        given(instructorMemberRepository.findByMemberId(memberId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() ->
+                courseQueryService.getCourseStudents(courseId, memberId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("준비 중인 코스는 수강생을 조회할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 성공 - 공개 프로필용 코스 목록 반환")
+    void getInstructorCourses_success() {
+        UUID instructorId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        InstructorMember instructor = approvedInstructorMember();
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.of(instructor));
+        given(courseRepository.findCoursesByInstructorMemberId(instructor.getId(), pageable))
+                .willReturn(new PageImpl<>(List.of(
+                        sampleInstructorCourseQueryResult(CourseStatus.OPEN)
+                ), pageable, 1));
+
+        PageResponse<InstructorCourseListItem> response = courseQueryService.getInstructorCourses(instructorId, pageable);
+
+        assertThat(response.content()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("강사 코스 목록 조회 실패 - 강사 등록이 없으면 ERR_NOT_FOUND_INSTRUCTOR")
+    void getInstructorCourses_instructorNotFound() {
+        UUID instructorId = UUID.randomUUID();
+
+        given(instructorMemberRepository.findByMemberId(instructorId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                courseQueryService.getInstructorCourses(instructorId, PageRequest.of(0, 10))
+        )
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 강사입니다");
+    }
+
+    @Test
+    @DisplayName("코스 엔티티 조회 성공")
+    void getCourseEntity_success() {
+        UUID courseId = UUID.randomUUID();
+        Course course = courseWithId(courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        Course result = courseQueryService.getCourseEntity(courseId);
+
+        assertThat(result.getId()).isEqualTo(courseId);
+    }
+
+    @Test
+    @DisplayName("코스 엔티티 조회 실패 - 존재하지 않으면 ERR_NOT_FOUND_COURSE")
+    void getCourseEntity_notFound() {
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseQueryService.getCourseEntity(courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+    }
+
     private CourseSearchCondition emptyCondition() {
         return new CourseSearchCondition(null, null, null, null, null, null, null, null);
     }
