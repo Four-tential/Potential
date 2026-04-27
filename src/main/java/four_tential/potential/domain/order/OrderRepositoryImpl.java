@@ -166,12 +166,13 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
     }
 
     @Override
-    public boolean hasOverlappingReservation(UUID memberId, LocalDateTime startAt, LocalDateTime endAt) {
+    public boolean hasOverlappingReservation(UUID memberId, UUID courseId, LocalDateTime startAt, LocalDateTime endAt) {
         Integer exists = queryFactory.selectOne()
                 .from(order)
                 .join(course).on(course.id.eq(order.courseId))
                 .where(
                         order.memberId.eq(memberId),
+                        course.id.ne(courseId),
                         order.status.in(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED),
                         course.startAt.lt(endAt),
                         course.endAt.gt(startAt)

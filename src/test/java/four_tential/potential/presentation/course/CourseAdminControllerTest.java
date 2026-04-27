@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseStatus;
@@ -48,7 +48,7 @@ class CourseAdminControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CourseService courseService;
+    private CourseFacade courseFacade;
 
     @MockitoBean
     private JwtFilter jwtFilter;
@@ -71,7 +71,7 @@ class CourseAdminControllerTest {
         CourseRequestActionResponse serviceResponse =
                 new CourseRequestActionResponse(courseId, CourseStatus.OPEN, LocalDateTime.of(2026, 5, 1, 10, 0));
 
-        given(courseService.handleCourseRequest(eq(courseId), any())).willReturn(serviceResponse);
+        given(courseFacade.handleCourseRequest(eq(courseId), any())).willReturn(serviceResponse);
 
         mockMvc.perform(patch("/v1/admin/course-requests/{courseId}", courseId)
                         .with(csrf())
@@ -95,7 +95,7 @@ class CourseAdminControllerTest {
         CourseRequestActionResponse serviceResponse =
                 new CourseRequestActionResponse(courseId, CourseStatus.REJECTED, null);
 
-        given(courseService.handleCourseRequest(eq(courseId), any())).willReturn(serviceResponse);
+        given(courseFacade.handleCourseRequest(eq(courseId), any())).willReturn(serviceResponse);
 
         mockMvc.perform(patch("/v1/admin/course-requests/{courseId}", courseId)
                         .with(csrf())
@@ -128,7 +128,7 @@ class CourseAdminControllerTest {
         UUID courseId = UUID.randomUUID();
         CourseRequestActionRequest request = new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null);
 
-        given(courseService.handleCourseRequest(eq(courseId), any()))
+        given(courseFacade.handleCourseRequest(eq(courseId), any()))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         mockMvc.perform(patch("/v1/admin/course-requests/{courseId}", courseId)
@@ -145,7 +145,7 @@ class CourseAdminControllerTest {
         UUID courseId = UUID.randomUUID();
         CourseRequestActionRequest request = new CourseRequestActionRequest(CourseApprovalAction.APPROVE, null);
 
-        given(courseService.handleCourseRequest(eq(courseId), any()))
+        given(courseFacade.handleCourseRequest(eq(courseId), any()))
                 .willThrow(new ServiceErrorException(ERR_COURSE_NOT_IN_PREPARATION));
 
         mockMvc.perform(patch("/v1/admin/course-requests/{courseId}", courseId)
@@ -162,7 +162,7 @@ class CourseAdminControllerTest {
         UUID courseId = UUID.randomUUID();
         CourseRequestActionRequest request = new CourseRequestActionRequest(CourseApprovalAction.REJECT, null);
 
-        given(courseService.handleCourseRequest(eq(courseId), any()))
+        given(courseFacade.handleCourseRequest(eq(courseId), any()))
                 .willThrow(new ServiceErrorException(ERR_REJECT_REASON_REQUIRED));
 
         mockMvc.perform(patch("/v1/admin/course-requests/{courseId}", courseId)

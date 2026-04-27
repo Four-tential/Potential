@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 public enum ImageType {
     PROFILE("profile-image"),
     INSTRUCTOR("instructor-image"),
-    COURSE("course-image");
+    COURSE("course-image"),
+    REVIEW("review-image");
 
     private final String prefix;
 }

@@ -49,10 +49,10 @@ class AttendanceRepositoryImplTest extends RedisTestContainer {
             AttendanceListResponse result = attendanceRepository.findStatsByCourseId(COURSE_ID);
 
             // then
-            assertThat(result.getTotalCount()).isEqualTo(2);
-            assertThat(result.getAttendCount()).isEqualTo(1);
-            assertThat(result.getAbsentCount()).isEqualTo(1);
-            assertThat(result.getAttendances()).hasSize(2);
+            assertThat(result.totalCount()).isEqualTo(2);
+            assertThat(result.attendCount()).isEqualTo(1);
+            assertThat(result.absentCount()).isEqualTo(1);
+            assertThat(result.attendances()).hasSize(2);
         }
 
         @Test
@@ -62,9 +62,9 @@ class AttendanceRepositoryImplTest extends RedisTestContainer {
             AttendanceListResponse result = attendanceRepository.findStatsByCourseId(COURSE_ID);
 
             // then
-            assertThat(result.getTotalCount()).isEqualTo(2);
-            assertThat(result.getAttendCount()).isZero();
-            assertThat(result.getAbsentCount()).isEqualTo(2);
+            assertThat(result.totalCount()).isEqualTo(2);
+            assertThat(result.attendCount()).isZero();
+            assertThat(result.absentCount()).isEqualTo(2);
         }
 
         @Test
@@ -74,10 +74,10 @@ class AttendanceRepositoryImplTest extends RedisTestContainer {
             AttendanceListResponse result = attendanceRepository.findStatsByCourseId(UUID.randomUUID());
 
             // then
-            assertThat(result.getTotalCount()).isZero();
-            assertThat(result.getAttendCount()).isZero();
-            assertThat(result.getAbsentCount()).isZero();
-            assertThat(result.getAttendances()).isEmpty();
+            assertThat(result.totalCount()).isZero();
+            assertThat(result.attendCount()).isZero();
+            assertThat(result.absentCount()).isZero();
+            assertThat(result.attendances()).isEmpty();
         }
 
         @Test
@@ -92,12 +92,12 @@ class AttendanceRepositoryImplTest extends RedisTestContainer {
             AttendanceListResponse result = attendanceRepository.findStatsByCourseId(COURSE_ID);
 
             // then
-            result.getAttendances().stream()
-                    .filter(d -> d.getMemberId().equals(MEMBER_ID))
+            result.attendances().stream()
+                    .filter(d -> d.memberId().equals(MEMBER_ID))
                     .findFirst()
                     .ifPresent(d -> {
-                        assertThat(d.getStatus()).isEqualTo(AttendanceStatus.ATTEND);
-                        assertThat(d.getAttendanceAt()).isNotNull();
+                        assertThat(d.status()).isEqualTo(AttendanceStatus.ATTEND);
+                        assertThat(d.attendanceAt()).isNotNull();
                     });
         }
     }

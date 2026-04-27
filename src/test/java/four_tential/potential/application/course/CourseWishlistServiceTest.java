@@ -1,9 +1,14 @@
 package four_tential.potential.application.course;
 
 import four_tential.potential.common.dto.PageResponse;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.course_wishlist.WishlistCourseQueryResult;
+import four_tential.potential.domain.course.fixture.CourseFixture;
+import four_tential.potential.presentation.course.model.response.CourseWishlistResponse;
 import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,17 +18,26 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class CourseWishlistServiceTest {
+
+    @Mock
+    private CourseRepository courseRepository;
 
     @Mock
     private CourseWishlistRepository courseWishlistRepository;
@@ -87,5 +101,103 @@ class CourseWishlistServiceTest {
         assertThat(response.size()).isEqualTo(5);
         assertThat(response.totalElements()).isEqualTo(7);
         assertThat(response.totalPages()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("찜 등록 성공 - OPEN 코스이면 isWishlisted=true 반환")
+    void addWishlist_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+        course.open();
+        ReflectionTestUtils.setField(course, "id", courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(false);
+
+        CourseWishlistResponse response = courseWishlistService.addWishlist(memberId, courseId);
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isTrue();
+        verify(courseWishlistRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - 이미 찜한 코스이면 ERR_ALREADY_WISHLISTED")
+    void addWishlist_alreadyWishlisted() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+        course.open();
+        ReflectionTestUtils.setField(course, "id", courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(true);
+
+        assertThatThrownBy(() -> courseWishlistService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("이미 찜한 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - 코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE")
+    void addWishlist_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseWishlistService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - OPEN이 아닌 코스이면 ERR_NOT_FOUND_COURSE")
+    void addWishlist_courseNotOpen() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+        ReflectionTestUtils.setField(course, "id", courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseWishlistService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 해제 성공 - isWishlisted=false 반환")
+    void removeWishlist_success() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseWishlistRepository.deleteByMemberIdAndCourseIdQuery(memberId, courseId)).willReturn(1);
+
+        CourseWishlistResponse response = courseWishlistService.removeWishlist(memberId, courseId);
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("찜 해제 성공 - 찜 목록에 없어도 정상 응답 (멱등성)")
+    void removeWishlist_notFound_stillSuccess() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseWishlistRepository.deleteByMemberIdAndCourseIdQuery(memberId, courseId)).willReturn(0);
+
+        CourseWishlistResponse response = courseWishlistService.removeWishlist(memberId, courseId);
+
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isFalse();
     }
 }

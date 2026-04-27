@@ -43,6 +43,7 @@ public interface OrderRepositoryCustom {
 
     /**
      * 특정 시간대에 이미 유효한(PENDING, PAID, CONFIRMED) 주문이 있는지 확인
+     * 단, 동일 코스(courseId)에 대한 추가 주문은 허용합니다.
      */
-    boolean hasOverlappingReservation(UUID memberId, LocalDateTime startAt, LocalDateTime endAt);
+    boolean hasOverlappingReservation(UUID memberId, UUID courseId, LocalDateTime startAt, LocalDateTime endAt);
 }

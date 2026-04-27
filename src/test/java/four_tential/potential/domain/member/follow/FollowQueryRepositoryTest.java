@@ -160,8 +160,8 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     // averageRating 검증
 
     @Test
-    @DisplayName("리뷰 없는 강사 팔로우 시 averageRating = null")
-    void findFollowedInstructors_averageRating_null_when_no_reviews() {
+    @DisplayName("리뷰 없는 강사 팔로우 시 averageRating = 0.0")
+    void findFollowedInstructors_averageRating_zero_when_no_reviews() {
         InstructorMember instructor = approvedInstructor("ins1@test.com", "강사A");
         followRepository.save(Follow.register(follower.getId(), instructor.getId()));
         saveCourse(instructor.getId());
@@ -170,7 +170,7 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
-        assertThat(item.averageRating()).isNull();
+        assertThat(item.averageRating()).isEqualTo(0.0);
     }
 
     @Test
@@ -192,15 +192,15 @@ class FollowQueryRepositoryTest extends RedisTestContainer {
     }
 
     @Test
-    @DisplayName("코스가 없으면 리뷰도 없으므로 averageRating = null")
-    void findFollowedInstructors_averageRating_null_when_no_courses() {
+    @DisplayName("코스가 없으면 리뷰도 없으므로 averageRating = 0.0")
+    void findFollowedInstructors_averageRating_zero_when_no_courses() {
         saveFollowedInstructor("ins1@test.com", "강사A");
 
         FollowQueryResult item = followRepository
                 .findFollowedInstructors(follower.getId(), PageRequest.of(0, 10))
                 .getContent().get(0);
 
-        assertThat(item.averageRating()).isNull();
+        assertThat(item.averageRating()).isEqualTo(0.0);
     }
 
     // 페이징 검증

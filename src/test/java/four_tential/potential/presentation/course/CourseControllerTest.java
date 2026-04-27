@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
 import four_tential.potential.common.exception.ServiceErrorException;
@@ -74,7 +74,7 @@ class CourseControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CourseService courseService;
+    private CourseFacade courseFacade;
 
     @MockitoBean
     private JwtFilter jwtFilter;
@@ -109,7 +109,7 @@ class CourseControllerTest {
     @Test
     @DisplayName("코스 목록 조회 - 비인증 유저도 200 OK")
     void getCourses_anonymous_success() throws Exception {
-        given(courseService.getCourses(any(), any(), any()))
+        given(courseFacade.getCourses(any(), any(), any()))
                 .willReturn(PageResponse.register(
                         new org.springframework.data.domain.PageImpl<>(List.of())
                 ));
@@ -134,7 +134,7 @@ class CourseControllerTest {
                 false
         );
 
-        given(courseService.getCourses(any(), any(), any()))
+        given(courseFacade.getCourses(any(), any(), any()))
                 .willReturn(PageResponse.register(
                         new org.springframework.data.domain.PageImpl<>(List.of(item))
                 ));
@@ -166,7 +166,7 @@ class CourseControllerTest {
                 4.2, 10L, false
         );
 
-        given(courseService.getCourseDetail(eq(courseId), any())).willReturn(response);
+        given(courseFacade.getCourseDetail(eq(courseId), any())).willReturn(response);
 
         mockMvc.perform(get("/v1/courses/{courseId}", courseId))
                 .andExpect(status().isOk())
@@ -179,7 +179,7 @@ class CourseControllerTest {
     @DisplayName("코스 상세 조회 - 존재하지 않는 코스이면 404")
     void getCourseDetail_notFound() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.getCourseDetail(eq(courseId), any()))
+        given(courseFacade.getCourseDetail(eq(courseId), any()))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         mockMvc.perform(get("/v1/courses/{courseId}", courseId))
@@ -204,7 +204,7 @@ class CourseControllerTest {
         UpdateCourseResponse serviceResponse =
                 new UpdateCourseResponse(courseId, "수정된 제목", LocalDateTime.now());
 
-        given(courseService.updateCourse(any(), eq(courseId), any())).willReturn(serviceResponse);
+        given(courseFacade.updateCourse(any(), eq(courseId), any())).willReturn(serviceResponse);
 
         mockMvc.perform(patch("/v1/courses/{courseId}", courseId)
                         .with(instructorAuth())
@@ -237,7 +237,7 @@ class CourseControllerTest {
     @DisplayName("찜 등록 - 인증 유저이면 201 CREATED")
     void addWishlist_success() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.addWishlist(any(), eq(courseId)))
+        given(courseFacade.addWishlist(any(), eq(courseId)))
                 .willReturn(new CourseWishlistResponse(courseId, true));
 
         mockMvc.perform(post("/v1/courses/{courseId}/wishlist-courses", courseId)
@@ -260,7 +260,7 @@ class CourseControllerTest {
     @DisplayName("찜 등록 - 존재하지 않는 코스이면 404")
     void addWishlist_courseNotFound() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.addWishlist(any(), eq(courseId)))
+        given(courseFacade.addWishlist(any(), eq(courseId)))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
         mockMvc.perform(post("/v1/courses/{courseId}/wishlist-courses", courseId)
@@ -273,7 +273,7 @@ class CourseControllerTest {
     @DisplayName("찜 등록 - 이미 찜한 코스이면 409")
     void addWishlist_alreadyWishlisted() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.addWishlist(any(), eq(courseId)))
+        given(courseFacade.addWishlist(any(), eq(courseId)))
                 .willThrow(new ServiceErrorException(ERR_ALREADY_WISHLISTED));
 
         mockMvc.perform(post("/v1/courses/{courseId}/wishlist-courses", courseId)
@@ -286,7 +286,7 @@ class CourseControllerTest {
     @DisplayName("찜 해제 - 인증 유저이면 200 OK")
     void removeWishlist_success() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.removeWishlist(any(), eq(courseId)))
+        given(courseFacade.removeWishlist(any(), eq(courseId)))
                 .willReturn(new CourseWishlistResponse(courseId, false));
 
         mockMvc.perform(delete("/v1/courses/{courseId}/wishlist-courses", courseId)
@@ -309,7 +309,7 @@ class CourseControllerTest {
     @DisplayName("찜 해제 - 찜 목록에 없으면 404")
     void removeWishlist_notFound() throws Exception {
         UUID courseId = UUID.randomUUID();
-        given(courseService.removeWishlist(any(), eq(courseId)))
+        given(courseFacade.removeWishlist(any(), eq(courseId)))
                 .willThrow(new ServiceErrorException(ERR_WISHLIST_NOT_FOUND));
 
         mockMvc.perform(delete("/v1/courses/{courseId}/wishlist-courses", courseId)
@@ -322,7 +322,7 @@ class CourseControllerTest {
     @DisplayName("코스 종료 - INSTRUCTOR이면 200 OK")
     void closeCourse_success() throws Exception {
         UUID courseId = UUID.randomUUID();
-        willDoNothing().given(courseService).closeCourse(any(), eq(courseId));
+        willDoNothing().given(courseFacade).closeCourse(any(), eq(courseId));
 
         mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
                         .with(instructorAuth())
@@ -346,7 +346,7 @@ class CourseControllerTest {
     void closeCourse_courseNotFound() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE))
-                .given(courseService).closeCourse(any(), eq(courseId));
+                .given(courseFacade).closeCourse(any(), eq(courseId));
 
         mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
                         .with(instructorAuth())
@@ -359,7 +359,7 @@ class CourseControllerTest {
     void closeCourse_notOwnCourse() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE_CLOSE))
-                .given(courseService).closeCourse(any(), eq(courseId));
+                .given(courseFacade).closeCourse(any(), eq(courseId));
 
         mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
                         .with(instructorAuth())
@@ -372,7 +372,7 @@ class CourseControllerTest {
     void closeCourse_notOpen() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_INVALID_STATUS_TRANSITION_TO_CLOSE))
-                .given(courseService).closeCourse(any(), eq(courseId));
+                .given(courseFacade).closeCourse(any(), eq(courseId));
 
         mockMvc.perform(patch("/v1/courses/{courseId}/close", courseId)
                         .with(instructorAuth())

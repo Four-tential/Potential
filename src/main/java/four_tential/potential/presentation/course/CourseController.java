@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.course.course.CourseLevel;
@@ -44,9 +44,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CourseController {
 
-    private final CourseService courseService;
+    private final CourseFacade courseFacade;
 
-    @Operation(summary = "코스 목록 조회", description = "조건·정렬 기반 코스 목록을 페이지로 조회합니다. 비인증 사용자도 조회 가능합니다.")
+    @Operation(summary = "코스 목록 조회", description = "조건·정렬 기반 코스 목록을 페이지로 조회합니다. 비인증 사용자도 조회 가능합니다. cursorId와 sort=LATEST가 함께 제공되면 커서 기반 조회가 적용되며, 이 경우 page 값은 무시됩니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공")
     })
@@ -60,14 +60,15 @@ public class CourseController {
             @RequestParam(required = false) BigInteger minPrice,
             @RequestParam(required = false) BigInteger maxPrice,
             @RequestParam(required = false) CourseSort sort,
+            @RequestParam(required = false) UUID cursorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort);
+        CourseSearchCondition condition = new CourseSearchCondition(categoryCode, status, level, keyword, minPrice, maxPrice, sort, cursorId);
         Pageable pageable = PageRequest.of(page, size);
         UUID memberId = principal != null ? principal.memberId() : null;
 
-        PageResponse<CourseListItem> response = courseService.getCourses(condition, memberId, pageable);
+        PageResponse<CourseListItem> response = courseFacade.getCourses(condition, memberId, pageable);
 
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 목록 조회 성공", response));
     }
@@ -86,7 +87,7 @@ public class CourseController {
             @PathVariable UUID courseId,
             @Valid @RequestBody UpdateCourseRequest request
     ) {
-        UpdateCourseResponse response = courseService.updateCourse(principal.memberId(), courseId, request);
+        UpdateCourseResponse response = courseFacade.updateCourse(principal.memberId(), courseId, request);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스가 수정되었습니다", response));
     }
 
@@ -103,7 +104,7 @@ public class CourseController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID courseId
     ) {
-        CourseWishlistResponse response = courseService.addWishlist(principal.memberId(), courseId);
+        CourseWishlistResponse response = courseFacade.addWishlist(principal.memberId(), courseId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success(HttpStatus.CREATED.name(), "찜 목록에 추가 성공", response));
     }
@@ -120,7 +121,7 @@ public class CourseController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID courseId
     ) {
-        CourseWishlistResponse response = courseService.removeWishlist(principal.memberId(), courseId);
+        CourseWishlistResponse response = courseFacade.removeWishlist(principal.memberId(), courseId);
         return ResponseEntity.ok(BaseResponse.success("OK", "찜 목록에서 제거 성공", response));
     }
 
@@ -137,7 +138,7 @@ public class CourseController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID courseId
     ) {
-        courseService.closeCourse(principal.memberId(), courseId);
+        courseFacade.closeCourse(principal.memberId(), courseId);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 종료 성공", null));
     }
 
@@ -153,7 +154,7 @@ public class CourseController {
     ) {
         UUID memberId = principal != null ? principal.memberId() : null;
 
-        CourseDetailResponse response = courseService.getCourseDetail(courseId, memberId);
+        CourseDetailResponse response = courseFacade.getCourseDetail(courseId, memberId);
 
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 상세 조회 성공", response));
     }
