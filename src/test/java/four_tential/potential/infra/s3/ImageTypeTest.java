@@ -13,11 +13,12 @@ class ImageTypeTest {
         assertThat(ImageType.PROFILE.getPrefix()).isEqualTo("profile-image");
         assertThat(ImageType.INSTRUCTOR.getPrefix()).isEqualTo("instructor-image");
         assertThat(ImageType.COURSE.getPrefix()).isEqualTo("course-image");
+        assertThat(ImageType.REVIEW.getPrefix()).isEqualTo("review-image");
     }
 
     @Test
-    @DisplayName("ImageType enum 값은 3개이다")
+    @DisplayName("ImageType enum 값은 4개이다")
     void enumValues() {
-        assertThat(ImageType.values()).hasSize(3);
+        assertThat(ImageType.values()).hasSize(4);
     }
 }
