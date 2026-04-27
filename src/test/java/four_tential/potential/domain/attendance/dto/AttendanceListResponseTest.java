@@ -34,7 +34,7 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2));
 
             // then
-            assertThat(response.getTotalCount()).isEqualTo(2);
+            assertThat(response.totalCount()).isEqualTo(2);
         }
 
         @Test
@@ -51,8 +51,8 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2, a3));
 
             // then
-            assertThat(response.getAttendCount()).isEqualTo(2);
-            assertThat(response.getAbsentCount()).isEqualTo(1);
+            assertThat(response.attendCount()).isEqualTo(2);
+            assertThat(response.absentCount()).isEqualTo(1);
         }
 
         @Test
@@ -66,10 +66,10 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1));
 
             // then
-            assertThat(response.getAttendances()).hasSize(1);
-            assertThat(response.getAttendances().get(0).getMemberId()).isEqualTo(MEMBER_ID);
-            assertThat(response.getAttendances().get(0).getStatus()).isEqualTo(AttendanceStatus.ATTEND);
-            assertThat(response.getAttendances().get(0).getAttendanceAt()).isNotNull();
+            assertThat(response.attendances()).hasSize(1);
+            assertThat(response.attendances().get(0).memberId()).isEqualTo(MEMBER_ID);
+            assertThat(response.attendances().get(0).status()).isEqualTo(AttendanceStatus.ATTEND);
+            assertThat(response.attendances().get(0).attendanceAt()).isNotNull();
         }
 
         @Test
@@ -79,10 +79,10 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of());
 
             // then
-            assertThat(response.getTotalCount()).isZero();
-            assertThat(response.getAttendCount()).isZero();
-            assertThat(response.getAbsentCount()).isZero();
-            assertThat(response.getAttendances()).isEmpty();
+            assertThat(response.totalCount()).isZero();
+            assertThat(response.attendCount()).isZero();
+            assertThat(response.absentCount()).isZero();
+            assertThat(response.attendances()).isEmpty();
         }
 
         @Test
@@ -96,8 +96,8 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofInstructor(List.of(a1, a2));
 
             // then
-            assertThat(response.getAttendCount()).isZero();
-            assertThat(response.getAbsentCount()).isEqualTo(2);
+            assertThat(response.attendCount()).isZero();
+            assertThat(response.absentCount()).isEqualTo(2);
         }
     }
 
@@ -115,9 +115,9 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
-            assertThat(response.getTotalCount()).isNull();
-            assertThat(response.getAttendCount()).isNull();
-            assertThat(response.getAbsentCount()).isNull();
+            assertThat(response.totalCount()).isNull();
+            assertThat(response.attendCount()).isNull();
+            assertThat(response.absentCount()).isNull();
         }
 
         @Test
@@ -130,8 +130,8 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
-            assertThat(response.getAttendances()).hasSize(1);
-            assertThat(response.getAttendances().get(0).getMemberId()).isEqualTo(MEMBER_ID);
+            assertThat(response.attendances()).hasSize(1);
+            assertThat(response.attendances().get(0).memberId()).isEqualTo(MEMBER_ID);
         }
 
         @Test
@@ -144,8 +144,8 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
-            assertThat(response.getAttendances().get(0).getStatus()).isEqualTo(AttendanceStatus.ABSENT);
-            assertThat(response.getAttendances().get(0).getAttendanceAt()).isNull();
+            assertThat(response.attendances().get(0).status()).isEqualTo(AttendanceStatus.ABSENT);
+            assertThat(response.attendances().get(0).attendanceAt()).isNull();
         }
 
         @Test
@@ -159,8 +159,8 @@ class AttendanceListResponseTest {
             AttendanceListResponse response = AttendanceListResponse.ofStudent(attendance);
 
             // then
-            assertThat(response.getAttendances().get(0).getStatus()).isEqualTo(AttendanceStatus.ATTEND);
-            assertThat(response.getAttendances().get(0).getAttendanceAt()).isNotNull();
+            assertThat(response.attendances().get(0).status()).isEqualTo(AttendanceStatus.ATTEND);
+            assertThat(response.attendances().get(0).attendanceAt()).isNotNull();
         }
     }
 }
