@@ -37,6 +37,10 @@ public class ReviewSummaryService {
      * @return 요약 결과 문자열
      */
     public String summarize(Long courseId, List<String> reviewContents) {
+        if (reviewContents == null || reviewContents.isEmpty()) {
+            log.info("[후기 요약 스킵] courseId={}, 후기 없음", courseId);
+            return "";
+        }
         log.info("[후기 요약 요청] courseId={}, 후기 수={}", courseId, reviewContents.size());
 
         // 스터디 week2 패턴: PromptTemplate으로 변수 치환
