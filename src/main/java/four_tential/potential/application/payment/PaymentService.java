@@ -7,6 +7,7 @@ import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import lombok.RequiredArgsConstructor;
@@ -209,6 +210,14 @@ public class PaymentService {
 
     public Payment getById(UUID paymentId) {
         return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+    }
+
+    /**
+     * 환불 가능 여부 조회용 데이터를 1번 쿼리로 조회한다.
+     */
+    public RefundPreviewData getRefundPreviewData(UUID paymentId, UUID memberId) {
+        return paymentRepository.findRefundPreviewData(paymentId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
     }
 }

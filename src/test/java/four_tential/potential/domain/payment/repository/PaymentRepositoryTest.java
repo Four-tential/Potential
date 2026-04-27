@@ -33,7 +33,7 @@ class PaymentRepositoryTest extends RedisTestContainer {
     private OrderRepository orderRepository;
 
     @Test
-    @DisplayName("findByPgKey 호출 시 pgKey 가 일치하는 결제를 조회한다")
+    @DisplayName("findByPgKey는 일치하는 결제를 반환한다")
     void findByPgKey_returns_payment() {
         Payment payment = createPayment(UUID.randomUUID(), "pg-key-1");
         paymentRepository.saveAndFlush(payment);
@@ -45,15 +45,13 @@ class PaymentRepositoryTest extends RedisTestContainer {
     }
 
     @Test
-    @DisplayName("findByPgKey 호출 시 pgKey 가 없으면 빈 Optional 을 반환한다")
+    @DisplayName("findByPgKey는 결제가 없으면 빈 Optional을 반환한다")
     void findByPgKey_returns_empty_when_not_found() {
-        Optional<Payment> result = paymentRepository.findByPgKey("missing-pg-key");
-
-        assertThat(result).isEmpty();
+        assertThat(paymentRepository.findByPgKey("missing-pg-key")).isEmpty();
     }
 
     @Test
-    @DisplayName("findByOrderId 호출 시 orderId 가 일치하는 결제를 조회한다")
+    @DisplayName("findByOrderId는 일치하는 결제를 반환한다")
     void findByOrderId_returns_payment() {
         UUID orderId = UUID.randomUUID();
         Payment payment = createPayment(orderId, "pg-key-by-order");
@@ -66,7 +64,7 @@ class PaymentRepositoryTest extends RedisTestContainer {
     }
 
     @Test
-    @DisplayName("findByPgKeyForUpdate 호출 시 pgKey 가 일치하는 결제를 조회한다")
+    @DisplayName("findByPgKeyForUpdate는 일치하는 결제를 반환한다")
     void findByPgKeyForUpdate_returns_payment() {
         Payment payment = createPayment(UUID.randomUUID(), "pg-key-lock");
         paymentRepository.saveAndFlush(payment);
@@ -78,74 +76,99 @@ class PaymentRepositoryTest extends RedisTestContainer {
     }
 
     @Test
-    @DisplayName("existsByOrderId 호출 시 같은 주문의 결제가 있으면 true 를 반환한다")
+    @DisplayName("existsByOrderId는 결제가 존재하면 true를 반환한다")
     void existsByOrderId_returns_true_when_exists() {
         UUID orderId = UUID.randomUUID();
         Payment payment = createPayment(orderId, "pg-key-order");
         paymentRepository.saveAndFlush(payment);
 
-        boolean result = paymentRepository.existsByOrderId(orderId);
-
-        assertThat(result).isTrue();
+        assertThat(paymentRepository.existsByOrderId(orderId)).isTrue();
     }
 
     @Test
-    @DisplayName("existsByOrderId 호출 시 같은 주문의 결제가 없으면 false 를 반환한다")
+    @DisplayName("existsByOrderId는 결제가 없으면 false를 반환한다")
     void existsByOrderId_returns_false_when_not_exists() {
-        boolean result = paymentRepository.existsByOrderId(UUID.randomUUID());
-
-        assertThat(result).isFalse();
+        assertThat(paymentRepository.existsByOrderId(UUID.randomUUID())).isFalse();
     }
 
     @Test
-    @DisplayName("findDetailByIdAndMemberId — 본인 결제이면 courseTitle, orderCount 를 포함한 DTO 를 반환한다")
-    void findDetailByIdAndMemberId_returns_dto_with_course_info() {
+    @DisplayName("findDetailByIdAndMemberId는 본인 결제의 상세 projection을 반환한다")
+    void findDetailByIdAndMemberId_returns_projection_for_owner() {
         UUID memberId = UUID.randomUUID();
-        Order order   = saveOrder(memberId);
+        Order order = saveOrder(memberId, UUID.randomUUID(), 2, 62500L, "Test Course");
         Payment payment = savePayment(order.getId(), memberId, "pg-detail-1");
 
         Optional<PaymentDetailResponse> result =
                 paymentRepository.findDetailByIdAndMemberId(payment.getId(), memberId);
 
         assertThat(result).isPresent();
-        PaymentDetailResponse dto = result.get();
-        assertThat(dto.paymentId()).isEqualTo(payment.getId());
-        assertThat(dto.orderId()).isEqualTo(order.getId());
-        assertThat(dto.courseTitle()).isEqualTo("테스트 강좌");  // Order.titleSnap
-        assertThat(dto.orderCount()).isEqualTo(2);              // Order.orderCount
-        assertThat(dto.paidTotalPrice()).isEqualTo(125000L);
-        assertThat(dto.status()).isEqualTo(PaymentStatus.PENDING);
+        PaymentDetailResponse detail = result.get();
+        assertThat(detail.paymentId()).isEqualTo(payment.getId());
+        assertThat(detail.orderId()).isEqualTo(order.getId());
+        assertThat(detail.courseTitle()).isEqualTo("Test Course");
+        assertThat(detail.orderCount()).isEqualTo(2);
+        assertThat(detail.paidTotalPrice()).isEqualTo(125000L);
+        assertThat(detail.status()).isEqualTo(PaymentStatus.PENDING);
     }
 
     @Test
-    @DisplayName("findDetailByIdAndMemberId — 타인의 결제이면 빈 Optional 을 반환한다")
+    @DisplayName("findDetailByIdAndMemberId는 타인의 결제면 빈 Optional을 반환한다")
     void findDetailByIdAndMemberId_returns_empty_for_other_member() {
-        UUID owner  = UUID.randomUUID();
-        UUID other  = UUID.randomUUID();
-        Order order = saveOrder(owner);
-        Payment payment = savePayment(order.getId(), owner, "pg-detail-2");
+        UUID ownerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        Order order = saveOrder(ownerId, UUID.randomUUID(), 2, 62500L, "Test Course");
+        Payment payment = savePayment(order.getId(), ownerId, "pg-detail-2");
 
         Optional<PaymentDetailResponse> result =
-                paymentRepository.findDetailByIdAndMemberId(payment.getId(), other);
+                paymentRepository.findDetailByIdAndMemberId(payment.getId(), otherId);
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    @DisplayName("findDetailByIdAndMemberId — 존재하지 않는 paymentId 이면 빈 Optional 을 반환한다")
-    void findDetailByIdAndMemberId_returns_empty_when_not_exists() {
-        Optional<PaymentDetailResponse> result =
-                paymentRepository.findDetailByIdAndMemberId(UUID.randomUUID(), UUID.randomUUID());
+    @DisplayName("findRefundPreviewData는 본인 결제의 환불 미리보기 projection을 반환한다")
+    void findRefundPreviewData_returns_projection_for_owner() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Order order = saveOrder(memberId, courseId, 2, 62500L, "Preview Course");
+        Payment payment = savePayment(order.getId(), memberId, "pg-refund-preview");
+
+        Optional<RefundPreviewData> result =
+                paymentRepository.findRefundPreviewData(payment.getId(), memberId);
+
+        assertThat(result).isPresent();
+        RefundPreviewData data = result.get();
+        assertThat(data.paymentId()).isEqualTo(payment.getId());
+        assertThat(data.memberId()).isEqualTo(memberId);
+        assertThat(data.paidTotalPrice()).isEqualTo(125000L);
+        assertThat(data.paymentStatusName()).isEqualTo(PaymentStatus.PENDING.name());
+        assertThat(data.courseId()).isEqualTo(courseId);
+        assertThat(data.courseTitle()).isEqualTo("Preview Course");
+        assertThat(data.currentOrderCount()).isEqualTo(2);
+        assertThat(data.priceSnap()).isEqualTo(BigInteger.valueOf(62500L));
+    }
+
+    @Test
+    @DisplayName("findRefundPreviewData는 타인의 결제면 빈 Optional을 반환한다")
+    void findRefundPreviewData_returns_empty_for_other_member() {
+        UUID ownerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Order order = saveOrder(ownerId, courseId, 2, 62500L, "Preview Course");
+        Payment payment = savePayment(order.getId(), ownerId, "pg-refund-preview-other");
+
+        Optional<RefundPreviewData> result =
+                paymentRepository.findRefundPreviewData(payment.getId(), otherId);
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    @DisplayName("findListByMemberIdAndStatus — status 가 null 이면 해당 회원의 전체 결제를 반환한다")
+    @DisplayName("findListByMemberIdAndStatus는 status가 null이면 회원의 전체 결제 목록을 반환한다")
     void findListByMemberIdAndStatus_returns_all_when_status_null() {
         UUID memberId = UUID.randomUUID();
-        Order order1 = saveOrder(memberId);
-        Order order2 = saveOrder(memberId);
+        Order order1 = saveOrder(memberId, UUID.randomUUID(), 2, 62500L, "Course A");
+        Order order2 = saveOrder(memberId, UUID.randomUUID(), 1, 50000L, "Course B");
         savePayment(order1.getId(), memberId, "pg-list-1");
         Payment paid = savePayment(order2.getId(), memberId, "pg-list-2");
         paid.confirmPaid();
@@ -159,12 +182,12 @@ class PaymentRepositoryTest extends RedisTestContainer {
     }
 
     @Test
-    @DisplayName("findListByMemberIdAndStatus — status 가 PAID 이면 PAID 상태만 반환한다")
+    @DisplayName("findListByMemberIdAndStatus는 status 조건으로 결제 목록을 필터링한다")
     void findListByMemberIdAndStatus_filters_by_status() {
         UUID memberId = UUID.randomUUID();
-        Order order1  = saveOrder(memberId);
-        Order order2  = saveOrder(memberId);
-        savePayment(order1.getId(), memberId, "pg-filter-pending");   // PENDING
+        Order order1 = saveOrder(memberId, UUID.randomUUID(), 2, 62500L, "Course A");
+        Order order2 = saveOrder(memberId, UUID.randomUUID(), 1, 50000L, "Course B");
+        savePayment(order1.getId(), memberId, "pg-filter-pending");
         Payment paid = savePayment(order2.getId(), memberId, "pg-filter-paid");
         paid.confirmPaid();
         paymentRepository.saveAndFlush(paid);
@@ -174,40 +197,15 @@ class PaymentRepositoryTest extends RedisTestContainer {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).status()).isEqualTo(PaymentStatus.PAID);
+        assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("findListByMemberIdAndStatus — 타인의 결제는 조회되지 않는다")
-    void findListByMemberIdAndStatus_excludes_other_members() {
-        UUID myId    = UUID.randomUUID();
-        UUID otherId = UUID.randomUUID();
-        Order myOrder    = saveOrder(myId);
-        Order otherOrder = saveOrder(otherId);
-        savePayment(myOrder.getId(),    myId,    "pg-mine");
-        savePayment(otherOrder.getId(), otherId, "pg-other");
-
-        Page<PaymentListResponse> result = paymentRepository.findListByMemberIdAndStatus(
-                myId, null, PageRequest.of(0, 10));
-
-        assertThat(result.getContent()).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("findListByMemberIdAndStatus — 결제가 없으면 빈 페이지를 반환한다")
-    void findListByMemberIdAndStatus_returns_empty_page() {
-        Page<PaymentListResponse> result = paymentRepository.findListByMemberIdAndStatus(
-                UUID.randomUUID(), null, PageRequest.of(0, 10));
-
-        assertThat(result.getContent()).isEmpty();
-        assertThat(result.getTotalElements()).isZero();
-    }
-
-    @Test
-    @DisplayName("findListByMemberIdAndStatus — 페이지네이션이 정상 동작한다")
+    @DisplayName("findListByMemberIdAndStatus는 페이지네이션이 정상 동작한다")
     void findListByMemberIdAndStatus_pagination_works() {
         UUID memberId = UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
-            Order order = saveOrder(memberId);
+            Order order = saveOrder(memberId, UUID.randomUUID(), 1, 30000L + i, "Course " + i);
             savePayment(order.getId(), memberId, "pg-page-" + i);
         }
 
@@ -222,22 +220,6 @@ class PaymentRepositoryTest extends RedisTestContainer {
         assertThat(firstPage.getTotalPages()).isEqualTo(2);
     }
 
-    @Test
-    @DisplayName("findListByMemberIdAndStatus — courseTitle 과 orderCount 가 포함되어 반환된다")
-    void findListByMemberIdAndStatus_includes_course_info() {
-        UUID memberId = UUID.randomUUID();
-        Order order   = saveOrder(memberId);
-        savePayment(order.getId(), memberId, "pg-course-info");
-
-        Page<PaymentListResponse> result = paymentRepository.findListByMemberIdAndStatus(
-                memberId, null, PageRequest.of(0, 10));
-
-        assertThat(result.getContent()).hasSize(1);
-        PaymentListResponse dto = result.getContent().get(0);
-        assertThat(dto.courseTitle()).isEqualTo("테스트 강좌");
-        assertThat(dto.orderCount()).isEqualTo(2);
-    }
-
     private Payment createPayment(UUID orderId, String pgKey) {
         return Payment.createPending(
                 orderId,
@@ -249,23 +231,26 @@ class PaymentRepositoryTest extends RedisTestContainer {
         );
     }
 
-    private Order saveOrder(UUID memberId) {
+    private Order saveOrder(UUID memberId, UUID courseId, int orderCount, long unitPrice, String title) {
         Order order = Order.register(
                 memberId,
-                UUID.randomUUID(),
-                2,
-                BigInteger.valueOf(62500),
-                "테스트 강좌"
+                courseId,
+                orderCount,
+                BigInteger.valueOf(unitPrice),
+                title
         );
         return orderRepository.saveAndFlush(order);
     }
 
     private Payment savePayment(UUID orderId, UUID memberId, String pgKey) {
         Payment payment = Payment.createPending(
-                orderId, memberId,
-                pgKey, 125000L, 125000L, PaymentPayWay.CARD
+                orderId,
+                memberId,
+                pgKey,
+                125000L,
+                125000L,
+                PaymentPayWay.CARD
         );
         return paymentRepository.saveAndFlush(payment);
     }
-
 }

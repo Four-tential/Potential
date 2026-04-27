@@ -7,6 +7,7 @@ import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.port.PaymentGatewayResponse;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -461,6 +463,41 @@ class PaymentServiceTest {
 
         assertThat(result.getContent()).isEmpty();
         assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("getRefundPreviewData는 결제 projection이 존재하면 반환한다")
+    void getRefundPreviewData_returns_projection() {
+        UUID paymentId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        RefundPreviewData expected = new RefundPreviewData(
+                paymentId,
+                memberId,
+                125000L,
+                PaymentStatus.PAID.name(),
+                UUID.randomUUID(),
+                "Test Course",
+                5,
+                BigInteger.valueOf(25000L)
+        );
+        given(paymentRepository.findRefundPreviewData(paymentId, memberId)).willReturn(Optional.of(expected));
+
+        RefundPreviewData result = paymentService.getRefundPreviewData(paymentId, memberId);
+
+        assertThat(result).isEqualTo(expected);
+        verify(paymentRepository).findRefundPreviewData(paymentId, memberId);
+    }
+
+    @Test
+    @DisplayName("getRefundPreviewData는 결제 projection이 없으면 예외가 발생한다")
+    void getRefundPreviewData_throws_when_not_found() {
+        UUID paymentId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        given(paymentRepository.findRefundPreviewData(paymentId, memberId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentService.getRefundPreviewData(paymentId, memberId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT.getMessage());
     }
 
     private PaymentListResponse createListResponse(

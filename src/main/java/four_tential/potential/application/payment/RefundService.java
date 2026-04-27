@@ -10,6 +10,7 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.domain.payment.repository.RefundRepository;
 import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
 import four_tential.potential.presentation.payment.dto.RefundListResponse;
@@ -37,25 +38,31 @@ public class RefundService {
      * 단가는 결제 금액을 현재 수량으로 다시 나누지 않고, 주문의 1장 가격 스냅샷을 사용한다.
      */
     public RefundPreviewResponse getRefundPreview(
-            Payment payment,
-            UUID memberId,
-            String courseTitle,
-            LocalDateTime courseStartAt,
-            int currentOrderCount,
-            Long unitPrice
+            RefundPreviewData data,
+            LocalDateTime courseStartAt
     ) {
-        validateOwner(payment, memberId);
-        validateRefundablePaymentStatus(payment);
+        // 결제 상태 검증 (PAID 또는 PART_REFUNDED 만 환불 가능)
+        PaymentStatus status = PaymentStatus.valueOf(data.paymentStatusName());
+        if (status != PaymentStatus.PAID && status != PaymentStatus.PART_REFUNDED) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID);
+        }
 
         boolean refundable = isRefundable(courseStartAt);
 
+        Long unitPrice;
+        try {
+            unitPrice = data.priceSnap().longValueExact();
+        } catch (ArithmeticException e) {
+            throw new ServiceErrorException(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH);
+        }
+
         return RefundPreviewResponse.of(
-                payment.getId(),
-                courseTitle,
+                data.paymentId(),
+                data.courseTitle(),
                 courseStartAt,
-                currentOrderCount,
+                data.currentOrderCount(),
                 unitPrice,
-                payment.getPaidTotalPrice(),
+                data.paidTotalPrice(),
                 refundable
         );
     }
