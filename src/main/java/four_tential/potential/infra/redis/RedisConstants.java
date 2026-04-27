@@ -30,6 +30,10 @@ public class RedisConstants {
     // Review 캐시
     public static final String REVIEW_LIST_CACHE = "reviewList";  // 후기 목록 캐시
 
+    // Order 캐시
+    public static final String ORDER_DETAILS_CACHE = "orderDetails";
+    public static final String ORDER_LIST_CACHE = "orderList";
+
     // Instructor Profile 캐시
     public static final String INSTRUCTOR_PROFILE_CACHE = "instructorProfile";
 

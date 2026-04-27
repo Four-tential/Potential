@@ -9,11 +9,15 @@ import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.order.WaitingStatus;
 import four_tential.potential.presentation.order.dto.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
+
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
 
 @Component
 @RequiredArgsConstructor
@@ -65,6 +69,7 @@ public class OrderFacade {
     /**
      * 주문 상세 조회
      */
+    @Cacheable(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId")
     public OrderDetailResponse getOrderDetails(UUID orderId, UUID memberId) {
         Order order = orderService.getOrderDetails(orderId, memberId);
         return OrderDetailResponse.from(order);
@@ -73,6 +78,7 @@ public class OrderFacade {
     /**
      * 나의 주문 목록 조회
      */
+    @Cacheable(cacheNames = ORDER_LIST_CACHE, key = "#memberId + '_' + #pageable.pageNumber")
     public PageResponse<OrderMyListResponse> getMyOrders(UUID memberId, Pageable pageable) {
         Page<Order> orders = orderService.getMyOrders(memberId, pageable);
         Page<OrderMyListResponse> responsePage = orders.map(OrderMyListResponse::from);
