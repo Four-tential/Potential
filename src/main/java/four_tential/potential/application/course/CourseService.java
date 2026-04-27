@@ -3,6 +3,7 @@ package four_tential.potential.application.course;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseDetailQueryResult;
 import four_tential.potential.domain.course.course.CourseListQueryResult;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
@@ -19,10 +20,7 @@ import four_tential.potential.domain.course.course_wishlist.CourseWishlistReposi
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
-import four_tential.potential.domain.member.member.Member;
-import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.order.OrderRepository;
-import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.presentation.course.model.request.CourseRequestActionRequest;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
 import four_tential.potential.presentation.course.model.request.UpdateCourseRequest;
@@ -49,7 +47,6 @@ import java.util.stream.Collectors;
 
 import static four_tential.potential.common.exception.domain.CourseExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_INSTRUCTOR;
-import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NOT_FOUND_MEMBER;
 
 @Service
 @RequiredArgsConstructor
@@ -61,8 +58,6 @@ public class CourseService {
     private final CourseCategoryRepository courseCategoryRepository;
     private final CourseWishlistRepository courseWishlistRepository;
     private final InstructorMemberRepository instructorMemberRepository;
-    private final MemberRepository memberRepository;
-    private final ReviewRepository reviewRepository;
     private final OrderRepository orderRepository;
 
     @Transactional(readOnly = true)
@@ -86,63 +81,40 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public CourseDetailResponse getCourseDetail(UUID courseId, UUID memberId) {
-        Course course = courseRepository.findById(courseId)
-                .filter(c -> c.getStatus() != CourseStatus.PREPARATION)
+        CourseDetailQueryResult detail = courseRepository.findCourseDetail(courseId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
 
-        CourseCategory category = courseCategoryRepository.findById(course.getCourseCategoryId())
-                .orElseThrow(() -> new ServiceErrorException(ERR_CATEGORY_NOT_FOUND));
-
-        InstructorMember instructorMember = instructorMemberRepository.findById(course.getMemberInstructorId())
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
-
-        Member instructorMemberInfo = memberRepository.findById(instructorMember.getMemberId())
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_MEMBER));
-
-        double instructorAvgRating = Optional.ofNullable(
-                reviewRepository.findAverageRatingByMemberInstructorId(instructorMember.getId())
-        ).orElse(0.0);
-
-        double courseAvgRating = Optional.ofNullable(
-                reviewRepository.findAverageRatingByCourseId(courseId)
-        ).orElse(0.0);
-
-        long reviewCount = reviewRepository.countByCourseId(courseId);
+        List<String> imageUrls = courseImageRepository.findImageUrlsByCourseId(courseId);
 
         boolean isWishlisted = memberId != null
                 && courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId);
 
-        List<String> imageUrls = course.getImages().stream()
-                .sorted(Comparator.comparing(image -> image.getId()))
-                .map(image -> image.getImageUrl())
-                .toList();
-
         return new CourseDetailResponse(
-                course.getId(),
-                course.getTitle(),
-                course.getDescription(),
-                category.getCode(),
-                category.getName(),
+                detail.courseId(),
+                detail.title(),
+                detail.description(),
+                detail.categoryCode(),
+                detail.categoryName(),
                 new CourseDetailInstructorInfo(
-                        instructorMemberInfo.getId(),
-                        instructorMemberInfo.getName(),
-                        instructorMemberInfo.getProfileImageUrl(),
-                        instructorAvgRating
+                        detail.instructorMemberId(),
+                        detail.instructorName(),
+                        detail.instructorProfileImageUrl(),
+                        detail.instructorAvgRating()
                 ),
                 imageUrls,
-                course.getAddressMain(),
-                course.getAddressDetail(),
-                course.getPrice(),
-                course.getCapacity(),
-                course.getConfirmCount(),
-                course.getStatus(),
-                course.getLevel(),
-                course.getOrderOpenAt(),
-                course.getOrderCloseAt(),
-                course.getStartAt(),
-                course.getEndAt(),
-                courseAvgRating,
-                reviewCount,
+                detail.addressMain(),
+                detail.addressDetail(),
+                detail.price(),
+                detail.capacity(),
+                detail.confirmCount(),
+                detail.status(),
+                detail.level(),
+                detail.orderOpenAt(),
+                detail.orderCloseAt(),
+                detail.startAt(),
+                detail.endAt(),
+                detail.courseAvgRating(),
+                detail.reviewCount(),
                 isWishlisted
         );
     }
@@ -216,9 +188,7 @@ public class CourseService {
 
     @Transactional
     public CourseWishlistResponse removeWishlist(UUID memberId, UUID courseId) {
-        CourseWishlist wishlist = courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId)
-                .orElseThrow(() -> new ServiceErrorException(ERR_WISHLIST_NOT_FOUND));
-        courseWishlistRepository.delete(wishlist);
+        courseWishlistRepository.deleteByMemberIdAndCourseIdQuery(memberId, courseId);
         return new CourseWishlistResponse(courseId, false);
     }
 

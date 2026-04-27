@@ -65,7 +65,7 @@ function login(email) {
 }
 
 function sampleInstructorMemberId(vu, iter) {
-  const n = ((vu * 1000 + iter) % 100) + 1;
+  const n = ((vu * 997 + iter) % 100) + 1;
   return `00000000-0000-0000-0000-02${n.toString(16).padStart(10, '0')}`;
 }
 

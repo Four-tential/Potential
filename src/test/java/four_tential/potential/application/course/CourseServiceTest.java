@@ -9,7 +9,7 @@ import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.course.course_category.CourseCategory;
 import four_tential.potential.domain.course.course_category.CourseCategoryRepository;
-import four_tential.potential.domain.course.course_image.CourseImage;
+import four_tential.potential.domain.course.course.CourseDetailQueryResult;
 import four_tential.potential.domain.attendance.AttendanceStatus;
 import four_tential.potential.domain.course.course_image.CourseImageRepository;
 import four_tential.potential.domain.course.course_approval_history.CourseApprovalHistoryRepository;
@@ -17,14 +17,10 @@ import four_tential.potential.domain.course.course_wishlist.CourseWishlistReposi
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
 import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.member.fixture.InstructorMemberFixture;
-import four_tential.potential.domain.member.fixture.MemberFixture;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
-import four_tential.potential.domain.member.member.Member;
-import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.order.CourseStudentQueryResult;
 import four_tential.potential.domain.order.OrderRepository;
-import four_tential.potential.domain.review.review.ReviewRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
@@ -75,8 +71,6 @@ class CourseServiceTest {
     @Mock private CourseCategoryRepository courseCategoryRepository;
     @Mock private CourseWishlistRepository courseWishlistRepository;
     @Mock private InstructorMemberRepository instructorMemberRepository;
-    @Mock private MemberRepository memberRepository;
-    @Mock private ReviewRepository reviewRepository;
     @Mock private OrderRepository orderRepository;
 
     @InjectMocks
@@ -195,18 +189,11 @@ class CourseServiceTest {
     void getCourseDetail_success_allFieldsMapped() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-        CourseCategory category = CourseCategoryFixture.defaultCourseCategory();
-        InstructorMember instructorMember = approvedInstructorMember();
-        Member instructorInfo = instructorMember();
+        UUID instructorMemberId = UUID.randomUUID();
+        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, instructorMemberId);
 
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(course.getCourseCategoryId())).willReturn(Optional.of(category));
-        given(instructorMemberRepository.findById(course.getMemberInstructorId())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(instructorMember.getMemberId())).willReturn(Optional.of(instructorInfo));
-        given(reviewRepository.findAverageRatingByMemberInstructorId(instructorMember.getId())).willReturn(4.5);
-        given(reviewRepository.findAverageRatingByCourseId(courseId)).willReturn(4.2);
-        given(reviewRepository.countByCourseId(courseId)).willReturn(15L);
+        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
+        given(courseImageRepository.findImageUrlsByCourseId(courseId)).willReturn(List.of("https://cdn.example.com/img1.jpg"));
         given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(true);
 
         CourseDetailResponse response = courseService.getCourseDetail(courseId, memberId);
@@ -222,23 +209,27 @@ class CourseServiceTest {
         assertThat(response.reviewCount()).isEqualTo(15L);
         assertThat(response.isWishlisted()).isTrue();
         assertThat(response.instructor().averageRating()).isEqualTo(4.5);
-        assertThat(response.instructor().memberId()).isEqualTo(instructorInfo.getId());
+        assertThat(response.instructor().memberId()).isEqualTo(instructorMemberId);
     }
 
     @Test
     @DisplayName("코스 상세 조회 성공 - 리뷰가 없으면 평점과 리뷰 수가 0")
     void getCourseDetail_noReviews_returnsZeroStats() {
         UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-        InstructorMember instructorMember = approvedInstructorMember();
+        CourseDetailQueryResult detail = new CourseDetailQueryResult(
+                courseId, CourseFixture.DEFAULT_TITLE, CourseFixture.DEFAULT_DESCRIPTION,
+                CourseCategoryFixture.DEFAULT_CODE, CourseCategoryFixture.DEFAULT_NAME,
+                UUID.randomUUID(), "강사이름", null,
+                CourseFixture.DEFAULT_ADDRESS_MAIN, CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                CourseFixture.DEFAULT_PRICE, CourseFixture.DEFAULT_CAPACITY, 0,
+                CourseStatus.OPEN, CourseFixture.DEFAULT_LEVEL,
+                CourseFixture.DEFAULT_ORDER_OPEN_AT, CourseFixture.DEFAULT_ORDER_CLOSE_AT,
+                CourseFixture.DEFAULT_START_AT, CourseFixture.DEFAULT_END_AT,
+                0.0, 0.0, 0L
+        );
 
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(any())).willReturn(Optional.of(CourseCategoryFixture.defaultCourseCategory()));
-        given(instructorMemberRepository.findById(any())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(any())).willReturn(Optional.of(instructorMember()));
-        given(reviewRepository.findAverageRatingByMemberInstructorId(any())).willReturn(null);
-        given(reviewRepository.findAverageRatingByCourseId(courseId)).willReturn(null);
-        given(reviewRepository.countByCourseId(courseId)).willReturn(0L);
+        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
+        given(courseImageRepository.findImageUrlsByCourseId(courseId)).willReturn(List.of());
         given(courseWishlistRepository.existsByMemberIdAndCourseId(any(), any())).willReturn(false);
 
         CourseDetailResponse response = courseService.getCourseDetail(courseId, UUID.randomUUID());
@@ -252,16 +243,10 @@ class CourseServiceTest {
     @DisplayName("코스 상세 조회 성공 - 비인증 유저(memberId=null)이면 isWishlisted=false이고 위시리스트 조회 안 함")
     void getCourseDetail_notAuthenticated_isWishlistedFalse_noWishlistQuery() {
         UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-        InstructorMember instructorMember = approvedInstructorMember();
+        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, UUID.randomUUID());
 
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(any())).willReturn(Optional.of(CourseCategoryFixture.defaultCourseCategory()));
-        given(instructorMemberRepository.findById(any())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(any())).willReturn(Optional.of(instructorMember()));
-        given(reviewRepository.findAverageRatingByMemberInstructorId(any())).willReturn(null);
-        given(reviewRepository.findAverageRatingByCourseId(courseId)).willReturn(null);
-        given(reviewRepository.countByCourseId(courseId)).willReturn(0L);
+        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
+        given(courseImageRepository.findImageUrlsByCourseId(courseId)).willReturn(List.of());
 
         CourseDetailResponse response = courseService.getCourseDetail(courseId, null);
 
@@ -273,22 +258,11 @@ class CourseServiceTest {
     @DisplayName("코스 상세 조회 성공 - 코스 이미지 URL이 응답에 포함된다")
     void getCourseDetail_imagesIncludedInResponse() {
         UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-        CourseImage image1 = CourseImage.register(course, "https://cdn.example.com/img1.jpg");
-        CourseImage image2 = CourseImage.register(course, "https://cdn.example.com/img2.jpg");
+        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, UUID.randomUUID());
 
-        ReflectionTestUtils.setField(image1, "id", UUID.fromString("00000000-0000-7000-8000-000000000001"));
-        ReflectionTestUtils.setField(image2, "id", UUID.fromString("00000000-0000-7000-8000-000000000002"));
-        ReflectionTestUtils.setField(course, "images", List.of(image1, image2));
-
-        InstructorMember instructorMember = approvedInstructorMember();
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(any())).willReturn(Optional.of(CourseCategoryFixture.defaultCourseCategory()));
-        given(instructorMemberRepository.findById(any())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(any())).willReturn(Optional.of(instructorMember()));
-        given(reviewRepository.findAverageRatingByMemberInstructorId(any())).willReturn(null);
-        given(reviewRepository.findAverageRatingByCourseId(courseId)).willReturn(null);
-        given(reviewRepository.countByCourseId(courseId)).willReturn(0L);
+        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
+        given(courseImageRepository.findImageUrlsByCourseId(courseId))
+                .willReturn(List.of("https://cdn.example.com/img1.jpg", "https://cdn.example.com/img2.jpg"));
         given(courseWishlistRepository.existsByMemberIdAndCourseId(any(), any())).willReturn(false);
 
         CourseDetailResponse response = courseService.getCourseDetail(courseId, UUID.randomUUID());
@@ -303,80 +277,13 @@ class CourseServiceTest {
     @DisplayName("코스 상세 조회 실패 - 존재하지 않는 코스 ID이면 NOT_FOUND")
     void getCourseDetail_courseNotFound_throwsNotFound() {
         UUID courseId = UUID.randomUUID();
-        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> courseService.getCourseDetail(courseId, UUID.randomUUID()))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 코스입니다");
 
-        verify(courseCategoryRepository, never()).findById(any());
-    }
-
-    @Test
-    @DisplayName("코스 상세 조회 실패 - PREPARATION 상태 코스는 공개 조회 불가 (NOT_FOUND)")
-    void getCourseDetail_preparationCourse_treatedAsNotFound() {
-        UUID courseId = UUID.randomUUID();
-        Course preparationCourse = courseWithId(courseId);
-
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(preparationCourse));
-
-        assertThatThrownBy(() -> courseService.getCourseDetail(courseId, UUID.randomUUID()))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("존재하지 않는 코스입니다");
-
-        verify(courseCategoryRepository, never()).findById(any());
-    }
-
-    @Test
-    @DisplayName("코스 상세 조회 실패 - 카테고리를 찾을 수 없으면 NOT_FOUND")
-    void getCourseDetail_categoryNotFound_throwsNotFound() {
-        UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(course.getCourseCategoryId())).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> courseService.getCourseDetail(courseId, UUID.randomUUID()))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("존재하지 않는 카테고리입니다");
-
-        verify(instructorMemberRepository, never()).findById(any());
-    }
-
-    @Test
-    @DisplayName("코스 상세 조회 실패 - 강사 엔티티가 없으면 NOT_FOUND")
-    void getCourseDetail_instructorNotFound_throwsNotFound() {
-        UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(any())).willReturn(Optional.of(CourseCategoryFixture.defaultCourseCategory()));
-        given(instructorMemberRepository.findById(course.getMemberInstructorId())).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> courseService.getCourseDetail(courseId, UUID.randomUUID()))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("존재하지 않는 강사입니다");
-
-        verify(memberRepository, never()).findById(any());
-    }
-
-    @Test
-    @DisplayName("코스 상세 조회 실패 - 강사 회원 정보가 없으면 NOT_FOUND")
-    void getCourseDetail_instructorMemberNotFound_throwsNotFound() {
-        UUID courseId = UUID.randomUUID();
-        Course course = openCourseWithId(courseId);
-        InstructorMember instructorMember = approvedInstructorMember();
-
-        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
-        given(courseCategoryRepository.findById(any())).willReturn(Optional.of(CourseCategoryFixture.defaultCourseCategory()));
-        given(instructorMemberRepository.findById(any())).willReturn(Optional.of(instructorMember));
-        given(memberRepository.findById(instructorMember.getMemberId())).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> courseService.getCourseDetail(courseId, UUID.randomUUID()))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("존재하지 않는 회원입니다");
-
-        verify(reviewRepository, never()).findAverageRatingByCourseId(any());
+        verify(courseImageRepository, never()).findImageUrlsByCourseId(any());
     }
 
     @Test
@@ -905,33 +812,28 @@ class CourseServiceTest {
     void removeWishlist_success() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
-        four_tential.potential.domain.course.course_wishlist.CourseWishlist wishlist =
-                four_tential.potential.domain.course.course_wishlist.CourseWishlist.register(memberId, courseId);
 
-        given(courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId))
-                .willReturn(Optional.of(wishlist));
+        given(courseWishlistRepository.deleteByMemberIdAndCourseIdQuery(memberId, courseId)).willReturn(1);
 
         CourseWishlistResponse response = courseService.removeWishlist(memberId, courseId);
 
         assertThat(response.courseId()).isEqualTo(courseId);
         assertThat(response.isWishlisted()).isFalse();
-        verify(courseWishlistRepository).delete(wishlist);
+        verify(courseWishlistRepository).deleteByMemberIdAndCourseIdQuery(memberId, courseId);
     }
 
     @Test
-    @DisplayName("찜 해제 실패 - 찜 목록에 없으면 ERR_WISHLIST_NOT_FOUND")
-    void removeWishlist_notFound() {
+    @DisplayName("찜 해제 성공 - 찜 목록에 없어도 정상 응답 (멱등성)")
+    void removeWishlist_notFound_stillSuccess() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
 
-        given(courseWishlistRepository.findByMemberIdAndCourseId(memberId, courseId))
-                .willReturn(Optional.empty());
+        given(courseWishlistRepository.deleteByMemberIdAndCourseIdQuery(memberId, courseId)).willReturn(0);
 
-        assertThatThrownBy(() -> courseService.removeWishlist(memberId, courseId))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage("찜 목록에 존재하지 않는 코스입니다");
+        CourseWishlistResponse response = courseService.removeWishlist(memberId, courseId);
 
-        verify(courseWishlistRepository, never()).delete(any());
+        assertThat(response.courseId()).isEqualTo(courseId);
+        assertThat(response.isWishlisted()).isFalse();
     }
 
     @Test
@@ -1275,7 +1177,7 @@ class CourseServiceTest {
     }
 
     private CourseSearchCondition emptyCondition() {
-        return new CourseSearchCondition(null, null, null, null, null, null, null);
+        return new CourseSearchCondition(null, null, null, null, null, null, null, null);
     }
 
     private CourseListQueryResult sampleQueryResult(UUID courseId) {
@@ -1318,10 +1220,31 @@ class CourseServiceTest {
         return im;
     }
 
-    private Member instructorMember() {
-        Member member = MemberFixture.defaultMember();
-        ReflectionTestUtils.setField(member, "id", InstructorMemberFixture.DEFAULT_MEMBER_ID);
-        return member;
+    private CourseDetailQueryResult sampleCourseDetailQueryResult(UUID courseId, UUID instructorMemberId) {
+        return new CourseDetailQueryResult(
+                courseId,
+                CourseFixture.DEFAULT_TITLE,
+                CourseFixture.DEFAULT_DESCRIPTION,
+                CourseCategoryFixture.DEFAULT_CODE,
+                CourseCategoryFixture.DEFAULT_NAME,
+                instructorMemberId,
+                "강사이름",
+                "https://cdn.example.com/profile.jpg",
+                CourseFixture.DEFAULT_ADDRESS_MAIN,
+                CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                CourseFixture.DEFAULT_PRICE,
+                CourseFixture.DEFAULT_CAPACITY,
+                5,
+                CourseStatus.OPEN,
+                CourseFixture.DEFAULT_LEVEL,
+                CourseFixture.DEFAULT_ORDER_OPEN_AT,
+                CourseFixture.DEFAULT_ORDER_CLOSE_AT,
+                CourseFixture.DEFAULT_START_AT,
+                CourseFixture.DEFAULT_END_AT,
+                4.5,
+                4.2,
+                15L
+        );
     }
 
     @Test
