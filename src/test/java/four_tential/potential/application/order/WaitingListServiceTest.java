@@ -244,7 +244,7 @@ class WaitingListServiceTest {
 
         // then
         verify(waitingListSet).add(anyDouble(), eq(memberId.toString()));
-        verify(countBucket).set(eq("1"));
+        verify(countBucket).set(eq("1"), any(java.time.Duration.class));
     }
 
     @Test
