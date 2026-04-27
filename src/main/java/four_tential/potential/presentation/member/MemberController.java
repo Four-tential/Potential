@@ -1,7 +1,6 @@
 package four_tential.potential.presentation.member;
 
-import four_tential.potential.application.course.CourseService;
-import four_tential.potential.application.course.CourseWishlistService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
@@ -55,8 +54,7 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 public class MemberController {
 
     private final MemberService memberService;
-    private final CourseWishlistService courseWishlistService;
-    private final CourseService courseService;
+    private final CourseFacade courseFacade;
 
     @Operation(summary = "마이페이지 조회", description = "로그인한 회원의 마이페이지 정보를 조회합니다.")
     @ApiResponses({
@@ -208,7 +206,7 @@ public class MemberController {
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "찜 목록 조회 성공",
-                        courseWishlistService.getMyWishlistCourses(principal.memberId(), page, size)
+                        courseFacade.getMyWishlistCourses(principal.memberId(), page, size)
                 ));
     }
 
@@ -266,7 +264,7 @@ public class MemberController {
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "수강생 명단 조회 성공",
-                        courseService.getCourseStudents(courseId, principal.memberId(), PageRequest.of(page, size))
+                        courseFacade.getCourseStudents(courseId, principal.memberId(), PageRequest.of(page, size))
                 ));
     }
 
@@ -286,7 +284,7 @@ public class MemberController {
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "강사 본인 코스 목록 조회 성공",
-                        courseService.getMyInstructorCourses(principal.memberId(), PageRequest.of(page, size))
+                        courseFacade.getMyInstructorCourses(principal.memberId(), PageRequest.of(page, size))
                 ));
     }
 
@@ -305,7 +303,7 @@ public class MemberController {
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "강사 코스 목록 조회 성공",
-                        courseService.getInstructorCourses(instructorId, PageRequest.of(page, size))
+                        courseFacade.getInstructorCourses(instructorId, PageRequest.of(page, size))
                 ));
     }
 

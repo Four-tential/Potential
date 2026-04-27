@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseLevel;
@@ -61,7 +61,7 @@ class CourseRequestControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CourseService courseService;
+    private CourseFacade courseFacade;
 
     @MockitoBean
     private JwtFilter jwtFilter;
@@ -90,7 +90,7 @@ class CourseRequestControllerTest {
         CreateCourseRequestResponse serviceResponse = new CreateCourseRequestResponse(
                 UUID.randomUUID(), "소도구 필라테스 입문반", "FITNESS", CourseStatus.PREPARATION
         );
-        given(courseService.createCourseRequest(any(), any())).willReturn(serviceResponse);
+        given(courseFacade.createCourseRequest(any(), any())).willReturn(serviceResponse);
 
         mockMvc.perform(post("/v1/course-requests")
                         .with(instructorAuth())
@@ -119,7 +119,7 @@ class CourseRequestControllerTest {
     @Test
     @DisplayName("코스 개설 신청 - 미승인 강사이면 404 Not Found")
     void createCourseRequest_notApprovedInstructor() throws Exception {
-        given(courseService.createCourseRequest(any(), any()))
+        given(courseFacade.createCourseRequest(any(), any()))
                 .willThrow(new ServiceErrorException(ERR_NOT_FOUND_INSTRUCTOR));
 
         mockMvc.perform(post("/v1/course-requests")
@@ -133,7 +133,7 @@ class CourseRequestControllerTest {
     @Test
     @DisplayName("코스 개설 신청 - 잘못된 강의 시간이면 400 Bad Request")
     void createCourseRequest_invalidSchedule() throws Exception {
-        given(courseService.createCourseRequest(any(), any()))
+        given(courseFacade.createCourseRequest(any(), any()))
                 .willThrow(new ServiceErrorException(ERR_INVALID_SCHEDULE));
 
         mockMvc.perform(post("/v1/course-requests")
@@ -147,7 +147,7 @@ class CourseRequestControllerTest {
     @Test
     @DisplayName("코스 개설 신청 - 잘못된 주문 마감 시간이면 400 Bad Request")
     void createCourseRequest_invalidOrderCloseTime() throws Exception {
-        given(courseService.createCourseRequest(any(), any()))
+        given(courseFacade.createCourseRequest(any(), any()))
                 .willThrow(new ServiceErrorException(ERR_INVALID_ORDER_CLOSE_TIME));
 
         mockMvc.perform(post("/v1/course-requests")
@@ -183,7 +183,7 @@ class CourseRequestControllerTest {
     @DisplayName("코스 개설 신청 취소 - INSTRUCTOR이면 200 OK")
     void deleteCourseRequest_success() throws Exception {
         UUID courseId = UUID.randomUUID();
-        willDoNothing().given(courseService).deleteCourseRequest(any(), eq(courseId));
+        willDoNothing().given(courseFacade).deleteCourseRequest(any(), eq(courseId));
 
         mockMvc.perform(delete("/v1/course-requests/{courseId}", courseId)
                         .with(instructorAuth())
@@ -208,7 +208,7 @@ class CourseRequestControllerTest {
     void deleteCourseRequest_courseNotFound() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_NOT_FOUND_COURSE))
-                .given(courseService).deleteCourseRequest(any(), eq(courseId));
+                .given(courseFacade).deleteCourseRequest(any(), eq(courseId));
 
         mockMvc.perform(delete("/v1/course-requests/{courseId}", courseId)
                         .with(instructorAuth())
@@ -221,7 +221,7 @@ class CourseRequestControllerTest {
     void deleteCourseRequest_notOwnCourse() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_FORBIDDEN_COURSE_DELETE))
-                .given(courseService).deleteCourseRequest(any(), eq(courseId));
+                .given(courseFacade).deleteCourseRequest(any(), eq(courseId));
 
         mockMvc.perform(delete("/v1/course-requests/{courseId}", courseId)
                         .with(instructorAuth())
@@ -234,7 +234,7 @@ class CourseRequestControllerTest {
     void deleteCourseRequest_notPreparation() throws Exception {
         UUID courseId = UUID.randomUUID();
         willThrow(new ServiceErrorException(ERR_CANNOT_DELETE_COURSE_REQUEST))
-                .given(courseService).deleteCourseRequest(any(), eq(courseId));
+                .given(courseFacade).deleteCourseRequest(any(), eq(courseId));
 
         mockMvc.perform(delete("/v1/course-requests/{courseId}", courseId)
                         .with(instructorAuth())

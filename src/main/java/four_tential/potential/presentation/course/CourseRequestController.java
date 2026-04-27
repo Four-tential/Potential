@@ -1,6 +1,6 @@
 package four_tential.potential.presentation.course;
 
-import four_tential.potential.application.course.CourseService;
+import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.course.model.request.CreateCourseRequestRequest;
@@ -31,7 +31,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CourseRequestController {
 
-    private final CourseService courseService;
+    private final CourseFacade courseFacade;
 
     @Operation(summary = "코스 개설 신청", description = "강사가 새로운 코스 개설을 신청합니다. PREPARATION 상태로 생성됩니다.")
     @ApiResponses({
@@ -46,7 +46,7 @@ public class CourseRequestController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @Valid @RequestBody CreateCourseRequestRequest request
     ) {
-        CreateCourseRequestResponse response = courseService.createCourseRequest(principal.memberId(), request);
+        CreateCourseRequestResponse response = courseFacade.createCourseRequest(principal.memberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success(HttpStatus.CREATED.name(), "코스 개설 신청 성공", response));
     }
@@ -64,7 +64,7 @@ public class CourseRequestController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID courseId
     ) {
-        courseService.deleteCourseRequest(principal.memberId(), courseId);
+        courseFacade.deleteCourseRequest(principal.memberId(), courseId);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 개설 신청 삭제", null));
     }
 
@@ -81,7 +81,7 @@ public class CourseRequestController {
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable UUID courseId
     ) {
-        courseService.reapplyCourseRequest(principal.memberId(), courseId);
+        courseFacade.reapplyCourseRequest(principal.memberId(), courseId);
         return ResponseEntity.ok(BaseResponse.success("OK", "코스 개설 재신청 성공", null));
     }
 }
