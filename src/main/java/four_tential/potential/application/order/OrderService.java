@@ -14,6 +14,8 @@ import four_tential.potential.presentation.order.dto.OrderCreateRequest;
 import four_tential.potential.presentation.order.dto.OrderInventoryReconcileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +30,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
 
 @Slf4j
 @Service
@@ -45,6 +50,7 @@ public class OrderService {
      */
     @Transactional
     @DistributedLock(key = "'order:member:' + #memberId")
+    @CacheEvict(cacheNames = ORDER_LIST_CACHE, key = "#memberId")
     public Order createOrder(UUID memberId, OrderCreateRequest request) {
         // 코스 정보 조회
         Course course = courseFacade.getCourseEntity(request.courseId());
@@ -106,6 +112,8 @@ public class OrderService {
 
     /**
      * 나의 주문 목록 조회
+     * 페이징 정보까지 포함하여 캐싱하려면 key 설정을 정교하게 가져가야 하지만,
+     * 여기서는 회원별 첫 페이지 조회가 빈번하다는 가정하에 memberId와 페이지 번호를 조합합니다.
      */
     @Transactional(readOnly = true)
     public Page<Order> getMyOrders(UUID memberId, Pageable pageable) {
@@ -116,6 +124,10 @@ public class OrderService {
      * 결제 완료 처리
      */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public void completePayment(UUID orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
@@ -128,6 +140,10 @@ public class OrderService {
      * 주문 취소 처리
      */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, key = "#memberId + '_0'") // 단순화를 위해 첫 페이지 위주 만료
+    })
     public Order cancelOrder(UUID orderId, UUID memberId) {
         Order order = orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
@@ -144,6 +160,10 @@ public class OrderService {
      * PG 환불이 성공한 뒤 결제 트랜잭션 안에서만 호출한다.
      */
     @Transactional(propagation = Propagation.MANDATORY)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public Order applyRefund(UUID orderId, UUID memberId, int cancelCount) {
         Order order = orderRepository.findOrderDetailsById(orderId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
@@ -157,6 +177,10 @@ public class OrderService {
      * orderCount 감소 없이 status 만 변경
      */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public void cancelOrderForInstructor(UUID orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
@@ -193,6 +217,10 @@ public class OrderService {
      * 단일 주문을 독립된 트랜잭션(REQUIRES_NEW)으로 만료 처리합니다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public boolean expireOrderInNewTransaction(UUID orderId) {
         try {
             Order order = orderRepository.findById(orderId)
@@ -244,6 +272,10 @@ public class OrderService {
      * 단일 주문을 독립된 트랜잭션(REQUIRES_NEW)으로 확정 처리합니다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public boolean confirmOrderInNewTransaction(UUID orderId) {
         try {
             Order order = orderRepository.findById(orderId)
@@ -264,6 +296,10 @@ public class OrderService {
      * 관리자에 의한 주문 상태 강제 변경
      */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, key = "#orderId"),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
     public OrderAdminStatusUpdateResponse updateOrderStatusByAdmin(UUID orderId, OrderAdminStatusUpdateRequest request) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ServiceErrorException(OrderExceptionEnum.ERR_NOT_FOUND_ORDER));
