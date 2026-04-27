@@ -50,10 +50,10 @@ public class RefundFacade {
      * 환불 가능 여부를 조회
      */
     public RefundPreviewResponse getRefundPreview(UUID memberId, UUID paymentId) {
-        // payment JOIN order 1번 쿼리 — 소유자 검증 포함
+
         RefundPreviewData data = paymentService.getRefundPreviewData(paymentId, memberId);
 
-        // course.startAt 조회 (캐시 적용 시 DB 호출 없음)
+        // course.startAt 조회
         Course course = getCourse(data.courseId());
 
         return refundService.getRefundPreview(data, course.getStartAt());
