@@ -18,6 +18,7 @@ import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.presentation.payment.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,21 +48,15 @@ public class RefundFacade {
 
     /**
      * 환불 가능 여부를 조회
-     * 부분 환불 후에도 단가는 주문의 1장 가격 스냅샷을 그대로 사용한다.
      */
     public RefundPreviewResponse getRefundPreview(UUID memberId, UUID paymentId) {
-        Payment payment = paymentService.getById(paymentId);
-        Order order = getOrder(payment.getOrderId());
-        Course course = getCourse(order.getCourseId());
+        // payment JOIN order 1번 쿼리 — 소유자 검증 포함
+        RefundPreviewData data = paymentService.getRefundPreviewData(paymentId, memberId);
 
-        return refundService.getRefundPreview(
-                payment,
-                memberId,
-                order.getTitleSnap(),
-                course.getStartAt(),
-                order.getOrderCount(),
-                toLong(order.getPriceSnap())
-        );
+        // course.startAt 조회 (캐시 적용 시 DB 호출 없음)
+        Course course = getCourse(data.courseId());
+
+        return refundService.getRefundPreview(data, course.getStartAt());
     }
 
     /**

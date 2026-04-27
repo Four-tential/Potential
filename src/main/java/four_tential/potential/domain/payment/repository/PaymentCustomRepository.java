@@ -23,4 +23,6 @@ public interface PaymentCustomRepository {
     Optional<PaymentDetailResponse> findDetailByIdAndMemberId(UUID paymentId, UUID memberId);
 
     Page<PaymentListResponse> findListByMemberIdAndStatus(UUID memberId, PaymentStatus status, Pageable pageable);
+
+    Optional<RefundPreviewData> findRefundPreviewData(UUID paymentId, UUID memberId);
 }

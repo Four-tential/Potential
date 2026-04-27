@@ -125,6 +125,34 @@ public class PaymentCustomRepositoryImpl implements PaymentCustomRepository {
         return new PageImpl<>(content, pageable, total == null ? 0 : total);
     }
 
+    /**
+     * 환불 가능 여부 조회에 필요한 데이터를 payment JOIN order 1번 쿼리로 조회.
+     * 개선 방식: 3번 개별 조회 -> 1번 JOIN 조회
+     */
+    @Override
+    public Optional<RefundPreviewData> findRefundPreviewData(UUID paymentId, UUID memberId) {
+        RefundPreviewData result = queryFactory
+                .select(Projections.constructor(RefundPreviewData.class,
+                        payment.id,
+                        payment.memberId,
+                        payment.paidTotalPrice,
+                        payment.status.stringValue(),   // PaymentStatus.name()
+                        order.courseId,
+                        order.titleSnap,
+                        order.orderCount,
+                        order.priceSnap
+                ))
+                .from(payment)
+                .join(order).on(order.id.eq(payment.orderId))
+                .where(
+                        payment.id.eq(paymentId),
+                        payment.memberId.eq(memberId)
+                )
+                .fetchOne();
+
+        return Optional.ofNullable(result);
+    }
+
     private BooleanExpression statusEq(PaymentStatus status) {
         return status != null ? payment.status.eq(status) : null;
     }
