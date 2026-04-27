@@ -402,7 +402,6 @@ public class PaymentFacade {
         }
 
         // 잔여 자리 1차 확인 (course lock 밖, 낙관적 선확인)
-        // 명백히 자리가 없으면 조기 종료. 자리가 있어도 lock 안에서 재확인한다.
         if (!hasAvailableSeats(order, course)) {
             log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음. pgKey={}", pgKey);
             paymentService.fail(payment);
@@ -415,27 +414,26 @@ public class PaymentFacade {
         final int orderCount = order.getOrderCount();
 
         boolean seatsConfirmed = paymentLockExecutor.executeWithCourseLock(courseId, () -> {
-            // course lock 안에서 course 재조회
-            // lock 밖에서 조회한 course는 다른 요청이 confirmCount를 올렸을 수 있음
             Course freshCourse = getCourse(courseId);
 
-            // 잔여 자리 재확인 (최종 확정) — 오버로딩 메서드 사용
+            // 잔여 자리 재확인 (최종 확정)
+            // course lock 밖에서 seatsConfirmed = false를 보고 한 번만 호출한다.
             if (!hasAvailableSeats(freshCourse, orderCount)) {
                 log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음 (course lock 내 재확인). pgKey={}", pgKey);
-                return false; // 예외 대신 boolean 반환 → lock 밖에서 처리
+                return false;
             }
 
-            // confirmCount 증가
             for (int i = 0; i < orderCount; i++) {
                 freshCourse.increaseConfirmCount();
             }
             return true;
         });
 
-        // lock 결과를 바깥에서 처리
+        // course lock 밖에서 결과 처리 — paymentService.fail() 은 여기서만 호출
         if (!seatsConfirmed) {
             paymentService.fail(payment);
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
 
         // 3. payment / order 상태 변경 (course lock 밖)
