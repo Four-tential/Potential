@@ -8,7 +8,8 @@ import org.springframework.http.HttpStatus;
 public enum CommonExceptionEnum implements ServiceErrorCode {
     ERR_GET_DISTRIBUTED_LOCK_FAIL(HttpStatus.CONFLICT, "서버 오류 처리 실패, 락 획득에 실패하였습니다"),
     ERR_DISTRIBUTED_LOCK_KEY_NULL(HttpStatus.CONFLICT, "서버 오류 처리 실패, 락의 키는 비어있을 수 없습니다"),
-    ERR_DISTRIBUTED_LOCK_SPEL_EVAL_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류 처리 실패, 락 키 SpEL 표현식 평가에 실패하였습니다")
+    ERR_DISTRIBUTED_LOCK_SPEL_EVAL_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류 처리 실패, 락 키 SpEL 표현식 평가에 실패하였습니다"),
+    ERR_IMAGE_RESOURCE_ID_REQUIRED(HttpStatus.BAD_REQUEST, "해당 이미지 타입은 resourceId가 필수입니다")
     ;
 
     private final HttpStatus httpStatus;

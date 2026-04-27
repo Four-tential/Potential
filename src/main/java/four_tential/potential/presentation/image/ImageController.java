@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import static four_tential.potential.common.exception.domain.CommonExceptionEnum.ERR_IMAGE_RESOURCE_ID_REQUIRED;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_INVALID_AUTHORIZE;
 
 @Tag(name = "이미지", description = "S3 Presigned URL 발급 API")
@@ -35,7 +36,7 @@ public class ImageController {
 
     private final S3Service s3Service;
 
-    @Operation(summary = "Presigned URL 발급", description = "S3에 직접 업로드하기 위한 Presigned PUT URL을 발급합니다. PROFILE·INSTRUCTOR 타입은 인증이 필요하며 memberId가 경로에 자동 포함됩니다. COURSE 타입은 courseId를 resourceId로 전달해야 합니다.")
+    @Operation(summary = "Presigned URL 발급", description = "S3에 직접 업로드하기 위한 Presigned PUT URL을 발급합니다. PROFILE·INSTRUCTOR 타입은 인증이 필요하며 memberId가 경로에 자동 포함됩니다. COURSE·REVIEW 타입은 resourceId(courseId/reviewId)를 전달해야 합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "발급 성공"),
             @ApiResponse(responseCode = "400", description = "지원하지 않는 Content-Type / 유효성 검사 실패"),
@@ -53,15 +54,9 @@ public class ImageController {
                 }
                 yield principal.memberId();
             }
-            case COURSE -> {
+            case COURSE, REVIEW -> {
                 if (request.resourceId() == null) {
-                    throw new IllegalArgumentException("COURSE 타입은 resourceId가 필수입니다");
-                }
-                yield request.resourceId();
-            }
-            case REVIEW -> {
-                if (request.resourceId() == null) {
-                    throw new IllegalArgumentException("REVIEW 타입은 resourceId가 필수입니다");
+                    throw new ServiceErrorException(ERR_IMAGE_RESOURCE_ID_REQUIRED);
                 }
                 yield request.resourceId();
             }
