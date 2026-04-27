@@ -48,6 +48,29 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # Spring AI
+  ai:
+    # ChatClient 자동 구성 비활성화 (AiConfig에서 @Profile로 수동 생성)
+    chat:
+      client:
+        enabled: false
+
+    # OpenAI — local에서는 기본적으로 Ollama를 쓰므로 dummy 처리
+    openai:
+      api-key: ${OPENAI_API_KEY:local-not-used}
+      chat:
+        options:
+          model: gpt-4.1-nano
+          temperature: 0.7
+
+    # Ollama — ollama 프로파일 활성화 시 사용
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: llama3.2
+          temperature: 0.7
+
 # AWS S3 - fallback 기본값 제공: 실제 업로드는 실패하지만 앱 기동은 가능
 aws:
   s3:
@@ -117,3 +140,14 @@ management:
 # CORS
 cors:
   allowed-origins: http://localhost:3000, https://frontend.url.com # 프론트엔드 CORS 연결
+
+---
+#  Ollama Profile (로컬 LLM — 무료, API Key 불필요)
+#  실행: --spring.profiles.active=local,ollama
+spring:
+  config:
+    activate:
+      on-profile: ollama
+  ai:
+    openai:
+      enabled: false   # Ollama 프로파일에서는 OpenAI 비활성화
