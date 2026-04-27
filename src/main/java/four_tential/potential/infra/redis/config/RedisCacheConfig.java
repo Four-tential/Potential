@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+import static four_tential.potential.infra.redis.RedisConstants.ATTENDANCE_LIST_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACHE;
 
 @Configuration
@@ -32,6 +33,11 @@ public class RedisCacheConfig {
 
         // 후기 목록 캐시: TTL 10분
         configs.put(REVIEW_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(10)));
+
+        // 출석 현황 캐시: TTL 30초
+        // QR 스캔 시 @CacheEvict로 즉시 무효화
+        // 짧은 TTL로 실시간성 보장 (SSE 미연결 클라이언트 대비)
+        configs.put(ATTENDANCE_LIST_CACHE, defaultConfig.entryTtl(Duration.ofSeconds(30)));
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)

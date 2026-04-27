@@ -29,4 +29,6 @@ public class RedisConstants {
     // Review 캐시
     public static final String REVIEW_LIST_CACHE = "reviewList";  // 후기 목록 캐시
 
+    // Attendance 캐시
+    public static final String ATTENDANCE_LIST_CACHE = "attendanceList";  // 출석 현황 캐시
 }
