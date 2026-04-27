@@ -35,12 +35,14 @@ public class CourseWishlistService {
 
     @Transactional
     public CourseWishlistResponse addWishlist(UUID memberId, UUID courseId) {
-        Course course = courseRepository.findById(courseId)
+        courseRepository.findById(courseId)
                 .filter(c -> c.getStatus() == CourseStatus.OPEN)
                 .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
+
         if (courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)) {
             throw new ServiceErrorException(ERR_ALREADY_WISHLISTED);
         }
+
         courseWishlistRepository.save(CourseWishlist.register(memberId, courseId));
         return new CourseWishlistResponse(courseId, true);
     }
