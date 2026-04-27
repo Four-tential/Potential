@@ -142,6 +142,38 @@ class CourseWishlistServiceTest {
     }
 
     @Test
+    @DisplayName("찜 등록 실패 - 코스가 존재하지 않으면 ERR_NOT_FOUND_COURSE")
+    void addWishlist_courseNotFound() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseWishlistService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("찜 등록 실패 - OPEN이 아닌 코스이면 ERR_NOT_FOUND_COURSE")
+    void addWishlist_courseNotOpen() {
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Course course = CourseFixture.defaultCourse();
+        ReflectionTestUtils.setField(course, "id", courseId);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+
+        assertThatThrownBy(() -> courseWishlistService.addWishlist(memberId, courseId))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("존재하지 않는 코스입니다");
+
+        verify(courseWishlistRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("찜 해제 성공 - isWishlisted=false 반환")
     void removeWishlist_success() {
         UUID memberId = UUID.randomUUID();

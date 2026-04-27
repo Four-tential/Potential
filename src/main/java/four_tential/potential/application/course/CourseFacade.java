@@ -14,6 +14,7 @@ import four_tential.potential.presentation.course.model.response.CourseWishlistR
 import four_tential.potential.presentation.course.model.response.CreateCourseRequestResponse;
 import four_tential.potential.presentation.course.model.response.InstructorCourseListItem;
 import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
+import four_tential.potential.presentation.member.model.response.WishlistCourseItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -71,6 +72,10 @@ public class CourseFacade {
 
     public void reapplyCourseRequest(UUID memberId, UUID courseId) {
         courseCommandService.reapplyCourseRequest(memberId, courseId);
+    }
+
+    public PageResponse<WishlistCourseItem> getMyWishlistCourses(UUID memberId, int page, int size) {
+        return courseWishlistService.getMyWishlistCourses(memberId, page, size);
     }
 
     public CourseWishlistResponse addWishlist(UUID memberId, UUID courseId) {

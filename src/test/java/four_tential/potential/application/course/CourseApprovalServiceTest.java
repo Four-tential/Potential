@@ -53,6 +53,7 @@ class CourseApprovalServiceTest {
         ArgumentCaptor<CourseApprovalHistory> captor = ArgumentCaptor.forClass(CourseApprovalHistory.class);
         verify(courseApprovalHistoryRepository).save(captor.capture());
         assertThat(captor.getValue().getAction()).isEqualTo(CourseApprovalAction.APPROVE);
+        assertThat(captor.getValue().getRejectReason()).isNull();
     }
 
     @Test

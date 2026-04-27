@@ -1,7 +1,6 @@
 package four_tential.potential.presentation.member;
 
 import four_tential.potential.application.course.CourseFacade;
-import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
@@ -55,7 +54,6 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 public class MemberController {
 
     private final MemberService memberService;
-    private final CourseWishlistService courseWishlistService;
     private final CourseFacade courseFacade;
 
     @Operation(summary = "마이페이지 조회", description = "로그인한 회원의 마이페이지 정보를 조회합니다.")
@@ -208,7 +206,7 @@ public class MemberController {
                 .body(BaseResponse.success(
                         HttpStatus.OK.name(),
                         "찜 목록 조회 성공",
-                        courseWishlistService.getMyWishlistCourses(principal.memberId(), page, size)
+                        courseFacade.getMyWishlistCourses(principal.memberId(), page, size)
                 ));
     }
 

@@ -77,6 +77,7 @@ public class CourseCommandService {
         return CreateCourseRequestResponse.register(course, category.getCode());
     }
 
+    @CacheEvict(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#memberId")
     @Transactional
     public UpdateCourseResponse updateCourse(UUID memberId, UUID courseId, UpdateCourseRequest request) {
         InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)

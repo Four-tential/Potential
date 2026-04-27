@@ -251,7 +251,7 @@ class CourseQueryServiceTest {
     @DisplayName("수강생 명단 조회 성공 - CONFIRMED 수강생 목록과 출석 정보 반환")
     void getCourseStudents_success() {
         UUID memberId = UUID.randomUUID();
-        UUID courseId = CourseFixture.DEFAULT_COURSE_CATEGORY_ID;
+        UUID courseId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 10);
 
         InstructorMember instructor = approvedInstructorMember();

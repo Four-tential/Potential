@@ -1,7 +1,6 @@
 package four_tential.potential.presentation.member;
 
 import four_tential.potential.application.course.CourseFacade;
-import four_tential.potential.application.course.CourseWishlistService;
 import four_tential.potential.application.member.MemberService;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.dto.PageResponse;
@@ -66,9 +65,6 @@ class MemberControllerTest {
 
     @Mock
     private MemberService memberService;
-
-    @Mock
-    private CourseWishlistService courseWishlistService;
 
     @Mock
     private CourseFacade courseFacade;
@@ -627,7 +623,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<WishlistCourseItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(item), pageRequest, 1));
-        given(courseWishlistService.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
+        given(courseFacade.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<WishlistCourseItem>>> response =
                 memberController.getMyWishlistCourses(0, 10, PRINCIPAL);
@@ -646,7 +642,7 @@ class MemberControllerTest {
         PageRequest pageRequest = PageRequest.of(0, 10);
         PageResponse<WishlistCourseItem> serviceResponse =
                 PageResponse.register(new PageImpl<>(List.of(), pageRequest, 0));
-        given(courseWishlistService.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
+        given(courseFacade.getMyWishlistCourses(MEMBER_ID, 0, 10)).willReturn(serviceResponse);
 
         ResponseEntity<BaseResponse<PageResponse<WishlistCourseItem>>> response =
                 memberController.getMyWishlistCourses(0, 10, PRINCIPAL);
