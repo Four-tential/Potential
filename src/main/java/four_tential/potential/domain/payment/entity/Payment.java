@@ -16,9 +16,15 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "payments", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_payments_order_id", columnNames = {"order_id"})
-})
+@Table(name = "payments",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_payments_order_id", columnNames = {"order_id"})
+        },
+        indexes = {
+                @Index(name = "idx_payments_member_id", columnList = "member_id"),
+                @Index(name = "idx_payments_member_id_status", columnList = "member_id, status")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment extends BaseTimeEntity {
 
