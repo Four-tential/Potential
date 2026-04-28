@@ -63,6 +63,8 @@ public class RedisCacheConfig {
         // 환불 목록 캐시: TTL 1분
         configs.put(REFUND_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(1)));
 
+        configs.put(COURSE_DETAIL_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(3)));
+
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(configs)
