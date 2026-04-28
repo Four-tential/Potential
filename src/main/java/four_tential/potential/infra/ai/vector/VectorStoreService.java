@@ -11,23 +11,6 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 범용 벡터 저장소 서비스
- *
- * 도메인에 관계없이 텍스트 임베딩 저장/검색/삭제 기능을 제공합니다.
- * 도메인 구분은 메타데이터(domain, entityId)로 처리합니다.
- *
- * 사용 예시:
- *   // 저장
- *   vectorStoreService.add("review", courseId, content);
- *   vectorStoreService.addBatch("review", courseId, contents);
- *
- *   // 검색
- *   vectorStoreService.search("review", courseId, query);
- *
- *   // 삭제
- *   vectorStoreService.delete("review", courseId);
- */
 @Slf4j
 @Service
 @Profile("!test")
@@ -53,13 +36,6 @@ public class VectorStoreService {
         log.debug("벡터 저장 완료 — domain: {}, entityId: {}", domain, entityId);
     }
 
-    /**
-     * 여러 텍스트를 한 번에 벡터 저장소에 저장 (배치)
-     *
-     * @param domain   도메인 구분자
-     * @param entityId 엔티티 ID
-     * @param contents 저장할 텍스트 목록
-     */
     public void addBatch(String domain, Long entityId, List<String> contents) {
         if (contents == null || contents.isEmpty()) {
             return;
@@ -85,7 +61,7 @@ public class VectorStoreService {
                 .query(query)
                 .topK(DEFAULT_TOP_K)
                 .similarityThreshold(DEFAULT_SIMILARITY_THRESHOLD)
-                .filterExpression("domain == '" + domain + "' && entityId == " + entityId)
+                .filterExpression(buildFilter(domain, entityId))
                 .build();
 
         List<Document> documents = vectorStore.similaritySearch(request);
@@ -110,7 +86,7 @@ public class VectorStoreService {
                 .query(query)
                 .topK(DEFAULT_TOP_K)
                 .similarityThreshold(DEFAULT_SIMILARITY_THRESHOLD)
-                .filterExpression("domain == '" + domain + "'")
+                .filterExpression(buildDomainFilter(domain))
                 .build();
 
         List<Document> documents = vectorStore.similaritySearch(request);
@@ -131,11 +107,19 @@ public class VectorStoreService {
      * @param entityId 엔티티 ID
      */
     public void delete(String domain, Long entityId) {
-        vectorStore.delete("domain == '" + domain + "' && entityId == " + entityId);
+        vectorStore.delete(buildFilter(domain, entityId));
         log.debug("벡터 삭제 완료 — domain: {}, entityId: {}", domain, entityId);
     }
 
     //  내부 유틸
+    private String buildFilter(String domain, Long entityId) {
+        return "domain == '" + domain + "' && entityId == " + entityId;
+    }
+
+    private String buildDomainFilter(String domain) {
+        return "domain == '" + domain + "'";
+    }
+
     private Document buildDocument(String domain, Long entityId, String content) {
         return new Document(content, Map.of(
                 "domain", domain,
