@@ -1,5 +1,6 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.Payment;
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -417,15 +417,15 @@ class PaymentServiceTest {
                 createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PAID),
                 createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PENDING)
         );
-        Page<PaymentListResponse> page = new PageImpl<>(items, pageable, 2);
+        PageImpl<PaymentListResponse> page = new PageImpl<>(items, pageable, 2);
         given(paymentRepository.findListByMemberIdAndStatus(memberId, null, pageable))
                 .willReturn(page);
 
-        Page<PaymentListResponse> result =
+        PageResponse<PaymentListResponse> result =
                 paymentService.getAllMyPayments(memberId, null, pageable);
 
-        assertThat(result.getContent()).hasSize(2);
-        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.totalElements()).isEqualTo(2);
         verify(paymentRepository).findListByMemberIdAndStatus(memberId, null, pageable);
     }
 
@@ -437,15 +437,15 @@ class PaymentServiceTest {
         List<PaymentListResponse> items = List.of(
                 createListResponse(UUID.randomUUID(), UUID.randomUUID(), PaymentStatus.PAID)
         );
-        Page<PaymentListResponse> page = new PageImpl<>(items, pageable, 1);
+        PageImpl<PaymentListResponse> page = new PageImpl<>(items, pageable, 1);
         given(paymentRepository.findListByMemberIdAndStatus(memberId, PaymentStatus.PAID, pageable))
                 .willReturn(page);
 
-        Page<PaymentListResponse> result =
+        PageResponse<PaymentListResponse> result =
                 paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
 
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).status()).isEqualTo(PaymentStatus.PAID);
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).status()).isEqualTo(PaymentStatus.PAID);
         verify(paymentRepository).findListByMemberIdAndStatus(memberId, PaymentStatus.PAID, pageable);
     }
 
@@ -454,15 +454,15 @@ class PaymentServiceTest {
     void getListByMemberIdAndStatus_returns_empty_page() {
         UUID memberId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 10);
-        Page<PaymentListResponse> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+        PageImpl<PaymentListResponse> emptyPage = new PageImpl<>(List.of(), pageable, 0);
         given(paymentRepository.findListByMemberIdAndStatus(memberId, null, pageable))
                 .willReturn(emptyPage);
 
-        Page<PaymentListResponse> result =
+        PageResponse<PaymentListResponse> result =
                 paymentService.getAllMyPayments(memberId, null, pageable);
 
-        assertThat(result.getContent()).isEmpty();
-        assertThat(result.getTotalElements()).isZero();
+        assertThat(result.content()).isEmpty();
+        assertThat(result.totalElements()).isZero();
     }
 
     @Test

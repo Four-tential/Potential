@@ -33,8 +33,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -907,8 +905,15 @@ class PaymentFacadeTest {
                 PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );
-        Page<PaymentListResponse> page = new PageImpl<>(List.of(item), pageable, 1);
-        given(paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable)).willReturn(page);
+        PageResponse<PaymentListResponse> pageResponse = new PageResponse<>(
+                List.of(item),
+                0,
+                1,
+                1L,
+                10,
+                true
+        );
+        given(paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable)).willReturn(pageResponse);
 
         PageResponse<PaymentListResponse> result = paymentFacade.getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
 
