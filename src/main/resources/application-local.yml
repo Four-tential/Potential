@@ -48,6 +48,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # Spring Batch
+  batch:
+    jdbc:
+      initialize-schema: always   # 로컬에서는 메타 테이블 자동 생성
+    job:
+      enabled: false              # 서버 시작 시 Job 자동 실행 방지 — 반드시 false
+
   # Spring AI
   ai:
     # ChatClient 자동 구성 비활성화 (AiConfig에서 @Profile로 수동 생성)

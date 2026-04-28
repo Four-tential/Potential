@@ -36,6 +36,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # Spring Batch
+  batch:
+    jdbc:
+      initialize-schema: never   # Flyway 로 직접 관리
+    job:
+      enabled: false             # 서버 시작 시 자동 실행 방지
+
   # Spring AI
   ai: # ChatClient 자동 구성 비활성화 (AiConfig에서 수동 생성)
       chat:
