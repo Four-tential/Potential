@@ -23,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   터미널: ./gradlew bootRun --args='--spring.profiles.active=local,ollama'
  *
  * 임베딩 모델: OpenAI text-embedding-3-small (1536차원) 고정
+ *   - 모델 변경 시 potential_vector_store 테이블 재생성 필요 (차원 불일치)
  *   - ChatModel은 ollama 프로파일로 로컬/OpenAI 분기 유지
  */
 @Configuration
@@ -70,6 +71,7 @@ public class AiConfig {
     //  text-embedding-3-small (1536차원) 고정
     //  로컬/dev/prod 환경 동일 — 차원 불일치 마이그레이션 문제 방지
     @Bean
+    @Profile("!test")
     public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel
