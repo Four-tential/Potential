@@ -211,7 +211,7 @@ public class PaymentService {
      */
     @Cacheable(
             cacheNames = PAYMENT_LIST_CACHE,
-            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
+            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()"
     )
     public PageResponse<PaymentListResponse> getAllMyPayments(
             UUID memberId, PaymentStatus status, Pageable pageable) {

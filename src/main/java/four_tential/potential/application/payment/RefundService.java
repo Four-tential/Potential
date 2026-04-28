@@ -95,7 +95,7 @@ public class RefundService {
      */
     @Cacheable(
             cacheNames = REFUND_LIST_CACHE,
-            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
+            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + #pageable.sort.toString()"
     )
     public PageResponse<RefundListResponse> getAllMyRefunds(UUID memberId, RefundStatus status, Pageable pageable) {
         return PageResponse.register(refundRepository.findListByMemberIdAndStatus(memberId, status, pageable));
