@@ -36,65 +36,70 @@ public class WaitingListService {
     }
 
     /**
-     * 잔여석 점유 시도
+     * 잔여석 점유 시도 (Lua 스크립트 적용 버전)
+     * 락 없이 Redis 내부에서 원자적으로 실행되어 성능을 극대화함
      */
-    @DistributedLock(key = "'order:course:' + #courseId")
     public boolean tryOccupyingSeat(UUID courseId, UUID memberId, int orderCount) {
         if (orderCount <= 0) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
         }
 
-        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
 
-        RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
-        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
-        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+        // Lua 스크립트: 
+        // 1. 이미 점유 중인지 확인 (점유 중이면 성공 반환)
+        // 2. 대기열에 있는지 확인 (있으면 실패/중복 에러를 위해 특정 값 반환)
+        // 3. 대기열이 비어있고 잔여석이 충분하면 차감 후 점유 등록
+        // 4. 그 외 상황(잔여석 부족 등)은 대기열 진입 필요를 알림
+        String script = 
+                "if redis.call('exists', KEYS[2]) == 1 then " +
+                "  local val = redis.call('get', KEYS[2]) " +
+                "  if val == ARGV[3] then " + // TOKEN_PROMOTED
+                "    local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
+                "    local req = tonumber(ARGV[2]) " +
+                "    if cap >= req then " +
+                "      redis.call('decrby', KEYS[1], req) " +
+                "      redis.call('setex', KEYS[2], ARGV[4], ARGV[2]) " +
+                "      return 1 " + // 승격자 점유 성공
+                "    else " +
+                "      return -1 " + // 승격자였으나 재고 부족 (삭제 필요)
+                "    end " +
+                "  end " +
+                "  return 1 " + // 일반 점유자 이미 존재
+                "end " +
+                "if redis.call('zrank', KEYS[3], ARGV[1]) ~= false then return -2 end " + // 이미 대기 중
+                "if redis.call('zcard', KEYS[3]) > 0 then return 0 end " + // 대기열 존재함
+                "local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
+                "local req = tonumber(ARGV[2]) " +
+                "if cap >= req then " +
+                "  redis.call('decrby', KEYS[1], req) " +
+                "  redis.call('setex', KEYS[2], ARGV[4], ARGV[2]) " +
+                "  return 1 " + // 즉시 점유 성공
+                "end " +
+                "return 0"; // 대기열 진입 필요
 
-        // 이미 점유 중인 경우 (승격된 유저나 기존 점유자)
-        if (occupancy.isExists()) {
-            String val = occupancy.get();
-            if (OrderConstants.TOKEN_PROMOTED.equals(val)) {
-                // 승격된 유저가 실제 주문을 시도하는 시점 -> 수량 차감 및 점유 확정
-                long currentCapacity = capacity.get();
-                if (currentCapacity >= orderCount) {
-                    capacity.addAndGet(-orderCount);
-                    occupancy.set(String.valueOf(orderCount), Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES));
-                    log.info("승격 유저의 실제 점유 성공: courseId={}, memberId={}, 수량={}", courseId, memberId, orderCount);
-                    return true;
-                } else {
-                    // 승격되었으나 그사이 재고가 부족해진 경우 (동시성 방어)
-                    log.warn("승격 유저 점유 실패: 재고 부족. courseId={}, memberId={}", courseId, memberId);
-                    occupancy.delete();
-                    
-                    // 자리가 부족하여 실패했지만, 혹시라도 1개라도 남은 자리가 있다면 다음 대기자에게 기회를 줌
-                    promoteNextInWaitingList(courseId);
-                    return false;
-                }
-            }
-            // 이미 수량이 세팅된 일반 점유 상태
-            return true;
-        }
+        RScript rScript = redissonClient.getScript(StringCodec.INSTANCE);
+        Long result = rScript.eval(
+                RScript.Mode.READ_WRITE,
+                script,
+                RScript.ReturnType.LONG,
+                List.of(capacityKey, occupancyKey, waitingKey),
+                memberId.toString(),
+                String.valueOf(orderCount),
+                OrderConstants.TOKEN_PROMOTED,
+                String.valueOf(Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES).toSeconds())
+        );
 
-        // 대기열에 본인이 들어있는 경우 (아직 대기 중)
-        if (waitingList.contains(memberId.toString())) {
-            throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
-        }
-
-        // 대기열에 다른 사람이 있는 경우 (무조건 대기열로)
-        if (!waitingList.isEmpty()) {
-            log.info("대기열 존재로 인해 대기열 진입 유도: courseId={}, memberId={}", courseId, memberId);
+        if (result == 1) return true;
+        if (result == -1) {
+            redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE).delete();
+            promoteNextInWaitingList(courseId);
             return false;
         }
-
-        // 대기열이 비어있으면 즉시 점유 시도
-        long currentCapacity = capacity.get();
-        if (currentCapacity >= orderCount) {
-            capacity.addAndGet(-orderCount);
-            occupancy.set(String.valueOf(orderCount), Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES));
-            return true;
-        }
+        if (result == -2) throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
+        
         return false;
     }
 

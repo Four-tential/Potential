@@ -31,6 +31,7 @@ import static org.mockito.Mockito.*;
 class WaitingListServiceTest {
 
     @Mock private RedissonClient redissonClient;
+    @Mock private RScript rScript;
     @Mock private RBucket<String> occupancyBucket;
     @Mock private RBucket<String> countBucket;
     @Mock private RScoredSortedSet<String> waitingListSet;
@@ -48,6 +49,7 @@ class WaitingListServiceTest {
         // StringCodec을 사용하는 메서드 오버로딩에 대응
         lenient().doReturn(waitingListSet).when(redissonClient).getScoredSortedSet(anyString(), eq(StringCodec.INSTANCE));
         lenient().when(redissonClient.getAtomicLong(anyString())).thenReturn(capacityAtomic);
+        lenient().when(redissonClient.getScript(StringCodec.INSTANCE)).thenReturn(rScript);
         
         // 키 패턴에 따라 다른 버킷 반환
         lenient().doReturn(occupancyBucket).when(redissonClient).getBucket(startsWith(RedisConstants.USER_COURSE_OCCUPANCY_PREFIX), eq(StringCodec.INSTANCE));
@@ -59,33 +61,26 @@ class WaitingListServiceTest {
     void tryOccupyingSeat_success() {
         // given
         int orderCount = 2;
-        given(occupancyBucket.isExists()).willReturn(false);
-        given(waitingListSet.contains(memberId.toString())).willReturn(false);
-        given(waitingListSet.isEmpty()).willReturn(true); // 대기열이 비어있어야 함
-        given(capacityAtomic.get()).willReturn(10L);
+        lenient().doReturn(1L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // when
         boolean result = waitingListService.tryOccupyingSeat(courseId, memberId, orderCount);
 
         // then
         assertThat(result).isTrue();
-        verify(capacityAtomic).addAndGet(-orderCount);
     }
 
     @Test
     @DisplayName("승격된 유저(PROMOTED)가 주문을 시도하면 재고 차감 후 점유에 성공한다")
     void tryOccupyingSeat_promoted_success() {
         // given
-        given(occupancyBucket.isExists()).willReturn(true);
-        given(occupancyBucket.get()).willReturn(OrderConstants.TOKEN_PROMOTED);
-        given(capacityAtomic.get()).willReturn(5L);
+        lenient().doReturn(1L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // when
         boolean result = waitingListService.tryOccupyingSeat(courseId, memberId, 1);
 
         // then
         assertThat(result).isTrue();
-        verify(capacityAtomic).addAndGet(-1);
     }
 
     @Test
@@ -105,48 +100,39 @@ class WaitingListServiceTest {
     @DisplayName("대기열에 사람이 있으면 잔여석이 있어도 점유에 실패하고 대기열로 유도한다")
     void tryOccupyingSeat_fail_due_to_existing_waiting_list() {
         // given
-        given(occupancyBucket.isExists()).willReturn(false);
-        given(waitingListSet.contains(memberId.toString())).willReturn(false);
-        given(waitingListSet.isEmpty()).willReturn(false); // 대기열에 사람이 있음
+        lenient().doReturn(0L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // when
         boolean result = waitingListService.tryOccupyingSeat(courseId, memberId, 1);
 
         // then
         assertThat(result).isFalse();
-        verify(capacityAtomic, never()).get(); // 재고 확인까지 가지 않아야 함
     }
 
     @Test
     @DisplayName("잔여석이 없으면 점유에 실패한다")
     void tryOccupyingSeat_fail_no_capacity() {
         // given
-        given(occupancyBucket.isExists()).willReturn(false);
-        given(waitingListSet.contains(memberId.toString())).willReturn(false);
-        given(waitingListSet.isEmpty()).willReturn(true);
-        given(capacityAtomic.get()).willReturn(0L);
+        lenient().doReturn(0L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // when
         boolean result = waitingListService.tryOccupyingSeat(courseId, memberId, 1);
 
         // then
         assertThat(result).isFalse();
-        verify(capacityAtomic, never()).addAndGet(anyLong());
     }
 
     @Test
     @DisplayName("이미 점유 중인 유저가 재요청하면 true를 반환한다")
     void tryOccupyingSeat_already_occupied_returns_true() {
         // given
-        given(occupancyBucket.isExists()).willReturn(true);
-        given(occupancyBucket.get()).willReturn("1"); // 이미 1개 점유 중인 상태
+        lenient().doReturn(1L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // when
         boolean result = waitingListService.tryOccupyingSeat(courseId, memberId, 1);
 
         // then
         assertThat(result).isTrue();
-        verify(capacityAtomic, never()).addAndGet(anyLong()); // 재고를 중복으로 깎지 않아야 함
     }
 
     @Test
@@ -178,13 +164,11 @@ class WaitingListServiceTest {
     void tryOccupyingSeat_promoted_fail_and_promote_next() {
         // given
         int orderCount = 2;
-        given(occupancyBucket.isExists()).willReturn(true);
-        given(occupancyBucket.get()).willReturn(OrderConstants.TOKEN_PROMOTED);
-        given(capacityAtomic.get()).willReturn(1L); // 요청(2)보다 부족
+        lenient().doReturn(-1L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any());
 
         // 승격 로직을 위한 설정
         given(waitingListSet.isEmpty()).willReturn(false);
-        when(capacityAtomic.get()).thenReturn(1L, 1L); 
+        given(capacityAtomic.get()).willReturn(1L);
         UUID nextId = UUID.randomUUID();
         given(waitingListSet.first()).willReturn(nextId.toString());
         given(waitingListSet.pollFirst()).willReturn(nextId.toString());
@@ -199,6 +183,7 @@ class WaitingListServiceTest {
         verify(occupancyBucket).delete();
         verify(sseWaitingEventPublisher).publish(eq(courseId), eq(nextId), any());
     }
+
 
     @Test
     @DisplayName("승격 시 대상자의 SSE 연결이 없으면 고아 토큰을 생성하지 않고 다음 대기자를 승격시킨다")
