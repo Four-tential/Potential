@@ -62,6 +62,9 @@ spring:
         options:
           model: gpt-4.1-nano
           temperature: 0.7
+      embedding:
+        options:
+          model: text-embedding-3-small  # 1536차원
 
     # Ollama — ollama 프로파일 활성화 시 사용
     ollama:
@@ -70,6 +73,17 @@ spring:
         options:
           model: llama3.2
           temperature: 0.7
+      embedding:
+        options:
+          model: nomic-embed-text  # 768차원
+
+    # PGVector 설정 — ollama 프로파일이면 768, 아니면 1536
+    vectorstore:
+      pgvector:
+        initialize-schema: true   # pgvector 익스텐션 + vector_store 테이블 자동 생성
+        index-type: hnsw
+        distance-type: cosine_distance
+        dimensions: 1536           # ollama 프로파일 시 768로 변경 필요
 
 # AWS S3 - fallback 기본값 제공: 실제 업로드는 실패하지만 앱 기동은 가능
 aws:
@@ -141,6 +155,13 @@ management:
 cors:
   allowed-origins: http://localhost:3000, https://frontend.url.com # 프론트엔드 CORS 연결
 
+# PGVector DataSource — PgVectorConfig에서 @Value로 읽음 (메인 MySQL과 별도)
+pgvector:
+  datasource:
+    url: jdbc:postgresql://${PGVECTOR_HOST}:${PGVECTOR_PORT}/${PGVECTOR_DB}
+    username: ${PGVECTOR_USER}
+    password: ${PGVECTOR_PASSWORD}
+
 ---
 #  Ollama Profile (로컬 LLM — 무료, API Key 불필요)
 #  실행: --spring.profiles.active=local,ollama
@@ -151,3 +172,6 @@ spring:
   ai:
     openai:
       enabled: false   # Ollama 프로파일에서는 OpenAI 비활성화
+    vectorstore:
+      pgvector:
+        dimensions: 768  # nomic-embed-text 차원 수 (기본값 1536 오버라이드)
