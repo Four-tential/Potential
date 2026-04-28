@@ -84,7 +84,6 @@ dependencies {
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-parameter-store'
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3'
 
-
     // Test - JPA
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 
@@ -132,6 +131,9 @@ dependencies {
 
     // Chat Memory - Redis 기반 대화 기억 (챗봇 Agent용)
     //implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-redis'
+
+    // PGVector
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
 }
 
 // Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용

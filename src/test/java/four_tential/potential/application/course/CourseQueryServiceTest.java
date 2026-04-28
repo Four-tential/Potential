@@ -7,19 +7,18 @@ import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseListQueryResult;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseStatus;
-import four_tential.potential.domain.course.course.CourseDetailQueryResult;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.InstructorCourseQueryResult;
 import four_tential.potential.domain.attendance.AttendanceStatus;
-import four_tential.potential.domain.course.course_image.CourseImageRepository;
-import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseCategoryFixture;
+import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.course.fixture.CourseFixture;
 import four_tential.potential.domain.member.fixture.InstructorMemberFixture;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.order.CourseStudentQueryResult;
 import four_tential.potential.domain.order.OrderRepository;
+import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
@@ -52,10 +51,10 @@ import static org.mockito.Mockito.verify;
 class CourseQueryServiceTest {
 
     @Mock private CourseRepository courseRepository;
-    @Mock private CourseImageRepository courseImageRepository;
     @Mock private CourseWishlistRepository courseWishlistRepository;
     @Mock private InstructorMemberRepository instructorMemberRepository;
     @Mock private OrderRepository orderRepository;
+    @Mock private CourseCacheQueryService courseCacheQueryService;
 
     @InjectMocks
     private CourseQueryService courseQueryService;
@@ -149,15 +148,14 @@ class CourseQueryServiceTest {
     }
 
     @Test
-    @DisplayName("코스 상세 조회 성공 - 모든 필드가 올바르게 매핑된다")
+    @DisplayName("코스 상세 조회 성공 - 캐시된 코스 데이터에 isWishlisted가 올바르게 합성된다")
     void getCourseDetail_success_allFieldsMapped() {
         UUID memberId = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
         UUID instructorMemberId = UUID.randomUUID();
-        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, instructorMemberId);
 
-        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
-        given(courseImageRepository.findImageUrlsByCourseId(courseId)).willReturn(List.of("https://cdn.example.com/img1.jpg"));
+        given(courseCacheQueryService.getCourseDetailCache(courseId))
+                .willReturn(sampleCourseDetailResponse(courseId, instructorMemberId));
         given(courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId)).willReturn(true);
 
         CourseDetailResponse response = courseQueryService.getCourseDetail(courseId, memberId);
@@ -172,10 +170,9 @@ class CourseQueryServiceTest {
     @DisplayName("코스 상세 조회 성공 - 비인증 유저(memberId=null)이면 isWishlisted=false이고 위시리스트 조회 안 함")
     void getCourseDetail_notAuthenticated_isWishlistedFalse_noWishlistQuery() {
         UUID courseId = UUID.randomUUID();
-        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, UUID.randomUUID());
 
-        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
-        given(courseImageRepository.findImageUrlsByCourseId(courseId)).willReturn(List.of());
+        given(courseCacheQueryService.getCourseDetailCache(courseId))
+                .willReturn(sampleCourseDetailResponse(courseId, UUID.randomUUID()));
 
         CourseDetailResponse response = courseQueryService.getCourseDetail(courseId, null);
 
@@ -187,11 +184,20 @@ class CourseQueryServiceTest {
     @DisplayName("코스 상세 조회 성공 - 코스 이미지 URL이 응답에 포함된다")
     void getCourseDetail_imagesIncludedInResponse() {
         UUID courseId = UUID.randomUUID();
-        CourseDetailQueryResult detail = sampleCourseDetailQueryResult(courseId, UUID.randomUUID());
 
-        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.of(detail));
-        given(courseImageRepository.findImageUrlsByCourseId(courseId))
-                .willReturn(List.of("https://cdn.example.com/img1.jpg", "https://cdn.example.com/img2.jpg"));
+        CourseDetailResponse cached = sampleCourseDetailResponse(courseId, UUID.randomUUID());
+        CourseDetailResponse withImages = new CourseDetailResponse(
+                cached.courseId(), cached.title(), cached.description(),
+                cached.categoryCode(), cached.categoryName(), cached.instructor(),
+                List.of("https://cdn.example.com/img1.jpg", "https://cdn.example.com/img2.jpg"),
+                cached.addressMain(), cached.addressDetail(),
+                cached.price(), cached.capacity(), cached.confirmCount(),
+                cached.status(), cached.level(),
+                cached.orderOpenAt(), cached.orderCloseAt(),
+                cached.startAt(), cached.endAt(),
+                cached.averageRating(), cached.reviewCount(), false
+        );
+        given(courseCacheQueryService.getCourseDetailCache(courseId)).willReturn(withImages);
         given(courseWishlistRepository.existsByMemberIdAndCourseId(any(), any())).willReturn(false);
 
         CourseDetailResponse response = courseQueryService.getCourseDetail(courseId, UUID.randomUUID());
@@ -206,13 +212,12 @@ class CourseQueryServiceTest {
     @DisplayName("코스 상세 조회 실패 - 존재하지 않는 코스 ID이면 NOT_FOUND")
     void getCourseDetail_courseNotFound_throwsNotFound() {
         UUID courseId = UUID.randomUUID();
-        given(courseRepository.findCourseDetail(courseId)).willReturn(Optional.empty());
+        given(courseCacheQueryService.getCourseDetailCache(courseId))
+                .willThrow(new ServiceErrorException(four_tential.potential.common.exception.domain.CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
         assertThatThrownBy(() -> courseQueryService.getCourseDetail(courseId, UUID.randomUUID()))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage("존재하지 않는 코스입니다");
-
-        verify(courseImageRepository, never()).findImageUrlsByCourseId(any());
     }
 
     @Test
@@ -427,17 +432,20 @@ class CourseQueryServiceTest {
         );
     }
 
-    private CourseDetailQueryResult sampleCourseDetailQueryResult(UUID courseId, UUID instructorMemberId) {
-        return new CourseDetailQueryResult(
+    private CourseDetailResponse sampleCourseDetailResponse(UUID courseId, UUID instructorMemberId) {
+        return new CourseDetailResponse(
                 courseId, CourseFixture.DEFAULT_TITLE, CourseFixture.DEFAULT_DESCRIPTION,
                 CourseCategoryFixture.DEFAULT_CODE, CourseCategoryFixture.DEFAULT_NAME,
-                instructorMemberId, "강사이름", "https://cdn.example.com/profile.jpg",
-                CourseFixture.DEFAULT_ADDRESS_MAIN, CourseFixture.DEFAULT_ADDRESS_DETAIL,
+                new CourseDetailInstructorInfo(
+                        instructorMemberId, "강사이름",
+                        "https://cdn.example.com/profile.jpg", 4.2
+                ),
+                List.of(), CourseFixture.DEFAULT_ADDRESS_MAIN, CourseFixture.DEFAULT_ADDRESS_DETAIL,
                 CourseFixture.DEFAULT_PRICE, CourseFixture.DEFAULT_CAPACITY, 5,
                 CourseStatus.OPEN, CourseFixture.DEFAULT_LEVEL,
                 CourseFixture.DEFAULT_ORDER_OPEN_AT, CourseFixture.DEFAULT_ORDER_CLOSE_AT,
                 CourseFixture.DEFAULT_START_AT, CourseFixture.DEFAULT_END_AT,
-                4.5, 4.2, 15L
+                4.5, 15L, false
         );
     }
 

@@ -3,18 +3,15 @@ package four_tential.potential.application.course;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.Course;
-import four_tential.potential.domain.course.course.CourseDetailQueryResult;
 import four_tential.potential.domain.course.course.CourseListQueryResult;
 import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.course.course.CourseSearchCondition;
 import four_tential.potential.domain.course.course.CourseStatus;
-import four_tential.potential.domain.course.course_image.CourseImageRepository;
 import four_tential.potential.domain.course.course_wishlist.CourseWishlistRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMember;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberRepository;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.domain.order.OrderRepository;
-import four_tential.potential.presentation.course.model.response.CourseDetailInstructorInfo;
 import four_tential.potential.presentation.course.model.response.CourseDetailResponse;
 import four_tential.potential.presentation.course.model.response.CourseListItem;
 import four_tential.potential.presentation.course.model.response.CourseStudentItem;
@@ -40,10 +37,10 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 public class CourseQueryService {
 
     private final CourseRepository courseRepository;
-    private final CourseImageRepository courseImageRepository;
     private final CourseWishlistRepository courseWishlistRepository;
     private final InstructorMemberRepository instructorMemberRepository;
     private final OrderRepository orderRepository;
+    private final CourseCacheQueryService courseCacheQueryService;
 
     public PageResponse<CourseListItem> getCourses(CourseSearchCondition condition, UUID memberId, Pageable pageable) {
         Page<CourseListQueryResult> results = courseRepository.findCourses(condition, pageable);
@@ -64,40 +61,20 @@ public class CourseQueryService {
     }
 
     public CourseDetailResponse getCourseDetail(UUID courseId, UUID memberId) {
-        CourseDetailQueryResult detail = courseRepository.findCourseDetail(courseId)
-                .orElseThrow(() -> new ServiceErrorException(ERR_NOT_FOUND_COURSE));
-
-        List<String> imageUrls = courseImageRepository.findImageUrlsByCourseId(courseId);
+        CourseDetailResponse cached = courseCacheQueryService.getCourseDetailCache(courseId);
 
         boolean isWishlisted = memberId != null
                 && courseWishlistRepository.existsByMemberIdAndCourseId(memberId, courseId);
 
         return new CourseDetailResponse(
-                detail.courseId(),
-                detail.title(),
-                detail.description(),
-                detail.categoryCode(),
-                detail.categoryName(),
-                new CourseDetailInstructorInfo(
-                        detail.instructorMemberId(),
-                        detail.instructorName(),
-                        detail.instructorProfileImageUrl(),
-                        detail.instructorAvgRating()
-                ),
-                imageUrls,
-                detail.addressMain(),
-                detail.addressDetail(),
-                detail.price(),
-                detail.capacity(),
-                detail.confirmCount(),
-                detail.status(),
-                detail.level(),
-                detail.orderOpenAt(),
-                detail.orderCloseAt(),
-                detail.startAt(),
-                detail.endAt(),
-                detail.courseAvgRating(),
-                detail.reviewCount(),
+                cached.courseId(), cached.title(), cached.description(),
+                cached.categoryCode(), cached.categoryName(), cached.instructor(),
+                cached.images(), cached.addressMain(), cached.addressDetail(),
+                cached.price(), cached.capacity(), cached.confirmCount(),
+                cached.status(), cached.level(),
+                cached.orderOpenAt(), cached.orderCloseAt(),
+                cached.startAt(), cached.endAt(),
+                cached.averageRating(), cached.reviewCount(),
                 isWishlisted
         );
     }

@@ -13,6 +13,14 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+import static four_tential.potential.infra.redis.RedisConstants.INSTRUCTOR_PROFILE_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.MY_FOLLOWS_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.MY_PAGE_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.ATTENDANCE_LIST_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.COURSE_DETAIL_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.*;
 
 @Configuration
@@ -62,6 +70,9 @@ public class RedisCacheConfig {
 
         // 환불 목록 캐시: TTL 1분
         configs.put(REFUND_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(1)));
+
+        // 코스 세부조회 캐시: TTL 3분
+        configs.put(COURSE_DETAIL_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(3)));
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)
