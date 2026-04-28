@@ -35,13 +35,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_GENERATION_MAX_RETRY;
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_PREFIX;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentFacade {
-
-    private static final String PAYMENT_PG_KEY_PREFIX = "p";
-    private static final int PAYMENT_PG_KEY_GENERATION_MAX_RETRY = 5;
 
     private final PaymentService paymentService;
     private final WebhookService webhookService;
