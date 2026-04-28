@@ -123,6 +123,9 @@ dependencies {
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.zxing:javase:3.5.3'
 
+    // Spring Batch
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+
     // Spring AI
     // OpenAI (dev/prod: @Profile("!ollama") 환경에서 활성화)
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
