@@ -21,12 +21,18 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 로컬 실행 방법:
  *   IntelliJ Active profiles: local,ollama
  *   터미널: ./gradlew bootRun --args='--spring.profiles.active=local,ollama'
+ *
+ * 임베딩 모델: OpenAI text-embedding-3-small (1536차원) 고정
+ *   - ChatModel은 ollama 프로파일로 로컬/OpenAI 분기 유지
  */
 @Configuration
 public class AiConfig {
 
+    // ─────────────────────────────────────────
     //  PromptTemplate Bean — .st 파일 로드
     //  변수 치환: {courseId}, {reviews}
+    // ─────────────────────────────────────────
+
     @Bean
     public PromptTemplate reviewSummaryPromptTemplate() {
         return new PromptTemplate(new ClassPathResource("ai/prompts/review-summary.st"));
@@ -60,38 +66,17 @@ public class AiConfig {
                 .build();
     }
 
-    // ─────────────────────────────────────────
-    //  VectorStore Bean — 프로젝트 공통 단일 저장소
-    //  도메인 구분은 Document 메타데이터로 처리
-    //  예: new Document(content, Map.of("domain", "review", "courseId", 1L))
-    //
-    //  EmbeddingModel 프로파일 분기:
-    //    - !ollama → OpenAiEmbeddingModel  (text-embedding-3-small, 1536차원)
-    //    - ollama  → OllamaEmbeddingModel  (nomic-embed-text, 768차원)
-    // ─────────────────────────────────────────
-
+    //  VectorStore Bean — OpenAI 임베딩 모델 단일화
+    //  text-embedding-3-small (1536차원) 고정
+    //  로컬/dev/prod 환경 동일 — 차원 불일치 마이그레이션 문제 방지
     @Bean
-    @Profile("!ollama")
     public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel
     ) {
-        return buildVectorStore(jdbcTemplate, embeddingModel);
-    }
-
-    @Bean("vectorStore")
-    @Profile("ollama")
-    public VectorStore vectorStoreOllama(
-            @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
-            @Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel
-    ) {
-        return buildVectorStore(jdbcTemplate, embeddingModel);
-    }
-
-    private VectorStore buildVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingModel) {
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
-                .vectorTableName("potential_vector_store")  // 프로젝트 공통 테이블
-                .initializeSchema(true)                     // 테이블 + 인덱스 자동 생성
+                .vectorTableName("potential_vector_store")
+                .initializeSchema(true)
                 .build();
     }
 }

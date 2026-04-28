@@ -59,7 +59,7 @@ spring:
       client:
         enabled: false
 
-    # OpenAI — local에서는 기본적으로 Ollama를 쓰므로 dummy 처리
+    # OpenAI — Chat은 ollama 프로파일로 대체, 임베딩은 OpenAI 단일화
     openai:
       api-key: ${OPENAI_API_KEY:local-not-used}
       chat:
@@ -68,26 +68,23 @@ spring:
           temperature: 0.7
       embedding:
         options:
-          model: text-embedding-3-small  # 1536차원
+          model: text-embedding-3-small
 
-    # Ollama — ollama 프로파일 활성화 시 사용
+    # Ollama — ollama 프로파일 활성화 시 Chat에서만 사용
     ollama:
       base-url: http://localhost:11434
       chat:
         options:
           model: llama3.2
           temperature: 0.7
-      embedding:
-        options:
-          model: nomic-embed-text  # 768차원
 
-    # PGVector 설정 — ollama 프로파일이면 768, 아니면 1536
+    # PGVector 설정
     vectorstore:
       pgvector:
         initialize-schema: true   # pgvector 익스텐션 + vector_store 테이블 자동 생성
         index-type: hnsw
         distance-type: cosine_distance
-        dimensions: 1536           # ollama 프로파일 시 768로 변경 필요
+        dimensions: 1536          # text-embedding-3-small 고정
 
 # AWS S3 - fallback 기본값 제공: 실제 업로드는 실패하지만 앱 기동은 가능
 aws:
@@ -169,13 +166,12 @@ pgvector:
 ---
 #  Ollama Profile (로컬 LLM — 무료, API Key 불필요)
 #  실행: --spring.profiles.active=local,ollama
+#  Chat은 Ollama로 대체, 임베딩은 OpenAI 유지 (1536차원 고정)
 spring:
   config:
     activate:
       on-profile: ollama
   ai:
     openai:
-      enabled: false   # Ollama 프로파일에서는 OpenAI 비활성화
-    vectorstore:
-      pgvector:
-        dimensions: 768  # nomic-embed-text 차원 수 (기본값 1536 오버라이드)
+      chat:
+        enabled: false   # Chat만 비활성화 — 임베딩은 OpenAI 유지
