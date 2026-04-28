@@ -23,9 +23,13 @@ spring:
       port: ${redis.port}
 
   # Flyway
+  # url 명시 필수 — pgvector DataSource 공존 시 Flyway가 잘못된 DataSource를 바라보는 문제 방지
   flyway:
     enabled: true
     baseline-on-migrate: true
+    url: jdbc:mysql://${db.host}:${db.port:3306}/${db.name}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    user: ${db.username}
+    password: ${db.password}
 
   # JPA
   jpa:

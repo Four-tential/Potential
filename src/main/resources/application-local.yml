@@ -38,6 +38,10 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    # url 명시 필수 — pgvector DataSource 공존 시 Flyway가 잘못된 DataSource를 바라보는 문제 방지
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB}?serverTimezone=Asia/Seoul
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
 
   # JPA
   jpa:
