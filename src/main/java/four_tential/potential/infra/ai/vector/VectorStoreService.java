@@ -32,8 +32,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class VectorStoreService {
 
-    private static final int DEFAULT_TOP_K = 5;
-    private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.7;
+    private static final int DEFAULT_TOP_K = 5;  //검색 결과 최대 개수
+    private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.7;   //유사도 필터링
 
     private final VectorStore vectorStore;
 

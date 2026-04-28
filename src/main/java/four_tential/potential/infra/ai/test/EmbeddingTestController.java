@@ -1,7 +1,7 @@
 package four_tential.potential.infra.ai.test;
 
 import four_tential.potential.common.dto.BaseResponse;
-import four_tential.potential.infra.ai.embedding.ReviewEmbeddingService;
+import four_tential.potential.infra.ai.vector.VectorStoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
@@ -17,27 +17,29 @@ import java.util.List;
  * 사용 순서:
  *   1. docker-compose up pgvector -d
  *   2. 앱 실행 (profiles: local,ollama 또는 local)
- *   3. POST /ai/test/embed   → 리뷰 임베딩 저장
- *   4. GET  /ai/test/search  → 유사 리뷰 검색
- *   5. pgvector DB에서 직접 확인:
+ *   3. POST /ai/test/embed        → 단건 저장
+ *   4. POST /ai/test/embed/batch  → 배치 저장
+ *   5. GET  /ai/test/search       → 유사도 검색
+ *   6. DELETE /ai/test            → 삭제
+ *   7. pgvector DB에서 직접 확인:
  *      SELECT id, content, metadata FROM potential_vector_store LIMIT 10;
  */
 @RestController
 @RequestMapping("/ai/test")
 @RequiredArgsConstructor
-@Profile("local")   // ← local 프로파일에서만 Bean 등록
+@Profile("local")
 public class EmbeddingTestController {
 
-    private final ReviewEmbeddingService reviewEmbeddingService;
+    private final VectorStoreService vectorStoreService;
 
     //단일 리뷰 임베딩 저장
     @PostMapping("/embed")
     public ResponseEntity<BaseResponse<String>> embed(@RequestBody EmbedRequest request) {
-        reviewEmbeddingService.embedReview(request.courseId(), request.content());
+        vectorStoreService.add(request.domain(), request.entityId(), request.content());
         return ResponseEntity.ok(BaseResponse.success(
                 "200",
                 "임베딩 저장 완료",
-                "courseId=%d 리뷰가 potential_vector_store에 저장되었습니다.".formatted(request.courseId())
+                "domain=%s, entityId=%d 저장 완료".formatted(request.domain(), request.entityId())
         ));
     }
 
@@ -45,29 +47,48 @@ public class EmbeddingTestController {
     //배치 임베딩 저장
     @PostMapping("/embed/batch")
     public ResponseEntity<BaseResponse<String>> embedBatch(@RequestBody EmbedBatchRequest request) {
-        reviewEmbeddingService.embedReviews(request.courseId(), request.reviews());
+        vectorStoreService.addBatch(request.domain(), request.entityId(), request.contents());
         return ResponseEntity.ok(BaseResponse.success(
                 "200",
                 "배치 임베딩 저장 완료",
-                "%d건 저장 완료 (courseId=%d)".formatted(request.reviews().size(), request.courseId())
+                "%d건 저장 완료 (domain=%s, entityId=%d)".formatted(
+                        request.contents().size(), request.domain(), request.entityId())
         ));
     }
 
     //유사 리뷰 검색
     @GetMapping("/search")
     public ResponseEntity<BaseResponse<List<String>>> search(
-            @RequestParam Long courseId,
+            @RequestParam String domain,
+            @RequestParam Long entityId,
             @RequestParam String query
     ) {
-        List<String> results = reviewEmbeddingService.searchSimilarReviews(courseId, query);
+        List<String> results = vectorStoreService.search(domain, entityId, query);
         return ResponseEntity.ok(BaseResponse.success(
                 "200",
-                "유사 리뷰 검색 완료 (%d건)".formatted(results.size()),
+                "유사도 검색 완료 (%d건)".formatted(results.size()),
                 results
         ));
     }
 
+    /**
+     * 삭제
+     * DELETE /ai/test?domain=review&entityId=1
+     */
+    @DeleteMapping
+    public ResponseEntity<BaseResponse<String>> delete(
+            @RequestParam String domain,
+            @RequestParam Long entityId
+    ) {
+        vectorStoreService.delete(domain, entityId);
+        return ResponseEntity.ok(BaseResponse.success(
+                "200",
+                "삭제 완료",
+                "domain=%s, entityId=%d 삭제 완료".formatted(domain, entityId)
+        ));
+    }
+
     //  Request Records
-    record EmbedRequest(Long courseId, String content) {}
-    record EmbedBatchRequest(Long courseId, List<String> reviews) {}
+    record EmbedRequest(String domain, Long entityId, String content) {}
+    record EmbedBatchRequest(String domain, Long entityId, List<String> contents) {}
 }
