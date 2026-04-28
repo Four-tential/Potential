@@ -13,13 +13,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-import static four_tential.potential.infra.redis.RedisConstants.INSTRUCTOR_PROFILE_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.MY_FOLLOWS_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.MY_PAGE_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.ATTENDANCE_LIST_CACHE;
-import static four_tential.potential.infra.redis.RedisConstants.REVIEW_LIST_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.*;
 
 @Configuration
 @EnableCaching
@@ -56,6 +50,18 @@ public class RedisCacheConfig {
 
         // 출석 현황 캐시: TTL 30초
         configs.put(ATTENDANCE_LIST_CACHE, defaultConfig.entryTtl(Duration.ofSeconds(30)));
+
+        // 결제 상세 캐시: TTL 5분
+        configs.put(PAYMENT_DETAIL_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+
+        // 결제 목록 캐시: TTL 1분
+        configs.put(PAYMENT_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(1)));
+
+        // 환불 상세 캐시: TTL 10분
+        configs.put(REFUND_DETAIL_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(10)));
+
+        // 환불 목록 캐시: TTL 1분
+        configs.put(REFUND_LIST_CACHE, defaultConfig.entryTtl(Duration.ofMinutes(1)));
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)

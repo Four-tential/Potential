@@ -90,6 +90,9 @@ public class RefundFacade {
         } catch (RuntimeException e) {
             // 실패 이력을 별도 트랜잭션(REQUIRES_NEW)으로 저장
             refundService.createFailed(plan.paymentId(), plan.refundPrice(), plan.cancelCount(), RefundReason.CANCEL);
+
+            refundService.evictRefundList();
+
             log.error("[PORTONE_REFUND] PortOne refund failed. paymentId={} pgKey={} amount={}",
                     plan.paymentId(), plan.pgKey(), plan.refundPrice(), e);
             throw new ServiceErrorException(PaymentExceptionEnum.ERR_REFUND_PROCESS_FAILED);
@@ -106,6 +109,11 @@ public class RefundFacade {
                     plan.paymentId(), plan.pgKey(), plan.refundPrice(), e);
             throw e;
         }
+
+        // 캐시 무효화
+        paymentService.evictPaymentDetail(plan.paymentId(), plan.memberId());
+        paymentService.evictPaymentList();
+        refundService.evictRefundList();
 
         // 4. Redis 잔여석 복구 (트랜잭션 밖, 실패해도 응답은 성공)
         recoverCapacityQuietly(result.courseId(), result.memberId(), plan.cancelCount());
@@ -427,6 +435,9 @@ public class RefundFacade {
                         plan.paymentId(), plan.refundPrice(),
                         plan.cancelCount(), RefundReason.INSTRUCTOR
                 );
+
+                refundService.evictRefundList();
+
                 log.error("[INSTRUCTOR_REFUND] PortOne 환불 실패. paymentId={} pgKey={} amount={}",
                         plan.paymentId(), plan.pgKey(), plan.refundPrice(), e);
                 throw new ServiceErrorException(PaymentExceptionEnum.ERR_REFUND_PROCESS_FAILED);
@@ -437,6 +448,10 @@ public class RefundFacade {
                 completeInstructorRefund(plan);
                 return null;
             });
+
+            paymentService.evictPaymentDetail(plan.paymentId(), plan.memberId());
+            paymentService.evictPaymentList();
+            refundService.evictRefundList();
 
             // 4. Redis 잔여석 복구 (실패해도 환불 결과에 영향 없음)
             recoverCapacityQuietly(plan.courseId(), plan.memberId(), plan.cancelCount());

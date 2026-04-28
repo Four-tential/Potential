@@ -16,6 +16,8 @@ import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
 import four_tential.potential.presentation.payment.dto.RefundListResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -24,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import static four_tential.potential.infra.redis.RedisConstants.REFUND_DETAIL_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.REFUND_LIST_CACHE;
 
 @Service
 @RequiredArgsConstructor
@@ -78,6 +83,7 @@ public class RefundService {
     /**
      * 환불 단건을 조회한다.
      */
+    @Cacheable(cacheNames = REFUND_DETAIL_CACHE, key = "#refundId + ':' + #memberId")
     public RefundDetailResponse getMyRefund(UUID refundId, UUID memberId) {
         return refundRepository.findDetailByIdAndMemberId(refundId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_REFUND));
@@ -87,6 +93,10 @@ public class RefundService {
      * 환불 목록을 조회한다.
      * status 가 null 이면 전체 조회한다.
      */
+    @Cacheable(
+            cacheNames = REFUND_LIST_CACHE,
+            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + #pageable.sort.toString()"
+    )
     public PageResponse<RefundListResponse> getAllMyRefunds(UUID memberId, RefundStatus status, Pageable pageable) {
         return PageResponse.register(refundRepository.findListByMemberIdAndStatus(memberId, status, pageable));
     }
@@ -144,5 +154,13 @@ public class RefundService {
 
         LocalDateTime refundDeadline = courseStartAt.minusDays(RefundConstants.REFUND_DEADLINE_DAYS);
         return LocalDateTime.now().isBefore(refundDeadline);
+    }
+
+    /**
+     * 환불 목록 캐시 전체 무효화
+     */
+    @CacheEvict(cacheNames = REFUND_LIST_CACHE, allEntries = true)
+    public void evictRefundList() {
+        // AOP 가 캐시 삭제 처리
     }
 }

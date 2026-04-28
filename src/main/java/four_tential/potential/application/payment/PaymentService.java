@@ -2,6 +2,7 @@ package four_tential.potential.application.payment;
 
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.enums.PaymentPayWay;
 import four_tential.potential.domain.payment.enums.PaymentStatus;
@@ -12,7 +13,8 @@ import four_tential.potential.presentation.payment.dto.PaymentDetailResponse;
 import four_tential.potential.presentation.payment.dto.PaymentListResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
+
+import static four_tential.potential.infra.redis.RedisConstants.PAYMENT_DETAIL_CACHE;
+import static four_tential.potential.infra.redis.RedisConstants.PAYMENT_LIST_CACHE;
 
 @Slf4j
 @Service
@@ -195,6 +200,7 @@ public class PaymentService {
     /**
      * 결제 단건 조회
      */
+    @Cacheable(cacheNames = PAYMENT_DETAIL_CACHE, key = "#paymentId + ':' + #memberId")
     public PaymentDetailResponse getMyPayment(UUID paymentId, UUID memberId) {
         return paymentRepository.findDetailByIdAndMemberId(paymentId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
@@ -203,9 +209,13 @@ public class PaymentService {
     /**
      * 결제 목록 조회
      */
-    public Page<PaymentListResponse> getAllMyPayments(
+    @Cacheable(
+            cacheNames = PAYMENT_LIST_CACHE,
+            key = "#memberId + ':' + #status + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()"
+    )
+    public PageResponse<PaymentListResponse> getAllMyPayments(
             UUID memberId, PaymentStatus status, Pageable pageable) {
-        return paymentRepository.findListByMemberIdAndStatus(memberId, status, pageable);
+        return PageResponse.register(paymentRepository.findListByMemberIdAndStatus(memberId, status, pageable));
     }
 
     public Payment getById(UUID paymentId) {
@@ -219,5 +229,21 @@ public class PaymentService {
     public RefundPreviewData getRefundPreviewData(UUID paymentId, UUID memberId) {
         return paymentRepository.findRefundPreviewData(paymentId, memberId)
                 .orElseThrow(() -> new ServiceErrorException(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT));
+    }
+
+    /**
+     * 결제 단건 캐시 무효화
+     */
+    @CacheEvict(cacheNames = PAYMENT_DETAIL_CACHE, key = "#paymentId + ':' + #memberId")
+    public void evictPaymentDetail(UUID paymentId, UUID memberId) {
+        // AOP 가 캐시 삭제 처리
+    }
+
+    /**
+     * 결제 목록 캐시 전체 무효화
+     */
+    @CacheEvict(cacheNames = PAYMENT_LIST_CACHE, allEntries = true)
+    public void evictPaymentList() {
+        // AOP 가 캐시 삭제 처리
     }
 }

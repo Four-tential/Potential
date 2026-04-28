@@ -35,13 +35,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_GENERATION_MAX_RETRY;
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_PREFIX;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentFacade {
-
-    private static final String PAYMENT_PG_KEY_PREFIX = "p";
-    private static final int PAYMENT_PG_KEY_GENERATION_MAX_RETRY = 5;
 
     private final PaymentService paymentService;
     private final WebhookService webhookService;
@@ -64,6 +64,7 @@ public class PaymentFacade {
                 () -> createPaymentInOrderLock(memberId, request)
         );
 
+        paymentService.evictPaymentList();
         return PaymentCreateResponse.from(payment);
     }
 
@@ -78,7 +79,7 @@ public class PaymentFacade {
      * 결제 목록 조회
      */
     public PageResponse<PaymentListResponse> getAllMyPayments(UUID memberId, PaymentStatus status, Pageable pageable) {
-        return PageResponse.register(paymentService.getAllMyPayments(memberId, status, pageable));
+        return paymentService.getAllMyPayments(memberId, status, pageable);
     }
 
     /**
@@ -353,6 +354,10 @@ public class PaymentFacade {
 
         log.warn("[PORTONE_WEBHOOK] payment failed/cancelled. pgKey={} memberId={}", pgKey, payment.get().getMemberId());
         paymentService.fail(payment.get());
+
+        paymentService.evictPaymentDetail(payment.get().getId(), payment.get().getMemberId());
+        paymentService.evictPaymentList();
+
         return PaymentCancelDecision.none();
     }
 
@@ -383,6 +388,10 @@ public class PaymentFacade {
         if (!order.getMemberId().equals(payment.getMemberId())) {
             log.error("[PORTONE_WEBHOOK] 주문 회원 불일치. pgKey={}", pgKey);
             paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
             return PaymentCancelDecision.cancel(
                     payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_ORDER_MEMBER_MISMATCH");
         }
@@ -390,6 +399,10 @@ public class PaymentFacade {
         if (order.getStatus() != OrderStatus.PENDING) {
             log.warn("[PORTONE_WEBHOOK] 주문 상태 불일치. pgKey={} orderStatus={}", pgKey, order.getStatus());
             paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
             return PaymentCancelDecision.cancel(
                     payment.getPgKey(), payment.getPaidTotalPrice(), "ORDER_STATUS_INVALID");
         }
@@ -397,6 +410,10 @@ public class PaymentFacade {
         if (LocalDateTime.now().isAfter(order.getExpireAt())) {
             log.warn("[PORTONE_WEBHOOK] 결제 기한 초과. pgKey={}", pgKey);
             paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
             return PaymentCancelDecision.cancel(
                     payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
         }
@@ -405,6 +422,10 @@ public class PaymentFacade {
         if (!hasAvailableSeats(order, course)) {
             log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음. pgKey={}", pgKey);
             paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
             return PaymentCancelDecision.cancel(
                     payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
@@ -432,6 +453,10 @@ public class PaymentFacade {
         // course lock 밖에서 결과 처리 — paymentService.fail() 은 여기서만 호출
         if (!seatsConfirmed) {
             paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
             return PaymentCancelDecision.cancel(
                     payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
         }
@@ -440,6 +465,9 @@ public class PaymentFacade {
         paymentService.confirmPaid(payment);
         orderService.completePayment(order.getId());
         completeOccupyingSeatQuietly(order);
+
+        paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+        paymentService.evictPaymentList();
 
         log.info("[PORTONE_WEBHOOK] 결제 확정 완료. pgKey={} memberId={}", pgKey, payment.getMemberId());
         return PaymentCancelDecision.none();
