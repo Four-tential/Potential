@@ -70,6 +70,9 @@ public class SecurityConfig {
                 // Swagger, Actuator
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
 
+                // AI test
+                //.requestMatchers("/ai/test/**").permitAll()
+
                 // Auth
                 .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh").permitAll()
 
