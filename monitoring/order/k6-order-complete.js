@@ -130,7 +130,30 @@ export function setup() {
         if (i % 500 === 1) console.log(`진행 상황: ${Math.min(i + CONFIG.BATCH_SIZE - 1, CONFIG.VU_COUNT)}/${CONFIG.VU_COUNT} 완료`);
     }
 
-    return {tokens, courseId};
+    return {tokens, courseId, adminToken};
+}
+
+/**
+ * [Teardown Phase] 테스트 종료 후 데이터 정리
+ */
+export function teardown(data) {
+    console.log(`--- [종료] 테스트 데이터 정리 시작 (ID: ${CONFIG.TEST_ID}) ---`);
+
+    const params = {
+        headers: {
+            'Authorization': `Bearer ${data.adminToken}`,
+            'Content-Type': 'application/json'
+        }
+    };
+
+    const res = http.del(`${CONFIG.BASE_URL}/v1/orders/performance-test-data`, null, params);
+
+    if (res.status === 200) {
+        console.log('--- [성공] 성능 테스트 데이터가 일괄 삭제되었습니다. ---');
+    } else {
+        console.error(`--- [실패] 데이터 정리 중 오류 발생: ${res.status} ---`);
+        console.error(res.body);
+    }
 }
 
 function login(email, password) {

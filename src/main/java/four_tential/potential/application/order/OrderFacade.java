@@ -26,6 +26,7 @@ public class OrderFacade {
     private final OrderService orderService;
     private final WaitingListService waitingListService;
     private final RefundFacade refundFacade;
+    private final PerformanceTestDataService performanceTestDataService;
 
     public OrderPlaceResult placeOrder(UUID memberId, OrderCreateRequest request) {
         // 동일 시간대 중복 예약 체크 (대기열 진입 전 필수 체크)
@@ -124,5 +125,12 @@ public class OrderFacade {
         if (cancelCount != order.getOrderCount()) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
         }
+    }
+
+    /**
+     * 성능 테스트 데이터 일괄 삭제
+     */
+    public void deletePerformanceTestData() {
+        performanceTestDataService.deletePerformanceTestData();
     }
 }
