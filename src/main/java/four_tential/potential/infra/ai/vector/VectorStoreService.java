@@ -65,7 +65,7 @@ public class VectorStoreService {
                 .build();
 
         List<Document> documents = vectorStore.similaritySearch(request);
-        if (documents == null || documents.isEmpty()) {
+        if (documents.isEmpty()) {
             return List.of();
         }
 
@@ -90,7 +90,7 @@ public class VectorStoreService {
                 .build();
 
         List<Document> documents = vectorStore.similaritySearch(request);
-        if (documents == null || documents.isEmpty()) {
+        if (documents.isEmpty()) {
             return List.of();
         }
 
