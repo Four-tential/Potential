@@ -52,7 +52,6 @@ public class AiConfig {
         return buildChatClient(chatModel);
     }
 
-    //  공통 빌더 메서드
     private ChatClient buildChatClient(ChatModel chatModel) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
@@ -61,22 +60,28 @@ public class AiConfig {
                 .build();
     }
 
-    //  VectorStore Beans (PgVectorStore)
-    //  EmbeddingModel은 프로파일에 따라 자동 선택:
-    //    - ollama  -> OllamaEmbeddingModel  (nomic-embed-text, 768차원)
-    //    - !ollama -> OpenAiEmbeddingModel  (text-embedding-3-small, 1536차원)
+    // ─────────────────────────────────────────
+    //  VectorStore Bean — 프로젝트 공통 단일 저장소
+    //  도메인 구분은 Document 메타데이터로 처리
+    //  예: new Document(content, Map.of("domain", "review", "courseId", 1L))
+    //
+    //  EmbeddingModel 프로파일 분기:
+    //    - !ollama → OpenAiEmbeddingModel  (text-embedding-3-small, 1536차원)
+    //    - ollama  → OllamaEmbeddingModel  (nomic-embed-text, 768차원)
+    // ─────────────────────────────────────────
+
     @Bean
     @Profile("!ollama")
-    public VectorStore reviewVectorStore(
+    public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel
     ) {
         return buildVectorStore(jdbcTemplate, embeddingModel);
     }
 
-    @Bean("reviewVectorStore")
+    @Bean("vectorStore")
     @Profile("ollama")
-    public VectorStore reviewVectorStoreOllama(
+    public VectorStore vectorStoreOllama(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel
     ) {
@@ -85,8 +90,8 @@ public class AiConfig {
 
     private VectorStore buildVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingModel) {
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
-                .vectorTableName("review_vector_store")   // 테이블명 명시
-                .initializeSchema(true)                   // 테이블 + 인덱스 자동 생성
+                .vectorTableName("potential_vector_store")  // 프로젝트 공통 테이블
+                .initializeSchema(true)                     // 테이블 + 인덱스 자동 생성
                 .build();
     }
 }
