@@ -55,19 +55,8 @@ public class OrderService {
         // 코스 정보 조회
         Course course = courseFacade.getCourseEntity(request.courseId());
 
-        // 동일 시간대 중복 예약 재검증
-        // Facade 에서 1차 체크를 수행하지만, 동시성 환경에서 안전을 위해 락 내부에서 최종 확인한다.
-        boolean hasOverlap = orderRepository.hasOverlappingReservation(
-                memberId,
-                course.getId(),
-                course.getStartAt(),
-                course.getEndAt()
-        );
-
-        if (hasOverlap) {
-            log.warn("중복 예약이 감지되었습니다: memberId={}, courseId={}", memberId, course.getId());
-            throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
-        }
+        // 중복 및 중첩 예약 검증 (락 내부에서 최종 확인)
+        validateReservation(memberId, course);
 
         // 주문 등록
         Order order = Order.register(
@@ -86,17 +75,35 @@ public class OrderService {
     @Transactional(readOnly = true)
     public void checkDuplicateTimeCourse(UUID memberId, UUID courseId) {
         Course course = courseFacade.getCourseEntity(courseId);
-        
-        log.info("동일 시간대 중복 예약 체크 중: memberId={}, courseId={}", memberId, course.getId());
-        
+        validateReservation(memberId, course);
+    }
+
+    /**
+     * 예약 유효성 검증 (중복 주문 및 시간대 중첩)
+     */
+    private void validateReservation(UUID memberId, Course course) {
+        // 1. 동일 코스 중복 주문 체크
+        boolean hasExistingOrder = orderRepository.existsByMemberIdAndCourseIdAndStatusIn(
+                memberId,
+                course.getId(),
+                List.of(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED)
+        );
+
+        if (hasExistingOrder) {
+            log.warn("이미 동일 코스에 대한 주문이 존재합니다: memberId={}, courseId={}", memberId, course.getId());
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
+        }
+
+        // 2. 다른 코스와의 시간대 중첩 체크
         boolean hasOverlap = orderRepository.hasOverlappingReservation(
                 memberId,
                 course.getId(),
-                course.getStartAt(), 
+                course.getStartAt(),
                 course.getEndAt()
         );
 
         if (hasOverlap) {
+            log.warn("중첩된 시간대의 예약이 감지되었습니다: memberId={}, courseId={}", memberId, course.getId());
             throw new ServiceErrorException(OrderExceptionEnum.ERR_ALREADY_RESERVED);
         }
     }

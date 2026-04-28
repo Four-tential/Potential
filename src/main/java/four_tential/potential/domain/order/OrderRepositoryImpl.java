@@ -172,7 +172,6 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .join(course).on(course.id.eq(order.courseId))
                 .where(
                         order.memberId.eq(memberId),
-                        course.id.ne(courseId),
                         order.status.in(OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CONFIRMED),
                         course.startAt.lt(endAt),
                         course.endAt.gt(startAt)
