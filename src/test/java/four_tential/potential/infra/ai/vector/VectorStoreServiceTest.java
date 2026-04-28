@@ -162,4 +162,57 @@ class VectorStoreServiceTest {
             return true;
         }));
     }
+
+    // ─────────────────────────────────────────
+//  searchByDomain
+// ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("searchByDomain 시 domain 필터만 적용된 SearchRequest 전달")
+    void searchByDomain_applies_domain_filter_only() {
+        // given
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+
+        // when
+        service.searchByDomain("course", "Java 기초");
+
+        // then
+        verify(vectorStore).similaritySearch(argThat((SearchRequest request) -> {
+            String filter = String.valueOf(request.getFilterExpression());
+            assertThat(filter).contains("domain");
+            assertThat(filter).contains("course");
+            assertThat(filter).doesNotContain("entityId");
+            return true;
+        }));
+    }
+
+    @Test
+    @DisplayName("searchByDomain 검색 결과를 텍스트 목록으로 반환")
+    void searchByDomain_returns_text_list() {
+        // given
+        List<Document> mockDocs = List.of(
+                new Document("Java 기초 강의", Map.of("domain", "course")),
+                new Document("Spring Boot 입문", Map.of("domain", "course"))
+        );
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(mockDocs);
+
+        // when
+        List<String> results = service.searchByDomain("course", "Java");
+
+        // then
+        assertThat(results).containsExactly("Java 기초 강의", "Spring Boot 입문");
+    }
+
+    @Test
+    @DisplayName("searchByDomain 결과가 없으면 빈 리스트 반환")
+    void searchByDomain_returns_empty_when_no_result() {
+        // given
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+
+        // when
+        List<String> results = service.searchByDomain("course", "없는내용");
+
+        // then
+        assertThat(results).isEmpty();
+    }
 }
