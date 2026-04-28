@@ -166,11 +166,24 @@ function login(email, password) {
 // -------------------------------------------------------------------------
 // 2. Main Run Phase
 // -------------------------------------------------------------------------
+let isFinished = false; // VU별로 상태를 추적
+
 export default function (data) {
+    // 1. 설정된 VU_COUNT를 벗어나는 가상 유저는 동작하지 않음
+    if (__VU > CONFIG.VU_COUNT) {
+        return;
+    }
+
+    // 2. 이미 주문 시도가 끝난 유저는 아주 긴 잠을 자서 지표 오염을 방지
+    if (isFinished) {
+        sleep(60);
+        return;
+    }
+
     const token = data.tokens[__VU - 1];
+    // 3. 번호표(토큰)가 없는 유저는 에러를 내지 않고 조용히 퇴장
     if (!token) {
-        metrics.error.add(1);
-        sleep(1);
+        isFinished = true;
         return;
     }
 
@@ -183,19 +196,28 @@ export default function (data) {
 
     metrics.duration.total.add(duration);
 
-    const isOk = check(res, {'expected status': (r) => [201, 202, 503].includes(r.status)});
-
-    if (isOk) {
-        if (res.status === 201) {
-            metrics.success.add(1);
-            metrics.duration.success.add(duration);
-        } else if (res.status === 202) {
-            metrics.waiting.add(1);
-            metrics.duration.waiting.add(duration);
-        } else if (res.status === 503) {
-            metrics.queueFull.add(1);
-        }
+    // 4. 응답 결과 분석
+    if (res.status === 201) {
+        // [성공] 주문 완료
+        metrics.success.add(1);
+        metrics.duration.success.add(duration);
+        isFinished = true;
+    } else if (res.status === 202) {
+        // [성공] 대기열 진입
+        metrics.waiting.add(1);
+        metrics.duration.waiting.add(duration);
+        isFinished = true;
+    } else if (res.status === 400) {
+        // [성공적 거절] 이미 주문했거나 대기 중인 경우 (중복 요청)
+        // 서버는 정상 작동 중이므로 에러로 카운트하지 않고 종료
+        isFinished = true;
+    } else if (res.status === 503) {
+        // [잠시 거절] 대기열이 꽉 참 -> 잠시 쉬었다가 다시 시도
+        metrics.queueFull.add(1);
+        sleep(0.5); 
     } else {
+        // [진짜 에러] 500, 404, 타임아웃 등 서버/네트워크 문제
         metrics.error.add(1);
+        sleep(1); 
     }
 }
