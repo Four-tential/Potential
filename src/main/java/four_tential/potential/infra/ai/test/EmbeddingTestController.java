@@ -32,7 +32,6 @@ public class EmbeddingTestController {
 
     private final VectorStoreService vectorStoreService;
 
-    //단일 리뷰 임베딩 저장
     @PostMapping("/embed")
     public ResponseEntity<BaseResponse<String>> embed(@RequestBody EmbedRequest request) {
         vectorStoreService.add(request.domain(), request.entityId(), request.content());
@@ -43,8 +42,6 @@ public class EmbeddingTestController {
         ));
     }
 
-
-    //배치 임베딩 저장
     @PostMapping("/embed/batch")
     public ResponseEntity<BaseResponse<String>> embedBatch(@RequestBody EmbedBatchRequest request) {
         vectorStoreService.addBatch(request.domain(), request.entityId(), request.contents());
@@ -56,7 +53,6 @@ public class EmbeddingTestController {
         ));
     }
 
-    //유사 리뷰 검색
     @GetMapping("/search")
     public ResponseEntity<BaseResponse<List<String>>> search(
             @RequestParam String domain,
@@ -71,10 +67,6 @@ public class EmbeddingTestController {
         ));
     }
 
-    /**
-     * 삭제
-     * DELETE /ai/test?domain=review&entityId=1
-     */
     @DeleteMapping
     public ResponseEntity<BaseResponse<String>> delete(
             @RequestParam String domain,
@@ -88,7 +80,6 @@ public class EmbeddingTestController {
         ));
     }
 
-    //  Request Records
     record EmbedRequest(String domain, Long entityId, String content) {}
     record EmbedBatchRequest(String domain, Long entityId, List<String> contents) {}
 }

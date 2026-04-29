@@ -139,6 +139,9 @@ dependencies {
     // PGVector — 임베딩 벡터 저장소 (PostgreSQL + pgvector)
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
 
+    // RAG Advisor — QuestionAnswerAdvisor (벡터 검색 → 컨텍스트 주입)
+    implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
+
     // PostgreSQL Driver — PGVector 전용 (메인 DB는 MySQL 유지)
     runtimeOnly 'org.postgresql:postgresql'
 }

@@ -26,11 +26,6 @@ import javax.sql.DataSource;
 @Profile("!test")
 public class PgVectorConfig {
 
-    // ─────────────────────────────────────────
-    //  MySQL DataSource — @Primary 명시
-    //  JPA, Flyway 등 자동 설정이 이 Bean을 우선 사용
-    // ─────────────────────────────────────────
-
     @Bean
     @Primary
     @ConfigurationProperties("spring.datasource.hikari")
@@ -39,11 +34,6 @@ public class PgVectorConfig {
                 .type(HikariDataSource.class)
                 .build();
     }
-
-    // ─────────────────────────────────────────
-    //  PGVector 전용 DataSource — Secondary
-    //  AiConfig의 VectorStore Bean만 이 DataSource를 사용
-    // ─────────────────────────────────────────
 
     @Value("${pgvector.datasource.url}")
     private String pgUrl;
