@@ -99,6 +99,21 @@ services:
     networks:
       network-potential:
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-potential
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD:
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    networks:
+      network-potential:
 
 networks:
   network-potential:
