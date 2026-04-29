@@ -177,4 +177,7 @@ grafana-data/
 ### claude ###
 .claude
 
+### pgvector-data ###
+pgvector-data
+
 # End of https://www.toptal.com/developers/gitignore/api/macos,intellij,java,gradle

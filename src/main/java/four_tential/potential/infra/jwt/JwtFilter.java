@@ -58,6 +58,7 @@ public class JwtFilter extends OncePerRequestFilter {
             any("/swagger-ui.html"),
             any("/v3/api-docs/**"),
             any("/actuator/**"),
+            //any("/ai/test/**"),
 
             // Auth
             post("/v1/auth/signup"),
