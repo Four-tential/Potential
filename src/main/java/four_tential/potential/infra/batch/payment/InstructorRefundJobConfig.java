@@ -20,11 +20,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 @RequiredArgsConstructor
 public class InstructorRefundJobConfig {
 
-    private final JobRepository jobRepository;
-    private final PlatformTransactionManager transactionManager;
-    private final RefundOutboxRepository refundOutboxRepository;
-    private final RefundFacade refundFacade;
-
     // Todo: Job 작성
     /**
      * Job 이름: "instructorRefundJob"
