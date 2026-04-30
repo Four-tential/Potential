@@ -1,62 +1,62 @@
 package four_tential.potential.infra.ai.review;
 
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.CourseExceptionEnum;
+import four_tential.potential.domain.course.course.Course;
+import four_tential.potential.domain.course.course.CourseRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.UUID;
 
-
-//후기 요약 AI 서비스(테스트 버전)
 @Slf4j
 @Service
 public class ReviewSummaryService {
 
+    private final CourseRepository courseRepository;
     private final ChatClient reviewChatClient;
-    private final PromptTemplate reviewSummaryPromptTemplate;
+    private final Resource initPrompt;
+    private final Resource updatePrompt;
 
     public ReviewSummaryService(
+            CourseRepository courseRepository,
             @Qualifier("reviewChatClient") ChatClient reviewChatClient,
-            PromptTemplate reviewSummaryPromptTemplate
+            @Value("classpath:ai/prompts/review-summary-init.st") Resource initPrompt,
+            @Value("classpath:ai/prompts/review-summary-update.st") Resource updatePrompt
     ) {
+        this.courseRepository = courseRepository;
         this.reviewChatClient = reviewChatClient;
-        this.reviewSummaryPromptTemplate = reviewSummaryPromptTemplate;
+        this.initPrompt = initPrompt;
+        this.updatePrompt = updatePrompt;
     }
 
-    /**
-     * 코스 후기 목록을 AI로 요약합니다.
-     *
-     * @param courseId       코스 ID
-     * @param reviewContents 후기 텍스트 목록
-     * @return 요약 결과 문자열
-     */
-    public String summarize(Long courseId, List<String> reviewContents) {
-        if (reviewContents == null || reviewContents.isEmpty()) {
-            log.info("[후기 요약 스킵] courseId={}, 후기 없음", courseId);
-            return "";
-        }
-        log.info("[후기 요약 요청] courseId={}, 후기 수={}", courseId, reviewContents.size());
+    @Transactional
+    public void updateSummary(UUID courseId, String newReviewContent) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        // 스터디 week2 패턴: PromptTemplate으로 변수 치환
-        Prompt prompt = reviewSummaryPromptTemplate.create(Map.of(
-                "courseId", courseId,
-                "reviews", formatReviews(reviewContents)
-        ));
+        String existingSummary = course.getSummary();
+        log.info("[후기 요약 갱신] courseId={}, 기존요약존재={}", courseId, existingSummary != null);
 
-        return reviewChatClient.prompt(prompt)
+        PromptTemplate template = existingSummary == null
+                ? new PromptTemplate(initPrompt)
+                : new PromptTemplate(updatePrompt);
+
+        Map<String, Object> variables = existingSummary == null
+                ? Map.of("newReview", newReviewContent)
+                : Map.of("existingSummary", existingSummary, "newReview", newReviewContent);
+
+        String updatedSummary = reviewChatClient.prompt(template.create(variables))
                 .call()
                 .content();
-    }
 
-    private String formatReviews(List<String> reviewContents) {
-        return IntStream.range(0, reviewContents.size())
-                .mapToObj(i -> (i + 1) + ". " + reviewContents.get(i))
-                .collect(Collectors.joining("\n"));
+        course.updateSummary(updatedSummary);
     }
 }
