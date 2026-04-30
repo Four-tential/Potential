@@ -135,6 +135,12 @@ dependencies {
 
     // Chat Memory - Redis 기반 대화 기억 (챗봇 Agent용)
     //implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-redis'
+
+    // PGVector — 임베딩 벡터 저장소 (PostgreSQL + pgvector)
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+
+    // PostgreSQL Driver — PGVector 전용 (메인 DB는 MySQL 유지)
+    runtimeOnly 'org.postgresql:postgresql'
 }
 
 // Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용
