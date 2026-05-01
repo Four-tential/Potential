@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface CourseCancelOutboxRepository extends JpaRepository<CourseCancelOutbox, UUID> {
 
     List<CourseCancelOutbox> findByStatus(CourseCancelOutboxStatus status);
+
+    boolean existsByStatus(CourseCancelOutboxStatus status);
 }

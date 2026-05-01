@@ -1,10 +1,13 @@
 package four_tential.potential.infra.batch.payment;
 
+import four_tential.potential.domain.payment.enums.CourseCancelOutboxStatus;
+import four_tential.potential.domain.payment.repository.CourseCancelOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,6 +18,8 @@ import org.springframework.stereotype.Component;
 public class CourseCancelJobScheduler {
 
     private final JobOperator jobOperator;
+    private final JobRepository jobRepository;
+    private final CourseCancelOutboxRepository courseCancelOutboxRepository;
 
     @Qualifier("courseCancelJob")
     private final Job courseCancelJob;
@@ -22,6 +27,18 @@ public class CourseCancelJobScheduler {
     @Scheduled(cron = "0 */5 * * * *")
     public void runCourseCancelJob() {
         try {
+            boolean running = !jobRepository.findRunningJobExecutions(courseCancelJob.getName()).isEmpty();
+            if (running) {
+                log.info("[SCHEDULER] courseCancelJob 실행 중 - 스킵");
+                return;
+            }
+
+            boolean hasPending = courseCancelOutboxRepository.existsByStatus(CourseCancelOutboxStatus.PENDING);
+            if (!hasPending) {
+                log.info("[SCHEDULER] PENDING course_cancel_outbox 없음 - 스킵");
+                return;
+            }
+
             log.info("[SCHEDULER] courseCancelJob 실행 시작");
             jobOperator.start(courseCancelJob, new JobParameters());
         } catch (Exception e) {

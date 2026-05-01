@@ -1,16 +1,8 @@
 package four_tential.potential.infra.batch.payment;
 
 import four_tential.potential.application.payment.RefundFacade;
-import four_tential.potential.application.payment.RefundService;
-import four_tential.potential.domain.order.Order;
-import four_tential.potential.domain.order.OrderRepository;
-import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.RefundTask;
-import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundTaskStatus;
-import four_tential.potential.domain.payment.port.PaymentGateway;
-import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
-import four_tential.potential.domain.payment.repository.PaymentRepository;
 import four_tential.potential.domain.payment.repository.RefundTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,8 +54,7 @@ public class RefundTaskJobConfig {
     @Bean
     @StepScope
     public ListItemReader<RefundTask> refundTaskReader() {
-        List<RefundTask> targets = refundTaskRepository
-                .findByStatus(RefundTaskStatus.PENDING);
+        List<RefundTask> targets = refundTaskRepository.findByStatus(RefundTaskStatus.PENDING);
         log.info("[JOB2] 처리 대상 환불 task: {}건", targets.size());
         return new ListItemReader<>(targets);
     }

@@ -8,6 +8,7 @@ import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.listener.JobExecutionListener;
+import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class CourseCancelJobCompletionListener implements JobExecutionListener {
 
     private final JobOperator jobOperator;
+    private final JobRepository jobRepository;
 
     @Qualifier("refundTaskJob")
     private final Job refundTaskJob;
@@ -38,6 +40,12 @@ public class CourseCancelJobCompletionListener implements JobExecutionListener {
             log.info("[LISTENER] courseCancelJob 완료 → refundTaskJob 트리거");
 
             try {
+                boolean running = !jobRepository.findRunningJobExecutions(refundTaskJob.getName()).isEmpty();
+                if (running) {
+                    log.info("[LISTENER] refundTaskJob 실행 중 - 즉시 트리거 스킵");
+                    return;
+                }
+
                 // Job1 완료 직후 즉시 Job2 실행
                 jobOperator.start(refundTaskJob, new JobParameters());
                 log.info("[LISTENER] refundTaskJob 트리거 성공");
