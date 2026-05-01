@@ -550,6 +550,26 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("markRefundPendingOrdersByCourseId는 PAID와 CONFIRMED 주문을 REFUND_PENDING으로 변경한다")
+    void markRefundPendingOrdersByCourseId_success() {
+        UUID courseId = UUID.randomUUID();
+        given(orderRepository.bulkUpdateStatusByCourseId(
+                eq(courseId),
+                eq(List.of(OrderStatus.PAID, OrderStatus.CONFIRMED)),
+                eq(OrderStatus.REFUND_PENDING)
+        )).willReturn(3L);
+
+        long updatedCount = orderService.markRefundPendingOrdersByCourseId(courseId);
+
+        assertThat(updatedCount).isEqualTo(3L);
+        verify(orderRepository).bulkUpdateStatusByCourseId(
+                courseId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                OrderStatus.REFUND_PENDING
+        );
+    }
+
+    @Test
     @DisplayName("재고가 초기화되지 않은 경우 reconcileInventoryLocked가 복구를 수행한다")
     void reconcileInventoryLocked_calls_reconcile_when_not_initialized() {
         // given
