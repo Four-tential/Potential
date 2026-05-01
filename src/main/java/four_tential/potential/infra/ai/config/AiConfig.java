@@ -2,9 +2,11 @@ package four_tential.potential.infra.ai.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,19 +31,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration
 public class AiConfig {
 
-    // ─────────────────────────────────────────
-    //  PromptTemplate Bean — .st 파일 로드
-    //  변수 치환: {courseId}, {reviews}
-    // ─────────────────────────────────────────
-
     @Bean
     public PromptTemplate reviewSummaryPromptTemplate() {
         return new PromptTemplate(new ClassPathResource("ai/prompts/review-summary.st"));
     }
 
-    //  ChatClient Beans
-
-    //  기본 프로필: OpenAI (dev / prod)
     @Bean
     @Profile("!ollama")
     public ChatClient reviewChatClient(
@@ -50,7 +44,6 @@ public class AiConfig {
         return buildChatClient(chatModel);
     }
 
-    //  Ollama 프로필: 로컬 LLM
     @Bean("reviewChatClient")
     @Profile("ollama")
     public ChatClient reviewChatClientOllama(
@@ -67,9 +60,51 @@ public class AiConfig {
                 .build();
     }
 
-    //  VectorStore Bean — OpenAI 임베딩 모델 단일화
-    //  text-embedding-3-small (1536차원) 고정
-    //  로컬/dev/prod 환경 동일 — 차원 불일치 마이그레이션 문제 방지
+    @Bean
+    @Profile("!ollama & !test")
+    public ChatClient chatbotChatClient(
+            @Qualifier("openAiChatModel") ChatModel chatModel,
+            VectorStore vectorStore
+    ) {
+        return buildChatbotChatClient(chatModel, vectorStore);
+    }
+
+    @Bean("chatbotChatClient")
+    @Profile("ollama & !test")
+    public ChatClient chatbotChatClientOllama(
+            @Qualifier("ollamaChatModel") ChatModel chatModel,
+            VectorStore vectorStore
+    ) {
+        return buildChatbotChatClient(chatModel, vectorStore);
+    }
+
+    private ChatClient buildChatbotChatClient(ChatModel chatModel, VectorStore vectorStore) {
+        SearchRequest searchRequest = SearchRequest.builder()
+                .similarityThreshold(0.3)
+                .topK(5)
+                .filterExpression("domain == 'policy'")
+                .build();
+
+        return ChatClient.builder(chatModel)
+                .defaultSystem("""
+                        당신은 온라인 수강 플랫폼 'Potential'의 고객지원 FAQ 챗봇입니다.
+
+                        [규칙]
+                        1. 사용자 질문과 함께 제공되는 검색 결과(정책 문서)에 있는 내용만 근거로 답변하세요.
+                        2. 검색 결과에 해당 내용이 없으면 "해당 내용은 현재 확인이 어렵습니다"라고 안내하세요.
+                        3. 반드시 한국어로만 답변하세요. 영어를 섞지 마세요.
+                        4. 답변은 2~3문장 이내로 간결하게 작성하세요.
+                        5. 정책 문서의 내용을 직접 인용하거나 요약하여 답변하세요.
+                        """)
+                .defaultAdvisors(
+                        QuestionAnswerAdvisor.builder(vectorStore)
+                                .searchRequest(searchRequest)
+                                .build(),
+                        new SimpleLoggerAdvisor(Ordered.LOWEST_PRECEDENCE - 1)
+                )
+                .build();
+    }
+
     @Bean
     @Profile("!test")
     public VectorStore vectorStore(
