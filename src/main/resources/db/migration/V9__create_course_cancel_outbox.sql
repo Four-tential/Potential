@@ -8,7 +8,7 @@ CREATE TABLE course_cancel_outbox
     update_at  DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     INDEX idx_course_cancel_outbox_status (status),
-    INDEX idx_course_cancel_outbox_course_id (course_id)
+    UNIQUE KEY uk_course_cancel_outbox_course_id (course_id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COMMENT = '강사 코스 취소 이벤트 아웃박스 - Job1이 읽어서 refund_task를 생성한다';

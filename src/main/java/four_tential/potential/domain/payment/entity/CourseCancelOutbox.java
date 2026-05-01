@@ -14,9 +14,11 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "course_cancel_outbox",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_course_cancel_outbox_course_id", columnNames = {"course_id"})
+        },
         indexes = {
-                @Index(name = "idx_course_cancel_outbox_status", columnList = "status"),
-                @Index(name = "idx_course_cancel_outbox_course_id", columnList = "course_id")
+                @Index(name = "idx_course_cancel_outbox_status", columnList = "status")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -51,6 +53,7 @@ public class CourseCancelOutbox extends BaseTimeEntity {
 
     public void markDone() {
         this.status = CourseCancelOutboxStatus.DONE;
+        this.failReason = null;
     }
 
     public void markFailed(String reason) {

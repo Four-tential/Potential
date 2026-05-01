@@ -14,9 +14,11 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "refund_task",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_refund_task_order_id", columnNames = {"order_id"})
+        },
         indexes = {
                 @Index(name = "idx_refund_task_status", columnList = "status"),
-                @Index(name = "idx_refund_task_order_id", columnList = "order_id"),
                 @Index(name = "idx_refund_task_course_id", columnList = "course_id")
         }
 )

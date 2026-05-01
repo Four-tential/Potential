@@ -11,7 +11,7 @@ CREATE TABLE refund_task
     update_at  DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     INDEX idx_refund_task_status (status),
-    INDEX idx_refund_task_order_id (order_id),
+    UNIQUE KEY uk_refund_task_order_id (order_id),
     INDEX idx_refund_task_course_id (course_id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
