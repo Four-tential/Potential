@@ -6,6 +6,7 @@ import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.review.dto.request.ReviewCreateRequest;
 import four_tential.potential.presentation.review.dto.request.ReviewUpdateRequest;
+import four_tential.potential.presentation.review.dto.response.ReviewSummaryResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import jakarta.validation.Valid;
@@ -99,6 +100,17 @@ public class ReviewController {
         reviewService.delete(principal.memberId(), reviewId);
         return ResponseEntity.ok(
                 BaseResponse.success(HttpStatus.OK.name(), "후기가 삭제되었습니다", null)
+        );
+    }
+
+    // 코스 후기 요약 조회
+    @GetMapping("/courses/{courseId}/reviews/summary")
+    public ResponseEntity<BaseResponse<ReviewSummaryResponse>> getSummary(
+            @PathVariable UUID courseId
+    ) {
+        ReviewSummaryResponse response = reviewService.getSummary(courseId);
+        return ResponseEntity.ok(
+                BaseResponse.success(HttpStatus.OK.name(), "후기 요약 조회 성공", response)
         );
     }
 

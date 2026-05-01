@@ -79,6 +79,9 @@ public class Course extends BaseTimeWithDelEntity {
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CourseImage> images = new ArrayList<>();
 
@@ -250,6 +253,10 @@ public class Course extends BaseTimeWithDelEntity {
         if (this.confirmCount > 0) {
             this.confirmCount--;
         }
+    }
+
+    public void updateSummary(String summary) {
+        this.summary = summary;
     }
 
     // 정원 측정 판별
