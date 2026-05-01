@@ -10,13 +10,14 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 class DocumentEtlServiceTest {
@@ -51,15 +52,16 @@ class DocumentEtlServiceTest {
     }
 
     @Test
-    @DisplayName("loadPolicyDocuments — 기존 삭제가 실패해도 신규 적재는 진행")
-    void loadPolicyDocuments_proceeds_when_delete_fails() {
+    @DisplayName("loadPolicyDocuments — 기존 삭제 실패 시 IllegalStateException 으로 적재 중단")
+    void loadPolicyDocuments_aborts_when_delete_fails() {
         doThrow(new RuntimeException("벡터 저장소 일시 오류"))
                 .when(vectorStore).delete(anyString());
 
-        int chunkCount = service.loadPolicyDocuments();
+        assertThatThrownBy(() -> service.loadPolicyDocuments())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("기존 정책 문서 삭제 실패");
 
-        assertThat(chunkCount).isPositive();
-        verify(vectorStore, atLeastOnce()).add(any());
+        verify(vectorStore, never()).add(any());
     }
 
     @Test

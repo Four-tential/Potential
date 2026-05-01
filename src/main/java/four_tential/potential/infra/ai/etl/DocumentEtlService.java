@@ -112,7 +112,8 @@ public class DocumentEtlService {
             vectorStore.delete("domain == '" + DOMAIN_POLICY + "'");
             log.info("기존 정책 문서 삭제 완료");
         } catch (Exception e) {
-            log.warn("기존 정책 문서 삭제 중 오류 (첫 적재일 수 있음): {}", e.getMessage());
+            log.error("기존 정책 문서 삭제 실패", e);
+            throw new IllegalStateException("기존 정책 문서 삭제 실패", e);
         }
     }
 }

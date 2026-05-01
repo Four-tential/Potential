@@ -90,7 +90,7 @@ services:
     volumes:
       - ./pgvector-data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d ${PGVECTOR_DB}" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${PGVECTOR_DB}"]
       interval: 10s
       timeout: 5s
       retries: 7
