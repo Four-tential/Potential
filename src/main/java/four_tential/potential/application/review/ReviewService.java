@@ -16,6 +16,7 @@ import four_tential.potential.domain.review.review_image.ReviewImage;
 import four_tential.potential.domain.review.review_image.ReviewImageRepository;
 import four_tential.potential.domain.review.review_like.ReviewLike;
 import four_tential.potential.domain.review.review_like.ReviewLikeRepository;
+import four_tential.potential.presentation.review.dto.response.ReviewSummaryResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
@@ -46,6 +47,7 @@ public class ReviewService {
     private final AttendanceRepository attendanceRepository;
     private final ReviewLikeRepository reviewLikeRepository;
     private final ReviewCacheService reviewCacheService;
+    private final four_tential.potential.infra.ai.review.ReviewSummaryService reviewSummaryService;
 
     // 후기 작성
     @Transactional
@@ -97,6 +99,7 @@ public class ReviewService {
         reviewRepository.save(review);
 
         reviewCacheService.evictAll(); // 후기 작성 시 캐시 무효화
+        reviewSummaryService.updateSummary(courseId, content); // 누적 요약 갱신
 
         // 이미지 저장
         List<ReviewImage> images = saveImages(review, imageUrls);
@@ -188,6 +191,14 @@ public class ReviewService {
         boolean liked  = reviewLikeRepository.existsByReviewIdAndMemberId(reviewId, memberId);
 
         return ReviewLikeResponse.of(reviewId, likeCount, liked);
+    }
+
+    // 코스 후기 요약 조회
+    @Transactional(readOnly = true)
+    public ReviewSummaryResponse getSummary(UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
+        return ReviewSummaryResponse.of(courseId, course.getSummary());
     }
 
     // 이미지 저장 공통 로직
