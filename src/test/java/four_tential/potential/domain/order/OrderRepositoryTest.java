@@ -10,6 +10,8 @@ import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.infra.redis.RedisTestContainer;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +44,9 @@ class OrderRepositoryTest extends RedisTestContainer {
 
     @Autowired
     private AttendanceRepository attendanceRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Test
     @DisplayName("주문 ID와 본인 ID로 주문 상세 정보를 성공적으로 조회한다")
@@ -578,6 +583,46 @@ class OrderRepositoryTest extends RedisTestContainer {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(Order::getId)
                 .containsExactlyInAnyOrder(paidOrder.getId(), confirmedOrder.getId());
+    }
+
+    @Test
+    @DisplayName("코스 기준 주문 상태 일괄 변경 - PAID와 CONFIRMED만 REFUND_PENDING으로 변경한다")
+    void bulkUpdateStatusByCourseId_updates_only_target_statuses() {
+        UUID courseId = UUID.randomUUID();
+
+        Order paidOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "paid");
+        paidOrder.completePayment();
+        orderRepository.save(paidOrder);
+
+        Order confirmedOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "confirmed");
+        ReflectionTestUtils.setField(confirmedOrder, "status", OrderStatus.CONFIRMED);
+        orderRepository.save(confirmedOrder);
+
+        Order pendingOrder = Order.register(UUID.randomUUID(), courseId, 1, BigInteger.valueOf(10000), "pending");
+        orderRepository.save(pendingOrder);
+
+        Order otherCoursePaid = Order.register(UUID.randomUUID(), UUID.randomUUID(), 1, BigInteger.valueOf(10000), "other");
+        otherCoursePaid.completePayment();
+        orderRepository.save(otherCoursePaid);
+
+        long updated = orderRepository.bulkUpdateStatusByCourseId(
+                courseId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                OrderStatus.REFUND_PENDING
+        );
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(updated).isEqualTo(2L);
+        assertThat(orderRepository.findById(paidOrder.getId())).get()
+                .extracting(Order::getStatus).isEqualTo(OrderStatus.REFUND_PENDING);
+        assertThat(orderRepository.findById(confirmedOrder.getId())).get()
+                .extracting(Order::getStatus).isEqualTo(OrderStatus.REFUND_PENDING);
+        assertThat(orderRepository.findById(pendingOrder.getId())).get()
+                .extracting(Order::getStatus).isEqualTo(OrderStatus.PENDING);
+        assertThat(orderRepository.findById(otherCoursePaid.getId())).get()
+                .extracting(Order::getStatus).isEqualTo(OrderStatus.PAID);
     }
 
     @Test

@@ -12,18 +12,22 @@ import four_tential.potential.domain.course.course.CourseRepository;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderRepository;
 import four_tential.potential.domain.order.OrderStatus;
+import four_tential.potential.domain.payment.entity.CourseCancelOutbox;
 import four_tential.potential.domain.payment.entity.Payment;
 import four_tential.potential.domain.payment.entity.Refund;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.domain.payment.repository.CourseCancelOutboxRepository;
 import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.presentation.payment.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigInteger;
@@ -45,6 +49,7 @@ public class RefundFacade {
     private final CourseRepository courseRepository;
     private final PaymentDistributedLockExecutor paymentLockExecutor;
     private final TransactionTemplate transactionTemplate;
+    private final CourseCancelOutboxRepository courseCancelOutboxRepository;
 
     /**
      * 환불 가능 여부를 조회
@@ -403,6 +408,42 @@ public class RefundFacade {
     }
 
     /**
+     * Spring Batch 적용 고도화 방식
+     * 강사 코스 취소 시 해당 코스의 모든 결제 주문을 일괄 전액 환불 예약
+     */
+    @Transactional
+    public String reserveRefundAllPaidOrdersForCancelledCourse(UUID courseId) {
+        Course course = getCourse(courseId);
+
+        // 트리거가 되는 courseId에 해당하는 주문 status REFUND_PENDING 로 변경
+        long targetCount = orderService.markRefundPendingOrdersByCourseId(courseId);
+
+        if (targetCount == 0) {
+            log.info("[INSTRUCTOR_REFUND] 배치 환불 예약 대상 주문 없음. courseId={}", courseId);
+            return "환불 예약 대상 주문이 없습니다. courseId=" + courseId;
+        }
+
+        // 해당 courseId -> PENDING 상태로 이벤트 쌓기
+        // 이후 Batch Job1에서 해당 이벤트의 주문들 조회 후 refund_task에 insert
+        courseCancelOutboxRepository.save(CourseCancelOutbox.pending(courseId));
+
+        log.warn("[INSTRUCTOR_REFUND] 배치 환불 예약 완료. courseId={} title={} targetCount={}",
+                courseId, course.getTitle(), targetCount);
+
+        return "환불 예약 완료. Batch가 5분 내로 처리합니다. courseId=" + courseId;
+    }
+
+    /**
+     * Batch용 public 메서드
+     * 주문 단건에 대한 강사 취소 환불을 처리
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Long processInstructorRefundTask(UUID orderId) {
+        Order order = getOrder(orderId);
+        return refundSingleOrderForInstructor(order);
+    }
+
+    /**
      * 주문 단건에 대한 강사 취소 환불을 처리
      *
      * PART_REFUNDED 처리의 경우
@@ -517,11 +558,13 @@ public class RefundFacade {
 
     /**
      * 강사 취소 환불 대상 주문 상태 검증
-     * 수강생 직접 환불과 달리 OrderStatus.CONFIRMED 도 허용
+     * 즉시 환불 경로: PAID, CONFIRMED
+     * 배치 예약 경로: REFUND_PENDING
      */
     private void validateOrderForInstructorRefund(Order order) {
         if (order.getStatus() != OrderStatus.PAID
-                && order.getStatus() != OrderStatus.CONFIRMED) {
+                && order.getStatus() != OrderStatus.CONFIRMED
+                && order.getStatus() != OrderStatus.REFUND_PENDING) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS);
         }
     }

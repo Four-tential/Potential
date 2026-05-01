@@ -18,6 +18,7 @@ import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.port.PaymentGateway;
 import four_tential.potential.domain.payment.port.PaymentGatewayRequest;
+import four_tential.potential.domain.payment.repository.CourseCancelOutboxRepository;
 import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.presentation.payment.dto.RefundCourseResponse;
 import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
@@ -90,6 +91,9 @@ class RefundFacadeTest {
 
     @Mock
     private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private CourseCancelOutboxRepository courseCancelOutboxRepository;
 
     @BeforeEach
     void setUp() {
@@ -435,6 +439,77 @@ class RefundFacadeTest {
         verify(refundService, never()).createCompleted(any(), anyLong(), anyInt(), eq(RefundReason.INSTRUCTOR));
         verify(orderService, never()).cancelOrderForInstructor(any());
         verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reserveRefundAllPaidOrdersForCancelledCourse는 REFUND_PENDING 주문이 생기면 outbox를 저장한다")
+    void reserveRefundAllPaidOrdersForCancelledCourse_saves_outbox_when_targets_exist() {
+        UUID courseId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 3);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderService.markRefundPendingOrdersByCourseId(courseId)).willReturn(2L);
+
+        String result = refundFacade.reserveRefundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result).contains("환불 예약 완료");
+        verify(courseCancelOutboxRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("reserveRefundAllPaidOrdersForCancelledCourse는 대상 주문이 없으면 outbox를 저장하지 않는다")
+    void reserveRefundAllPaidOrdersForCancelledCourse_returns_without_outbox_when_no_targets() {
+        UUID courseId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 0);
+
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(orderService.markRefundPendingOrdersByCourseId(courseId)).willReturn(0L);
+
+        String result = refundFacade.reserveRefundAllPaidOrdersForCancelledCourse(courseId);
+
+        assertThat(result).contains("환불 예약 대상 주문이 없습니다");
+        verify(courseCancelOutboxRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("processInstructorRefundTask는 REFUND_PENDING 주문과 PART_REFUNDED 결제를 남은 금액만 환불한다")
+    void processInstructorRefundTask_refunds_only_remaining_amount_for_part_refunded_payment() {
+        UUID courseId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Course course = createCourse(courseId, LocalDateTime.now().plusDays(10), 2);
+
+        Order order = Order.register(memberId, courseId, 3, BigInteger.valueOf(10000L), "Test Course");
+        order.completePayment();
+        order.applyRefund(1, LocalDateTime.now());
+        ReflectionTestUtils.setField(order, "id", orderId);
+        ReflectionTestUtils.setField(order, "status", four_tential.potential.domain.order.OrderStatus.REFUND_PENDING);
+
+        Payment payment = createPaidPayment(paymentId, orderId, memberId, 30000L);
+        payment.partRefund();
+
+        given(paymentService.findByOrderId(orderId)).willReturn(Optional.of(payment));
+        given(paymentService.getByPgKeyForUpdate(payment.getPgKey())).willReturn(payment);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        given(refundService.getCompletedRefundTotal(paymentId)).willReturn(10000L);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, Payment.class).refund();
+            return null;
+        }).when(paymentService).refund(any(Payment.class));
+
+        Long result = refundFacade.processInstructorRefundTask(orderId);
+
+        assertThat(result).isEqualTo(20000L);
+        verify(refundService).createCompleted(payment, 20000L, 2, RefundReason.INSTRUCTOR);
+        verify(orderService).cancelOrderForInstructor(orderId);
+        verify(waitingListService).recoverCapacity(courseId, memberId, 2);
+
+        PaymentGatewayRequest gatewayRequest = captureGatewayRequest();
+        assertThat(gatewayRequest.amount()).isEqualTo(20000L);
+        assertThat(gatewayRequest.currentCancellableAmount()).isEqualTo(20000L);
+        assertThat(gatewayRequest.reason()).isEqualTo("INSTRUCTOR");
     }
 
     private void stubSuccessfulRefund(
