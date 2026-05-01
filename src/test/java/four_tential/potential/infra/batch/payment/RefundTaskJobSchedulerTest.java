@@ -18,6 +18,7 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -71,6 +72,20 @@ class RefundTaskJobSchedulerTest {
         given(refundTaskJob.getName()).willReturn("refundTaskJob");
         given(jobRepository.findRunningJobExecutions("refundTaskJob")).willReturn(Collections.emptySet());
         given(refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING)).willReturn(true);
+
+        refundTaskJobScheduler.runRefundTaskJob();
+
+        verify(jobOperator).start(eq(refundTaskJob), any(JobParameters.class));
+    }
+
+    @Test
+    @DisplayName("스케줄러 실행 중 예외가 나도 밖으로 던지지 않는다")
+    void runRefundTaskJob_swallows_exception_when_start_fails() throws Exception {
+        given(refundTaskJob.getName()).willReturn("refundTaskJob");
+        given(jobRepository.findRunningJobExecutions("refundTaskJob")).willReturn(Collections.emptySet());
+        given(refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING)).willReturn(true);
+        doThrow(new RuntimeException("start fail"))
+                .when(jobOperator).start(eq(refundTaskJob), any(JobParameters.class));
 
         refundTaskJobScheduler.runRefundTaskJob();
 
