@@ -2,6 +2,7 @@ package four_tential.potential.infra.ai.chatbot;
 
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
+import four_tential.potential.infra.security.principal.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -53,7 +56,7 @@ class ChatbotControllerTest {
     @Test
     @DisplayName("POST /v1/chatbot — 정상 질문이면 200 과 답변 반환")
     void ask_success() throws Exception {
-        when(chatbotService.ask("환불 기간이 어떻게 되나요"))
+        when(chatbotService.ask(any(MemberPrincipal.class), eq("환불 기간이 어떻게 되나요")))
                 .thenReturn("코스 시작 7일 전까지 환불 가능합니다.");
 
         mockMvc.perform(post("/v1/chatbot")
@@ -66,7 +69,7 @@ class ChatbotControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.answer").value("코스 시작 7일 전까지 환불 가능합니다."));
 
-        verify(chatbotService).ask("환불 기간이 어떻게 되나요");
+        verify(chatbotService).ask(any(MemberPrincipal.class), eq("환불 기간이 어떻게 되나요"));
     }
 
     @Test
