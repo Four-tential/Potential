@@ -116,10 +116,33 @@ portone:
   api-base: ${PORTONE_API_BASE:https://api.portone.io}
   sdk-timeout: ${PORTONE_SDK_TIMEOUT:10s}
 
+# LocalPaymentGatewayStub
 payment:
   gateway:
     stub:
       enabled: false
+
+# CircuitBreaker 설정
+resilience4j:
+  circuitbreaker:
+    instances:
+      portoneGetPayment:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+
+      portoneCancelPayment:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
 
 # Member - fallback: 로컬 환경변수 미설정 시 플레이스홀더 URL 사용
 member:

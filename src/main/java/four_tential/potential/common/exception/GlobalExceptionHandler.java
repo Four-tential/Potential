@@ -15,6 +15,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(ServiceErrorException.class)
     public ResponseEntity<BaseResponse<Void>> handleServiceErrorException(ServiceErrorException e) {
         log.error(e.getMessage(), e);

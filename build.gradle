@@ -148,6 +148,10 @@ dependencies {
     // ShedLock — 분산 스케줄러 락
     implementation 'net.javacrumbs.shedlock:shedlock-spring:7.7.0'
     implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:7.7.0'
+
+    // 서킷 브레이커 - resilience4j
+    implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.4.0'
 }
 
 // Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용
