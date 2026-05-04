@@ -31,7 +31,7 @@ public class RefundTaskJobScheduler {
 
     // Job1이 0분에 실행되면 Job2는 2분 후에 실행
     @Scheduled(cron = "0 2/5 * * * *")
-    @SchedulerLock(name = "refundTaskJobScheduler", lockAtMostFor = "1m")
+    @SchedulerLock(name = "refundTaskJobScheduler", lockAtMostFor = "5m", lockAtLeastFor = "4m")
     public void runRefundTaskJob() {
         try {
             // 이미 실행 중이면 중복 실행 방지

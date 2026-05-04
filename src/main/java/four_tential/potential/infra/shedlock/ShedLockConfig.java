@@ -1,4 +1,4 @@
-package four_tential.potential.infra.shedLock;
+package four_tential.potential.infra.shedlock;
 
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;

@@ -26,7 +26,7 @@ public class CourseCancelJobScheduler {
     private final Job courseCancelJob;
 
     @Scheduled(cron = "0 */5 * * * *")
-    @SchedulerLock(name = "courseCancelJobScheduler", lockAtMostFor = "1m")
+    @SchedulerLock(name = "courseCancelJobScheduler", lockAtMostFor = "5m", lockAtLeastFor = "4m")
     public void runCourseCancelJob() {
         try {
             boolean running = !jobRepository.findRunningJobExecutions(courseCancelJob.getName()).isEmpty();

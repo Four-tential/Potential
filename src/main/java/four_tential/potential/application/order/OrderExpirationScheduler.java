@@ -29,7 +29,7 @@ public class OrderExpirationScheduler {
      * 분산 환경에서 중복 실행을 방지하기 위해 Redisson 분산 락을 사용합니다.
      */
     @Scheduled(cron = "0 * * * * *")
-    @SchedulerLock(name = "orderExpirationScheduler", lockAtMostFor = "3m")
+    @SchedulerLock(name = "orderExpirationScheduler", lockAtMostFor = "3m", lockAtLeastFor = "55s")
     public void expireOrders() {
         RLock lock = redissonClient.getLock(LOCK_KEY);
 
