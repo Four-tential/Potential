@@ -221,15 +221,15 @@ class WaitingListServiceTest {
     @DisplayName("대기열에 성공적으로 추가된다")
     void addToWaitingList_success() {
         // given
-        given(waitingListSet.contains(memberId.toString())).willReturn(false);
-        given(waitingListSet.size()).willReturn(50);
-        
+        lenient().doReturn(1L).when(rScript).eval(any(), anyString(), any(), anyList(), any(), any(), any(), any(), any());
+
         // when
         waitingListService.addToWaitingList(courseId, memberId, 1);
 
         // then
-        verify(waitingListSet).add(anyDouble(), eq(memberId.toString()));
-        verify(countBucket).set(eq("1"), any(java.time.Duration.class));
+        // Lua 스크립트 실행 확인
+        verify(rScript).eval(eq(RScript.Mode.READ_WRITE), anyString(), eq(RScript.ReturnType.LONG), anyList(), 
+                eq(memberId.toString()), eq("1"), eq(String.valueOf(OrderConstants.MAX_WAITING_SIZE)), anyString(), anyString());
     }
 
     @Test
