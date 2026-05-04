@@ -33,8 +33,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -61,6 +59,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentFacadeTest {
@@ -721,6 +720,42 @@ class PaymentFacadeTest {
     }
 
     @Test
+    @DisplayName("Paid 웹훅 처리 중 course lock 안에서 좌석이 사라지면 결제를 취소한다")
+    void handleWebhook_paid_seatsDisappearInsideCourseLock_cancelGatewayPayment() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Payment payment = createPendingPayment(orderId, memberId, "payment-seats-race");
+        Order order = createOrder(orderId, memberId, courseId, 1);
+        Course course = createCourse(courseId);
+        ReflectionTestUtils.setField(course, "capacity", 2);
+        ReflectionTestUtils.setField(course, "confirmCount", 0);
+
+        given(paymentService.findByPgKey("payment-seats-race")).willReturn(Optional.of(payment));
+        given(paymentService.getByPgKeyForUpdate("payment-seats-race")).willReturn(payment);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(courseRepository.findById(courseId)).willReturn(Optional.of(course));
+        when(paymentLockExecutor.executeWithCourseLock(eq(courseId), any()))
+                .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get())
+                .thenReturn(false);
+
+        WebhookTransactionPaid verified =
+                new WebhookTransactionPaid(new TestWebhookTransactionData("payment-seats-race"));
+
+        paymentFacade.handleWebhook("{}", "test-webhook-id", verified);
+
+        verify(paymentService).fail(payment);
+        verify(paymentService, never()).confirmPaid(any());
+        verify(orderService, never()).completePayment(any());
+        verify(paymentGateway).cancelPayment(PaymentGatewayRequest.of(
+                "payment-seats-race",
+                100000L,
+                "NO_AVAILABLE_SEATS"
+        ));
+        verify(webhookService).failWebhook(eq(savedWebhook), eq("NO_AVAILABLE_SEATS"), anyString());
+    }
+
+    @Test
     @DisplayName("failed webhook marks the existing payment as failed")
     void handleWebhook_failed() throws Exception {
         Payment payment = createPendingPayment(UUID.randomUUID(), UUID.randomUUID(), "payment-2");
@@ -870,8 +905,15 @@ class PaymentFacadeTest {
                 PaymentStatus.PAID,
                 LocalDateTime.of(2025, 1, 1, 10, 0)
         );
-        Page<PaymentListResponse> page = new PageImpl<>(List.of(item), pageable, 1);
-        given(paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable)).willReturn(page);
+        PageResponse<PaymentListResponse> pageResponse = new PageResponse<>(
+                List.of(item),
+                0,
+                1,
+                1L,
+                10,
+                true
+        );
+        given(paymentService.getAllMyPayments(memberId, PaymentStatus.PAID, pageable)).willReturn(pageResponse);
 
         PageResponse<PaymentListResponse> result = paymentFacade.getAllMyPayments(memberId, PaymentStatus.PAID, pageable);
 

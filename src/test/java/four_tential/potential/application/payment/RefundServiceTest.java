@@ -1,5 +1,6 @@
 package four_tential.potential.application.payment;
 
+import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.Payment;
@@ -9,8 +10,8 @@ import four_tential.potential.domain.payment.enums.PaymentStatus;
 import four_tential.potential.domain.payment.enums.RefundReason;
 import four_tential.potential.domain.payment.enums.RefundStatus;
 import four_tential.potential.domain.payment.repository.PaymentRepository;
+import four_tential.potential.domain.payment.repository.RefundPreviewData;
 import four_tential.potential.domain.payment.repository.RefundRepository;
-import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.payment.dto.RefundDetailResponse;
 import four_tential.potential.presentation.payment.dto.RefundListResponse;
 import four_tential.potential.presentation.payment.dto.RefundPreviewResponse;
@@ -25,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +34,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -41,78 +44,103 @@ class RefundServiceTest {
     @InjectMocks
     private RefundService refundService;
 
-    @Mock private RefundRepository refundRepository;
-    @Mock private PaymentRepository paymentRepository;
+    @Mock
+    private RefundRepository refundRepository;
+
+    @Mock
+    private PaymentRepository paymentRepository;
 
     @Test
-    @DisplayName("코스 시작 7일 초과 남고 PAID 상태이면 refundable = true 를 반환한다")
-    void getRefundPreview_returns_refundable_true_when_over_7days() {
-        UUID memberId = UUID.randomUUID();
+    @DisplayName("getRefundPreview는 코스 시작이 환불 마감일 이후면 refundable=true를 반환한다")
+    void getRefundPreview_returns_refundable_true() {
         UUID paymentId = UUID.randomUUID();
-        Payment payment = createPaidPayment(paymentId, UUID.randomUUID(), memberId, 125000L);
-        LocalDateTime startAt = LocalDateTime.now().plusDays(8);
+        RefundPreviewData data = createRefundPreviewData(
+                paymentId,
+                PaymentStatus.PAID.name(),
+                125000L,
+                5,
+                BigInteger.valueOf(25000L)
+        );
 
         RefundPreviewResponse result = refundService.getRefundPreview(
-                payment, memberId, "소도구 필라테스 입문반", startAt, 5, 25000L);
+                data,
+                LocalDateTime.now().plusDays(8)
+        );
 
-        assertThat(result.refundable()).isTrue();
-        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 전 취소 · 환불 가능");
+        assertThat(result.paymentId()).isEqualTo(paymentId);
         assertThat(result.currentOrderCount()).isEqualTo(5);
         assertThat(result.unitPrice()).isEqualTo(25000L);
         assertThat(result.paidTotalPrice()).isEqualTo(125000L);
-        assertThat(result.paymentId()).isEqualTo(paymentId);
+        assertThat(result.refundable()).isTrue();
     }
 
     @Test
-    @DisplayName("코스 시작 7일 이하이면 refundable = false 를 반환한다")
-    void getRefundPreview_returns_refundable_false_when_within_7days() {
-        UUID memberId = UUID.randomUUID();
-        Payment payment = createPaidPayment(UUID.randomUUID(), UUID.randomUUID(), memberId, 125000L);
+    @DisplayName("getRefundPreview는 코스 시작이 환불 마감일 이내면 refundable=false를 반환한다")
+    void getRefundPreview_returns_refundable_false() {
+        RefundPreviewData data = createRefundPreviewData(
+                UUID.randomUUID(),
+                PaymentStatus.PAID.name(),
+                125000L,
+                5,
+                BigInteger.valueOf(25000L)
+        );
 
         RefundPreviewResponse result = refundService.getRefundPreview(
-                payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(6), 5, 25000L);
+                data,
+                LocalDateTime.now().plusDays(6)
+        );
 
         assertThat(result.refundable()).isFalse();
-        assertThat(result.refundPolicy()).isEqualTo("수강 일자 7일 이내 취소 · 환불 불가");
     }
 
     @Test
-    @DisplayName("타인의 결제이면 NOT_FOUND 예외가 발생한다")
-    void getRefundPreview_throws_when_not_owner() {
-        UUID owner = UUID.randomUUID();
-        UUID other = UUID.randomUUID();
-        Payment payment = createPaidPayment(UUID.randomUUID(), UUID.randomUUID(), owner, 125000L);
-
-        assertThatThrownBy(() -> refundService.getRefundPreview(
-                payment, other, "테스트 강좌", LocalDateTime.now().plusDays(10), 5, 25000L))
-                .isInstanceOf(ServiceErrorException.class)
-                .hasMessage(PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT.getMessage());
-    }
-
-    @Test
-    @DisplayName("PAID/PART_REFUNDED 가 아니면 환불 가능 상태 예외가 발생한다")
+    @DisplayName("getRefundPreview는 환불 가능한 결제 상태가 아니면 예외가 발생한다")
     void getRefundPreview_throws_when_payment_status_invalid() {
-        UUID memberId = UUID.randomUUID();
-        Payment payment = createPaymentWithStatus(UUID.randomUUID(), UUID.randomUUID(), memberId,
-                125000L, PaymentStatus.PENDING);
+        RefundPreviewData data = createRefundPreviewData(
+                UUID.randomUUID(),
+                PaymentStatus.PENDING.name(),
+                125000L,
+                5,
+                BigInteger.valueOf(25000L)
+        );
 
-        assertThatThrownBy(() -> refundService.getRefundPreview(
-                payment, memberId, "테스트 강좌", LocalDateTime.now().plusDays(10), 5, 25000L))
+        assertThatThrownBy(() -> refundService.getRefundPreview(data, LocalDateTime.now().plusDays(10)))
                 .isInstanceOf(ServiceErrorException.class)
                 .hasMessage(PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID.getMessage());
     }
 
     @Test
-    @DisplayName("PART_REFUNDED 상태도 환불 가능 상태로 인정한다")
+    @DisplayName("getRefundPreview는 priceSnap이 long 범위를 넘으면 예외가 발생한다")
+    void getRefundPreview_throws_when_unit_price_overflows_long() {
+        RefundPreviewData data = createRefundPreviewData(
+                UUID.randomUUID(),
+                PaymentStatus.PAID.name(),
+                125000L,
+                5,
+                BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)
+        );
+
+        assertThatThrownBy(() -> refundService.getRefundPreview(data, LocalDateTime.now().plusDays(10)))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(PaymentExceptionEnum.ERR_PAYMENT_AMOUNT_MISMATCH.getMessage());
+    }
+
+    @Test
+    @DisplayName("validateRefundablePaymentStatus는 PART_REFUNDED 상태를 허용한다")
     void validateRefundablePaymentStatus_accepts_part_refunded() {
-        Payment payment = createPaymentWithStatus(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                125000L, PaymentStatus.PART_REFUNDED);
+        Payment payment = createPaymentWithStatus(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                125000L,
+                PaymentStatus.PART_REFUNDED
+        );
 
         refundService.validateRefundablePaymentStatus(payment);
     }
 
     @Test
-    @DisplayName("성공한 환불 금액 합계를 조회한다")
+    @DisplayName("getCompletedRefundTotal은 저장소에서 COMPLETED 환불 합계를 조회한다")
     void getCompletedRefundTotal_returns_repository_sum() {
         UUID paymentId = UUID.randomUUID();
         given(refundRepository.sumRefundPriceByPaymentIdAndStatus(paymentId, RefundStatus.COMPLETED))
@@ -125,10 +153,10 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("성공 환불 이력을 COMPLETED 로 저장한다")
+    @DisplayName("createCompleted는 COMPLETED 환불 이력을 저장한다")
     void createCompleted_saves_completed_refund() {
         Payment payment = createPaidPayment(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 100000L);
-        given(refundRepository.save(org.mockito.ArgumentMatchers.any(Refund.class)))
+        given(refundRepository.save(any(Refund.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         Refund result = refundService.createCompleted(payment, 50000L, 2, RefundReason.CANCEL);
@@ -140,12 +168,12 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("실패 환불 이력을 FAILED 로 저장한다")
+    @DisplayName("createFailed는 FAILED 환불 이력을 저장한다")
     void createFailed_saves_failed_refund() {
         UUID paymentId = UUID.randomUUID();
         Payment payment = createPaidPayment(paymentId, UUID.randomUUID(), UUID.randomUUID(), 100000L);
         given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment));
-        given(refundRepository.save(org.mockito.ArgumentMatchers.any(Refund.class)))
+        given(refundRepository.save(any(Refund.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         Refund result = refundService.createFailed(paymentId, 50000L, 1, RefundReason.CANCEL);
@@ -156,14 +184,14 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("환불 단건 조회는 본인 환불 내역을 반환한다")
+    @DisplayName("getMyRefund는 회원 본인의 환불 상세를 반환한다")
     void getMyRefund_returns_detail() {
         UUID refundId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         RefundDetailResponse expected = new RefundDetailResponse(
                 refundId,
                 UUID.randomUUID(),
-                "소도구 필라테스 입문반",
+                "Test Course",
                 2,
                 50000L,
                 RefundReason.CANCEL,
@@ -179,7 +207,7 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("환불 단건 조회 대상이 없으면 NOT_FOUND_REFUND 예외가 발생한다")
+    @DisplayName("getMyRefund는 회원 본인의 환불이 아니면 예외가 발생한다")
     void getMyRefund_throws_when_not_found() {
         UUID refundId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -191,14 +219,14 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("환불 목록 조회는 PageResponse 로 감싸 반환한다")
+    @DisplayName("getAllMyRefunds는 저장소 결과를 PageResponse로 감싸서 반환한다")
     void getAllMyRefunds_returns_page_response() {
         UUID memberId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 10);
         RefundListResponse content = new RefundListResponse(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                "소도구 필라테스 입문반",
+                "Test Course",
                 1,
                 25000L,
                 RefundReason.CANCEL,
@@ -219,6 +247,25 @@ class RefundServiceTest {
         assertThat(result.size()).isEqualTo(10);
         assertThat(result.isLast()).isTrue();
         verify(refundRepository).findListByMemberIdAndStatus(memberId, RefundStatus.COMPLETED, pageable);
+    }
+
+    private RefundPreviewData createRefundPreviewData(
+            UUID paymentId,
+            String paymentStatusName,
+            long paidTotalPrice,
+            int currentOrderCount,
+            BigInteger priceSnap
+    ) {
+        return new RefundPreviewData(
+                paymentId,
+                UUID.randomUUID(),
+                paidTotalPrice,
+                paymentStatusName,
+                UUID.randomUUID(),
+                "Test Course",
+                currentOrderCount,
+                priceSnap
+        );
     }
 
     private Payment createPaidPayment(UUID paymentId, UUID orderId, UUID memberId, Long amount) {

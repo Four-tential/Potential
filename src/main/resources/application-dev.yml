@@ -23,9 +23,13 @@ spring:
       port: ${redis.port}
 
   # Flyway
+  # url 명시 필수 — pgvector DataSource 공존 시 Flyway가 잘못된 DataSource를 바라보는 문제 방지
   flyway:
     enabled: true
     baseline-on-migrate: true
+    url: jdbc:mysql://${db.host}:${db.port:3306}/${db.name}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    user: ${db.username}
+    password: ${db.password}
 
   # JPA
   jpa:
@@ -35,6 +39,50 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+
+  # Spring Batch
+  batch:
+    jdbc:
+      initialize-schema: never   # Flyway 로 직접 관리
+    job:
+      enabled: false             # 서버 시작 시 자동 실행 방지
+
+  # Spring AI
+  ai: # ChatClient 자동 구성 비활성화 (AiConfig에서 수동 생성)
+    chat:
+      client:
+        enabled: false
+
+    openai:
+      api-key: ${openai.api-key}   # AWS Parameter Store: /config/potential-dev/openai.api-key
+      chat:
+        options:
+          model: gpt-4.1-mini      # 비용 절감 이슈로 mini버전 — agent는 코드에서 override 가능(4.1 버전 등으로 품질 상향)
+          temperature: 0.7
+          max-tokens: 2000
+      embedding:
+        options:
+          model: text-embedding-3-small  # 1536차원
+
+    ollama:
+      chat:
+        options:
+          model: llama3.2          # dev에서는 @Profile("!ollama")이므로 실제로 사용 안 됨
+
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: hnsw
+        distance-type: cosine_distance
+        dimensions: 1536
+
+# PGVector DataSource — AWS Parameter Store에서 주입
+# Parameter Store 키: /config/potential-dev/pgvector.*
+pgvector:
+  datasource:
+    url: jdbc:postgresql://${pgvector.host}:${pgvector.port:5432}/${pgvector.db}
+    username: ${pgvector.username}
+    password: ${pgvector.password}
 
 # AWS S3
 aws:

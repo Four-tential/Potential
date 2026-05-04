@@ -14,7 +14,10 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "refunds")
+@Table(name = "refunds", indexes = {
+        @Index(name = "idx_refunds_payment_id_status", columnList = "payment_id, status")
+
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Refund extends BaseTimeEntity {
 

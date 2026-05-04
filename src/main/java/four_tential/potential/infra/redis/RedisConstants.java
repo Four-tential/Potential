@@ -45,4 +45,15 @@ public class RedisConstants {
 
     // Attendance 캐시
     public static final String ATTENDANCE_LIST_CACHE = "attendanceList";  // 출석 현황 캐시
+
+    // Course 캐시
+    public static final String COURSE_DETAIL_CACHE = "courseDetail";
+
+    // 결제 캐시
+    public static final String PAYMENT_DETAIL_CACHE = "paymentDetail";
+    public static final String PAYMENT_LIST_CACHE   = "paymentList";
+
+    // 환불 캐시
+    public static final String REFUND_DETAIL_CACHE  = "refundDetail";
+    public static final String REFUND_LIST_CACHE    = "refundList";
 }

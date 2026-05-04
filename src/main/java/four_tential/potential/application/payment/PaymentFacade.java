@@ -35,13 +35,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_GENERATION_MAX_RETRY;
+import static four_tential.potential.application.payment.consts.PaymentKeyConstants.PAYMENT_PG_KEY_PREFIX;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentFacade {
-
-    private static final String PAYMENT_PG_KEY_PREFIX = "p";
-    private static final int PAYMENT_PG_KEY_GENERATION_MAX_RETRY = 5;
 
     private final PaymentService paymentService;
     private final WebhookService webhookService;
@@ -64,6 +64,7 @@ public class PaymentFacade {
                 () -> createPaymentInOrderLock(memberId, request)
         );
 
+        paymentService.evictPaymentList();
         return PaymentCreateResponse.from(payment);
     }
 
@@ -78,7 +79,7 @@ public class PaymentFacade {
      * 결제 목록 조회
      */
     public PageResponse<PaymentListResponse> getAllMyPayments(UUID memberId, PaymentStatus status, Pageable pageable) {
-        return PageResponse.register(paymentService.getAllMyPayments(memberId, status, pageable));
+        return paymentService.getAllMyPayments(memberId, status, pageable);
     }
 
     /**
@@ -353,6 +354,10 @@ public class PaymentFacade {
 
         log.warn("[PORTONE_WEBHOOK] payment failed/cancelled. pgKey={} memberId={}", pgKey, payment.get().getMemberId());
         paymentService.fail(payment.get());
+
+        paymentService.evictPaymentDetail(payment.get().getId(), payment.get().getMemberId());
+        paymentService.evictPaymentList();
+
         return PaymentCancelDecision.none();
     }
 
@@ -361,52 +366,110 @@ public class PaymentFacade {
      * 결제창을 열기 전 검증과 별개로, 확정 직전에도 주문 상태와 좌석을 다시 확인한다.
      */
     private PaymentCancelDecision confirmPaidWebhook(String pgKey) {
+
+        // 1. course lock 밖에서 검증
         Payment payment = paymentService.getByPgKeyForUpdate(pgKey);
 
         if (payment.isPaid()) {
-            log.info("[PORTONE_WEBHOOK] already PAID. idempotent handling. pgKey={}", pgKey);
+            log.info("[PORTONE_WEBHOOK] 이미 PAID 상태 — 멱등 처리. pgKey={}", pgKey);
             return PaymentCancelDecision.none();
         }
 
         if (!payment.isPending()) {
-            log.warn(
-                    "[PORTONE_WEBHOOK] paid webhook received for non-pending payment. pgKey={} status={}",
-                    pgKey,
-                    payment.getStatus()
-            );
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_STATUS_INVALID");
+            log.warn("[PORTONE_WEBHOOK] PENDING이 아닌 결제에 Paid 웹훅 수신. pgKey={} status={}",
+                    pgKey, payment.getStatus());
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_STATUS_INVALID");
         }
 
         Order order = getOrder(payment.getOrderId());
         Course course = getCourse(order.getCourseId());
 
         if (!order.getMemberId().equals(payment.getMemberId())) {
-            log.error("[PORTONE_WEBHOOK] order member mismatch. pgKey={}", pgKey);
+            log.error("[PORTONE_WEBHOOK] 주문 회원 불일치. pgKey={}", pgKey);
             paymentService.fail(payment);
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_ORDER_MEMBER_MISMATCH");
-        }
-        if (order.getStatus() != OrderStatus.PENDING) {
-            log.warn("[PORTONE_WEBHOOK] invalid order status. pgKey={} orderStatus={}", pgKey, order.getStatus());
-            paymentService.fail(payment);
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "ORDER_STATUS_INVALID");
-        }
-        if (LocalDateTime.now().isAfter(order.getExpireAt())) {
-            log.warn("[PORTONE_WEBHOOK] payment deadline exceeded. pgKey={}", pgKey);
-            paymentService.fail(payment);
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
-        }
-        if (!hasAvailableSeats(order, course)) {
-            log.warn("[PORTONE_WEBHOOK] no available seats. pgKey={}", pgKey);
-            paymentService.fail(payment);
-            return PaymentCancelDecision.cancel(payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_ORDER_MEMBER_MISMATCH");
         }
 
+        if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn("[PORTONE_WEBHOOK] 주문 상태 불일치. pgKey={} orderStatus={}", pgKey, order.getStatus());
+            paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "ORDER_STATUS_INVALID");
+        }
+
+        if (LocalDateTime.now().isAfter(order.getExpireAt())) {
+            log.warn("[PORTONE_WEBHOOK] 결제 기한 초과. pgKey={}", pgKey);
+            paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "PAYMENT_DEADLINE_EXCEEDED");
+        }
+
+        // 잔여 자리 1차 확인 (course lock 밖, 낙관적 선확인)
+        if (!hasAvailableSeats(order, course)) {
+            log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음. pgKey={}", pgKey);
+            paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
+        }
+
+        // 2. course lock 안에서 confirmCount 변경만 처리
+        final UUID courseId = order.getCourseId();
+        final int orderCount = order.getOrderCount();
+
+        boolean seatsConfirmed = paymentLockExecutor.executeWithCourseLock(courseId, () -> {
+            Course freshCourse = getCourse(courseId);
+
+            // 잔여 자리 재확인 (최종 확정)
+            // course lock 밖에서 seatsConfirmed = false를 보고 한 번만 호출한다.
+            if (!hasAvailableSeats(freshCourse, orderCount)) {
+                log.warn("[PORTONE_WEBHOOK] 잔여 자리 없음 (course lock 내 재확인). pgKey={}", pgKey);
+                return false;
+            }
+
+            for (int i = 0; i < orderCount; i++) {
+                freshCourse.increaseConfirmCount();
+            }
+            return true;
+        });
+
+        // course lock 밖에서 결과 처리 — paymentService.fail() 은 여기서만 호출
+        if (!seatsConfirmed) {
+            paymentService.fail(payment);
+
+            paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+            paymentService.evictPaymentList();
+
+            return PaymentCancelDecision.cancel(
+                    payment.getPgKey(), payment.getPaidTotalPrice(), "NO_AVAILABLE_SEATS");
+        }
+
+        // 3. payment / order 상태 변경 (course lock 밖)
         paymentService.confirmPaid(payment);
         orderService.completePayment(order.getId());
-        increaseCourseConfirmCount(order, course);
         completeOccupyingSeatQuietly(order);
 
-        log.info("[PORTONE_WEBHOOK] payment confirmed. pgKey={} memberId={}", pgKey, payment.getMemberId());
+        paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
+        paymentService.evictPaymentList();
+
+        log.info("[PORTONE_WEBHOOK] 결제 확정 완료. pgKey={} memberId={}", pgKey, payment.getMemberId());
         return PaymentCancelDecision.none();
     }
 
@@ -423,6 +486,14 @@ public class PaymentFacade {
      */
     private boolean hasAvailableSeats(Order order, Course course) {
         return course.getConfirmCount() + order.getOrderCount() <= course.getCapacity();
+    }
+
+    /**
+     * course lock 안에서 사용하는 잔여 자리 확인 메서드.
+     * Order 객체 대신 orderCount(int) 를 직접 받는다.
+     */
+    private boolean hasAvailableSeats(Course course, int orderCount) {
+        return course.getConfirmCount() + orderCount <= course.getCapacity();
     }
 
     /**

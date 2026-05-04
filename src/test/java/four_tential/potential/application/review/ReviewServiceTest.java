@@ -17,9 +17,6 @@ import four_tential.potential.domain.review.review_like.ReviewLike;
 import four_tential.potential.domain.review.review_like.ReviewLikeRepository;
 import four_tential.potential.presentation.review.dto.response.ReviewLikeResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import four_tential.potential.common.dto.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -41,7 +38,6 @@ import static four_tential.potential.common.exception.domain.OrderExceptionEnum.
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +50,7 @@ class ReviewServiceTest {
     @Mock private OrderRepository orderRepository;
     @Mock private AttendanceRepository attendanceRepository;
     @Mock private ReviewCacheService reviewCacheService;
+    @Mock private four_tential.potential.infra.ai.review.ReviewSummaryService reviewSummaryService;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -140,6 +137,7 @@ class ReviewServiceTest {
             assertThat(response.rating()).isEqualTo(5);
             assertThat(response.content()).isEqualTo("좋아요");
             verify(reviewRepository).save(any(Review.class));
+            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
         }
 
         @Test
@@ -691,6 +689,59 @@ class ReviewServiceTest {
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
             assertThat(result.getReviewId()).isEqualTo(REVIEW_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("getSummary() - 코스 후기 요약 조회")
+    class GetSummaryTest {
+
+        @Test
+        @DisplayName("요약이 존재하면 courseId 와 summary 를 반환한다")
+        void getSummary_returnsSummary() {
+            // given
+            Course course = closedCourse(2);
+            try {
+                java.lang.reflect.Field f = Course.class.getDeclaredField("summary");
+                f.setAccessible(true);
+                f.set(course, "긍정적인 후기 요약입니다.");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+
+            // when
+            var response = reviewService.getSummary(COURSE_ID);
+
+            // then
+            assertThat(response.courseId()).isEqualTo(COURSE_ID);
+            assertThat(response.summary()).isEqualTo("긍정적인 후기 요약입니다.");
+        }
+
+        @Test
+        @DisplayName("요약이 null 이면 summary 가 null 로 반환된다")
+        void getSummary_returnsNullSummary() {
+            // given
+            Course course = closedCourse(2);
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+
+            // when
+            var response = reviewService.getSummary(COURSE_ID);
+
+            // then
+            assertThat(response.courseId()).isEqualTo(COURSE_ID);
+            assertThat(response.summary()).isNull();
+        }
+
+        @Test
+        @DisplayName("코스가 존재하지 않으면 ERR_REVIEW_NOT_FOUND 를 던진다")
+        void getSummary_throwsWhenCourseNotFound() {
+            // given
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> reviewService.getSummary(COURSE_ID))
+                    .isInstanceOf(ServiceErrorException.class);
         }
     }
 }

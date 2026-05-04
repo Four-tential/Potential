@@ -195,6 +195,22 @@ public class OrderService {
     }
 
     /**
+     * 강사 코스 취소 시 주문 status 를 REFUND_PENDING 로 변경
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = ORDER_DETAILS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = ORDER_LIST_CACHE, allEntries = true)
+    })
+    public long markRefundPendingOrdersByCourseId(UUID courseId) {
+        return orderRepository.bulkUpdateStatusByCourseId(
+                courseId,
+                List.of(OrderStatus.PAID, OrderStatus.CONFIRMED),
+                OrderStatus.REFUND_PENDING
+        );
+    }
+
+    /**
      * 만료된 주문 자동 만료 처리 (단일 배치)
      * 개별 주문 처리는 독립된 트랜잭션에서 수행하여 낙관적 락 충돌 시 배치가 롤백되지 않도록 합니다.
      */

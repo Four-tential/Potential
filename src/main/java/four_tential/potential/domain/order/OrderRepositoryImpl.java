@@ -180,4 +180,27 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
 
         return exists != null;
     }
+
+    @Override
+    public List<Order> findByCourseIdAndStatus(UUID courseId, OrderStatus orderStatus) {
+        return queryFactory
+                .selectFrom(order)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.eq(orderStatus)
+                )
+                .fetch();
+    }
+
+    @Override
+    public long bulkUpdateStatusByCourseId(UUID courseId, List<OrderStatus> fromStatuses, OrderStatus toStatus) {
+        return queryFactory
+                .update(order)
+                .set(order.status, toStatus)
+                .where(
+                        order.courseId.eq(courseId),
+                        order.status.in(fromStatuses)
+                )
+                .execute();
+    }
 }

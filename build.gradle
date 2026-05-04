@@ -20,8 +20,15 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-parameters'
 }
 
+// Spring AI 버전
+ext {
+    set('springAiVersion', '2.0.0-M4')
+}
+
 repositories {
     mavenCentral()
+    // Spring AI Milestone 버전은 milestone 레포에서만 제공
+    maven { url 'https://repo.spring.io/milestone' }
 }
 
 dependencies {
@@ -115,6 +122,35 @@ dependencies {
     // QR code
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.zxing:javase:3.5.3'
+
+    // Spring Batch
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+
+    // Spring AI
+    // OpenAI (dev/prod: @Profile("!ollama") 환경에서 활성화)
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
+    // Ollama (local: @Profile("ollama") 환경에서 활성화)
+    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+
+    // Chat Memory - Redis 기반 대화 기억 (챗봇 Agent용)
+    //implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-redis'
+
+    // PGVector — 임베딩 벡터 저장소 (PostgreSQL + pgvector)
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+
+    // RAG Advisor — QuestionAnswerAdvisor (벡터 검색 → 컨텍스트 주입)
+    implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
+
+    // PostgreSQL Driver — PGVector 전용 (메인 DB는 MySQL 유지)
+    runtimeOnly 'org.postgresql:postgresql'
+}
+
+// Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
 }
 
 tasks.named('test') {

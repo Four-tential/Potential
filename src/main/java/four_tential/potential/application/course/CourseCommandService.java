@@ -18,9 +18,11 @@ import four_tential.potential.presentation.course.model.response.CreateCourseReq
 import four_tential.potential.presentation.course.model.response.UpdateCourseResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import static four_tential.potential.infra.redis.RedisConstants.COURSE_DETAIL_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.INSTRUCTOR_PROFILE_CACHE;
 
 import java.util.List;
@@ -75,7 +77,10 @@ public class CourseCommandService {
         return CreateCourseRequestResponse.register(course, category.getCode());
     }
 
-    @CacheEvict(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#memberId")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#memberId"),
+            @CacheEvict(cacheNames = COURSE_DETAIL_CACHE, key = "#courseId")
+    })
     @Transactional
     public UpdateCourseResponse updateCourse(UUID memberId, UUID courseId, UpdateCourseRequest request) {
         InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)
@@ -145,7 +150,10 @@ public class CourseCommandService {
         courseRepository.delete(course);
     }
 
-    @CacheEvict(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#memberId")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = INSTRUCTOR_PROFILE_CACHE, key = "#memberId"),
+            @CacheEvict(cacheNames = COURSE_DETAIL_CACHE, key = "#courseId")
+    })
     @Transactional
     public void closeCourse(UUID memberId, UUID courseId) {
         InstructorMember instructorMember = instructorMemberRepository.findByMemberId(memberId)

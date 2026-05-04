@@ -70,6 +70,9 @@ public class SecurityConfig {
                 // Swagger, Actuator
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
 
+                // AI test
+                //.requestMatchers("/ai/test/**").permitAll()
+
                 // Auth
                 .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh").permitAll()
 
@@ -78,6 +81,9 @@ public class SecurityConfig {
 
                 // PortOne 클라이언트 설정값
                 .requestMatchers(HttpMethod.GET, "/v1/payments/portone-config").permitAll()
+
+                // 결제 테스트 페이지
+                .requestMatchers(HttpMethod.GET, "/payment-test.html").permitAll()
 
                 // Course
                 .requestMatchers(HttpMethod.GET, "/v1/courses", "/v1/courses/*").permitAll()
