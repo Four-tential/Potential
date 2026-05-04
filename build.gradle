@@ -144,6 +144,10 @@ dependencies {
 
     // PostgreSQL Driver — PGVector 전용 (메인 DB는 MySQL 유지)
     runtimeOnly 'org.postgresql:postgresql'
+
+    // 서킷 브레이커 - resilience4j
+    implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.4.0'
 }
 
 // Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용

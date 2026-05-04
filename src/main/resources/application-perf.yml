@@ -2,6 +2,7 @@ spring:
   flyway:
     locations: classpath:db/migration,classpath:db/migration-perf
 
+# LocalPaymentGatewayStub
 payment:
   gateway:
     stub:
