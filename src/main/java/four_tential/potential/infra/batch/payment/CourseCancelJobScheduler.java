@@ -4,7 +4,6 @@ import four_tential.potential.domain.payment.enums.CourseCancelOutboxStatus;
 import four_tential.potential.domain.payment.repository.CourseCancelOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.parameters.JobParameters;
