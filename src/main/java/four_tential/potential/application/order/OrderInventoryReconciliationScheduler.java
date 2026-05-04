@@ -2,6 +2,7 @@ package four_tential.potential.application.order;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,6 +28,7 @@ public class OrderInventoryReconciliationScheduler {
      * DB의 유효 주문을 기준으로 Redis의 잔여석을 주기적으로 동기화(Self-Healing)합니다.
      */
     @Scheduled(cron = "0 0/30 * * * *")
+    @SchedulerLock(name = "orderInventoryReconciliationScheduler", lockAtMostFor = "20m")
     public void reconcileAllInventories() {
         RLock lock = redissonClient.getLock(LOCK_KEY);
         try {

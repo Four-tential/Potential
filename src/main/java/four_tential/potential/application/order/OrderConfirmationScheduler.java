@@ -3,6 +3,7 @@ package four_tential.potential.application.order;
 import four_tential.potential.application.order.OrderService.OrderBatchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +29,7 @@ public class OrderConfirmationScheduler {
      * 분산 환경에서 중복 실행을 방지하기 위해 Redisson 분산 락을 사용합니다.
      */
     @Scheduled(cron = "0 10 0 * * *")
+    @SchedulerLock(name = "orderConfirmationScheduler", lockAtMostFor = "30m")
     public void confirmOrders() {
         RLock lock = redissonClient.getLock(LOCK_KEY);
 
