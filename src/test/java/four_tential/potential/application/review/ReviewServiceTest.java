@@ -129,6 +129,7 @@ class ReviewServiceTest {
                     .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
             when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(1L); // 첫 번째 후기
 
             // when
             ReviewResponse response = reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
@@ -138,6 +139,98 @@ class ReviewServiceTest {
             assertThat(response.content()).isEqualTo("좋아요");
             verify(reviewRepository).save(any(Review.class));
             verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+        }
+
+        @Test
+        @DisplayName("첫 번째 후기(count=1)이면 updateSummary 를 호출한다")
+        void create_firstReview_callsUpdateSummary() {
+            // given
+            Order order = confirmedOrder();
+            Course course = closedCourse(2);
+            Attendance attendance = attendedAttendance();
+
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
+            when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(1L);
+
+            // when
+            reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
+
+            // then
+            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+        }
+
+        @Test
+        @DisplayName("5의 배수 번째 후기(count=5)이면 updateSummary 를 호출한다")
+        void create_fifthReview_callsUpdateSummary() {
+            // given
+            Order order = confirmedOrder();
+            Course course = closedCourse(2);
+            Attendance attendance = attendedAttendance();
+
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
+            when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(5L);
+
+            // when
+            reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
+
+            // then
+            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+        }
+
+        @Test
+        @DisplayName("5의 배수 번째 후기(count=10)이면 updateSummary 를 호출한다")
+        void create_tenthReview_callsUpdateSummary() {
+            // given
+            Order order = confirmedOrder();
+            Course course = closedCourse(2);
+            Attendance attendance = attendedAttendance();
+
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
+            when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(10L);
+
+            // when
+            reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
+
+            // then
+            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+        }
+
+        @Test
+        @DisplayName("5의 배수가 아닌 중간 후기(count=3)이면 updateSummary 를 호출하지 않는다")
+        void create_middleReview_doesNotCallUpdateSummary() {
+            // given
+            Order order = confirmedOrder();
+            Course course = closedCourse(2);
+            Attendance attendance = attendedAttendance();
+
+            when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
+            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
+            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
+                    .thenReturn(Optional.of(attendance));
+            when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(false);
+            when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(reviewRepository.countByCourseId(COURSE_ID)).thenReturn(3L);
+
+            // when
+            reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
+
+            // then
+            verify(reviewSummaryService, never()).updateSummary(any(), any());
         }
 
         @Test

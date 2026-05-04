@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.scheduling.annotation.Async;
 
 @Slf4j
 @Service
@@ -37,6 +38,7 @@ public class ReviewSummaryService {
         this.updatePrompt = updatePrompt;
     }
 
+    @Async("reviewSummaryExecutor")
     @Transactional
     public void updateSummary(UUID courseId, String newReviewContent) {
         Course course = courseRepository.findById(courseId)

@@ -21,6 +21,7 @@ import four_tential.potential.presentation.review.dto.response.ReviewLikeRespons
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,7 @@ import java.util.UUID;
 import static four_tential.potential.common.exception.domain.ReviewExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.OrderExceptionEnum.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReviewService {
@@ -99,7 +101,13 @@ public class ReviewService {
         reviewRepository.save(review);
 
         reviewCacheService.evictAll(); // 후기 작성 시 캐시 무효화
-        reviewSummaryService.updateSummary(courseId, content); // 누적 요약 갱신
+
+        // 첫 번째 후기이거나 5의 배수일 때만 LLM 요약 갱신
+        long reviewCount = reviewRepository.countByCourseId(courseId);
+        if (reviewCount == 1 || reviewCount % 5 == 0) {
+            log.info("[후기 요약 갱신 조건 충족] courseId={}, reviewCount={}", courseId, reviewCount);
+            reviewSummaryService.updateSummary(courseId, content);
+        }
 
         // 이미지 저장
         List<ReviewImage> images = saveImages(review, imageUrls);
