@@ -49,7 +49,7 @@ public class WaitingListService {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
 
         // Lua 스크립트: 
-        // 1. 이미 점유 중인지 확인 (점유 중이면 성공 반환)
+        // 1. 이미 점유 중인지 확인 (점유 중이면 일반 점유자의 경우 중복 에러 반환)
         // 2. 대기열에 있는지 확인 (있으면 실패/중복 에러를 위해 특정 값 반환)
         // 3. 대기열이 비어있고 잔여석이 충분하면 차감 후 점유 등록
         // 4. 그 외 상황(잔여석 부족 등)은 대기열 진입 필요를 알림
@@ -61,13 +61,13 @@ public class WaitingListService {
                 "    local req = tonumber(ARGV[2]) " +
                 "    if cap >= req then " +
                 "      redis.call('decrby', KEYS[1], req) " +
-                "      redis.call('setex', KEYS[2], ARGV[4], ARGV[2]) " +
+                "      redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
                 "      return 1 " + // 승격자 점유 성공
                 "    else " +
                 "      return -1 " + // 승격자였으나 재고 부족 (삭제 필요)
                 "    end " +
                 "  end " +
-                "  return 1 " + // 일반 점유자 이미 존재
+                "  return -2 " + // 일반 점유자 이미 존재 -> 중복
                 "end " +
                 "if redis.call('zrank', KEYS[3], ARGV[1]) ~= false then return -2 end " + // 이미 대기 중
                 "if redis.call('zcard', KEYS[3]) > 0 then return 0 end " + // 대기열 존재함
@@ -75,7 +75,7 @@ public class WaitingListService {
                 "local req = tonumber(ARGV[2]) " +
                 "if cap >= req then " +
                 "  redis.call('decrby', KEYS[1], req) " +
-                "  redis.call('setex', KEYS[2], ARGV[4], ARGV[2]) " +
+                "  redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
                 "  return 1 " + // 즉시 점유 성공
                 "end " +
                 "return 0"; // 대기열 진입 필요
@@ -219,25 +219,41 @@ public class WaitingListService {
     /**
      * 대기열 진입 완료
      */
-    @DistributedLock(key = "'order:course:' + #courseId")
     public void addToWaitingList(UUID courseId, UUID memberId, int orderCount) {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
-        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
 
-        if (waitingList.contains(memberId.toString())) {
+        // Lua 스크립트 로직:
+        // 1. 이미 대기열에 있는지 확인
+        // 2. 대기열 크기 확인
+        // 3. 대기열 진입 및 수량 정보 저장
+        String script = 
+                "if redis.call('zrank', KEYS[1], ARGV[1]) ~= false then return -1 end " +
+                "if redis.call('zcard', KEYS[1]) >= tonumber(ARGV[3]) then return -2 end " +
+                "redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
+                "redis.call('zadd', KEYS[1], tonumber(ARGV[5]), ARGV[1]) " +
+                "return 1";
+
+        RScript rScript = redissonClient.getScript(StringCodec.INSTANCE);
+        Long result = rScript.eval(
+                RScript.Mode.READ_WRITE,
+                script,
+                RScript.ReturnType.LONG,
+                List.of(waitingKey, countKey),
+                memberId.toString(),
+                String.valueOf(orderCount),
+                String.valueOf(OrderConstants.MAX_WAITING_SIZE),
+                String.valueOf(Duration.ofHours(1).toSeconds()),
+                String.valueOf(System.currentTimeMillis())
+        );
+
+        if (result == -1) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
         }
-
-        if (waitingList.size() >= OrderConstants.MAX_WAITING_SIZE) {
+        if (result == -2) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_QUEUE_FULL);
         }
 
-        // 수량 정보 저장
-        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
-        redissonClient.getBucket(countKey, StringCodec.INSTANCE)
-                .set(String.valueOf(orderCount), Duration.ofHours(1));
-
-        waitingList.add(System.currentTimeMillis(), memberId.toString());
         log.info("대기열 진입 완료: courseId={}, memberId={}, 수량={}", courseId, memberId, orderCount);
     }
 
