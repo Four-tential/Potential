@@ -332,21 +332,21 @@ public class WaitingListService {
     /**
      * 특정 코스와 관련된 모든 Redis 데이터를 삭제합니다. (테스트 데이터 정리용)
      */
-    public void clearCourseRedisData(UUID courseId, List<UUID> memberIds) {
+    public void clearCourseRedisData(UUID courseId) {
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
 
         redissonClient.getAtomicLong(capacityKey).delete();
         redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE).delete();
 
-        for (UUID memberId : memberIds) {
-            String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
-            String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
-            redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE).delete();
-            redissonClient.getBucket(countKey, StringCodec.INSTANCE).delete();
-        }
-        
-        log.info("Redis 데이터 정리 완료: courseId={}, 정리된 회원 수={}", courseId, memberIds.size());
+        // 멤버별 점유 및 대기 수량 정보 일괄 삭제 (패턴 매칭 활용)
+        String occupancyPattern = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":*";
+        String countPattern = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":*";
+
+        redissonClient.getKeys().deleteByPattern(occupancyPattern);
+        redissonClient.getKeys().deleteByPattern(countPattern);
+
+        log.info("Redis 데이터 정리 완료: courseId={}", courseId);
     }
 
     /**
