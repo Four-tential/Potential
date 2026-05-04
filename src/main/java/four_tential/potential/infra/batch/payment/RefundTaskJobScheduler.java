@@ -4,6 +4,7 @@ import four_tential.potential.domain.payment.enums.RefundTaskStatus;
 import four_tential.potential.domain.payment.repository.RefundTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
@@ -30,6 +31,7 @@ public class RefundTaskJobScheduler {
 
     // Job1이 0분에 실행되면 Job2는 2분 후에 실행
     @Scheduled(cron = "0 2/5 * * * *")
+    @SchedulerLock(name = "refundTaskJobScheduler", lockAtMostFor = "1m")
     public void runRefundTaskJob() {
         try {
             // 이미 실행 중이면 중복 실행 방지

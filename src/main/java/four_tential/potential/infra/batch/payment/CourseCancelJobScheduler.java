@@ -4,6 +4,8 @@ import four_tential.potential.domain.payment.enums.CourseCancelOutboxStatus;
 import four_tential.potential.domain.payment.repository.CourseCancelOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.core.LockAssert;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
@@ -25,6 +27,7 @@ public class CourseCancelJobScheduler {
     private final Job courseCancelJob;
 
     @Scheduled(cron = "0 */5 * * * *")
+    @SchedulerLock(name = "courseCancelJobScheduler", lockAtMostFor = "1m")
     public void runCourseCancelJob() {
         try {
             boolean running = !jobRepository.findRunningJobExecutions(courseCancelJob.getName()).isEmpty();
