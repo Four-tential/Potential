@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -14,10 +16,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.contains;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,7 +62,7 @@ class DocumentEtlServiceTest {
             return true;
         }));
         verify(policyDocumentRepository, times(result.added())).save(any(PolicyDocument.class));
-        verify(vectorStore, never()).delete(anyString());
+        verify(vectorStore, never()).delete(any(Filter.Expression.class));
     }
 
     @Test
@@ -86,7 +86,7 @@ class DocumentEtlServiceTest {
         assertThat(secondRun.removed()).isZero();
 
         verify(vectorStore, never()).add(any());
-        verify(vectorStore, never()).delete(anyString());
+        verify(vectorStore, never()).delete(any(Filter.Expression.class));
         verify(policyDocumentRepository, never()).save(any());
         verify(policyDocumentRepository, never()).delete(any());
     }
@@ -100,7 +100,7 @@ class DocumentEtlServiceTest {
         ReloadResult result = service.loadPolicyDocuments();
 
         assertThat(result.removed()).isEqualTo(1);
-        verify(vectorStore).delete(contains("source == 'ghost-policy'"));
+        verify(vectorStore).delete(expectedFilter("ghost-policy"));
         verify(policyDocumentRepository).delete(orphan);
     }
 
@@ -113,8 +113,8 @@ class DocumentEtlServiceTest {
         ReloadResult result = service.loadPolicyDocuments();
 
         assertThat(result.updated()).isEqualTo(1);
-        verify(vectorStore).delete(contains("source == 'common-policy'"));
-        verify(vectorStore, never()).delete(contains("source == 'order-policy'"));
+        verify(vectorStore).delete(expectedFilter("common-policy"));
+        verify(vectorStore, never()).delete(expectedFilter("order-policy"));
         assertThat(staleMeta.getContentHash()).isNotEqualTo("stale-hash");
     }
 
@@ -124,7 +124,7 @@ class DocumentEtlServiceTest {
         PolicyDocument staleMeta = PolicyDocument.of("common-policy", "stale-hash", 3);
         when(policyDocumentRepository.findAll()).thenReturn(List.of(staleMeta));
         doThrow(new RuntimeException("벡터 저장소 일시 오류"))
-                .when(vectorStore).delete(anyString());
+                .when(vectorStore).delete(any(Filter.Expression.class));
 
         assertThatThrownBy(() -> service.loadPolicyDocuments())
                 .isInstanceOf(IllegalStateException.class)
@@ -188,5 +188,13 @@ class DocumentEtlServiceTest {
                 "splitByMarkdownHeader", String.class, String.class);
         method.setAccessible(true);
         return method.invoke(service, content, source);
+    }
+
+    private Filter.Expression expectedFilter(String source) {
+        FilterExpressionBuilder builder = new FilterExpressionBuilder();
+        return builder.and(
+                builder.eq("domain", "policy"),
+                builder.eq("source", source)
+        ).build();
     }
 }

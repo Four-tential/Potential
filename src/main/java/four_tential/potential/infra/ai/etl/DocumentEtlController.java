@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 @Tag(name = "정책 문서 ETL", description = "RAG 정책 문서 재적재 (관리자 전용)")
 @RestController
 @RequestMapping("/v1/admin/chatbot/policy-documents")
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DocumentEtlController {
 
     private final DocumentEtlService documentEtlService;
+    private final AtomicBoolean reloading = new AtomicBoolean(false);
 
     @Operation(
             summary = "정책 문서 재적재",
@@ -28,11 +31,21 @@ public class DocumentEtlController {
     @PostMapping("/reload")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BaseResponse<ReloadResult>> reload() {
-        ReloadResult result = documentEtlService.loadPolicyDocuments();
-        return ResponseEntity.ok(BaseResponse.success(
-                HttpStatus.OK.name(),
-                "정책 문서 재적재 완료",
-                result
-        ));
+        if (!reloading.compareAndSet(false, true)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(BaseResponse.fail(
+                    HttpStatus.CONFLICT.name(),
+                    "다른 재적재 작업이 이미 실행 중입니다"
+            ));
+        }
+        try {
+            ReloadResult result = documentEtlService.loadPolicyDocuments();
+            return ResponseEntity.ok(BaseResponse.success(
+                    HttpStatus.OK.name(),
+                    "정책 문서 재적재 완료",
+                    result
+            ));
+        } finally {
+            reloading.set(false);
+        }
     }
 }

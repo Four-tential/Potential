@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -106,7 +108,9 @@ public class DocumentEtlService {
                 if (filename == null) {
                     continue;
                 }
-                String source = filename.replace(".md", "");
+                String source = filename.endsWith(".md")
+                        ? filename.substring(0, filename.length() - ".md".length())
+                        : filename;
                 String content = resource.getContentAsString(StandardCharsets.UTF_8);
                 String hash = sha256(content);
                 result.put(source, new FilePayload(hash, content));
@@ -168,7 +172,12 @@ public class DocumentEtlService {
 
     private void deleteVectorChunksBySource(String source) {
         try {
-            vectorStore.delete("domain == '" + DOMAIN_POLICY + "' && source == '" + source + "'");
+            FilterExpressionBuilder builder = new FilterExpressionBuilder();
+            Filter.Expression filter = builder.and(
+                    builder.eq("domain", DOMAIN_POLICY),
+                    builder.eq("source", source)
+            ).build();
+            vectorStore.delete(filter);
         } catch (Exception e) {
             log.error("벡터 청크 삭제 실패 - source={}", source, e);
             throw new IllegalStateException("벡터 청크 삭제 실패: " + source, e);
