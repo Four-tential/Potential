@@ -88,14 +88,4 @@ public class OrderController {
         return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "주문 취소 요청 성공", response));
     }
 
-    /**
-     * 성능 테스트 데이터 일괄 삭제 (회원, 코스, 주문, Redis 대기열)
-     */
-    @DeleteMapping("/performance-test-data")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<BaseResponse<Void>> deletePerformanceTestData() {
-        orderFacade.deletePerformanceTestData();
-        return ResponseEntity.ok(BaseResponse.success(HttpStatus.OK.name(), "성능 테스트 데이터 삭제 성공", null));
-    }
-
 }
