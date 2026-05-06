@@ -16,6 +16,6 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
     List<Member> findAllByEmailStartingWith(String prefix);
 
     @Modifying
-    @Query("delete from Member m where m.email like :prefix%")
+    @Query("delete from Member m where m.email like concat(:prefix, '%')")
     void deleteByEmailStartingWith(@Param("prefix") String prefix);
 }

@@ -8,7 +8,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -59,8 +58,6 @@ public class JwtRepository {
 
         if (!keys.isEmpty()) {
             log.info("삭제할 리프레시 토큰 키 발견 (패턴: {}): {}개", pattern, keys.size());
-            // 디버깅을 위해 처음 5개 키만 로그 출력
-            keys.stream().limit(5).forEach(k -> log.info("삭제 대상 키 예시: {}", k));
             redisTemplate.delete(keys);
         } else {
             log.warn("삭제할 리프레시 토큰 키를 찾지 못했습니다 (패턴: {})", pattern);

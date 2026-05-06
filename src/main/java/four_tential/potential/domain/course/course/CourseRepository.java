@@ -24,6 +24,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, CourseQue
     List<Course> findAllByTitleStartingWith(String prefix);
 
     @Modifying
-    @Query("delete from Course c where c.title like :prefix%")
+    @Query("delete from Course c where c.title like concat(:prefix, '%')")
     void deleteByTitleStartingWith(@Param("prefix") String prefix);
 }
