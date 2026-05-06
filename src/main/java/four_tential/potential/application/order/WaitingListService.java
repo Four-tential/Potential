@@ -37,7 +37,7 @@ public class WaitingListService {
 
     /**
      * 잔여석 점유 시도 (Lua 스크립트 적용 버전)
-     * 락 없이 Redis 내부에서 원자적으로 실행되어 성능을 극대화함
+     * 락 없이 Redis 내부에서 원자적으로 실행되어 성능을 극대화하며, 승격자 처리 시 과승격 방지를 위해 원자적 승격 로직을 포함함
      */
     public boolean tryOccupyingSeat(UUID courseId, UUID memberId, int orderCount) {
         if (orderCount <= 0) {
@@ -47,58 +47,84 @@ public class WaitingListService {
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        String occupancyPrefix = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":";
+        String countPrefix = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":";
 
-        // Lua 스크립트: 
-        // 1. 이미 점유 중인지 확인 (점유 중이면 일반 점유자의 경우 중복 에러 반환)
-        // 2. 대기열에 있는지 확인 (있으면 실패/중복 에러를 위해 특정 값 반환)
-        // 3. 대기열이 비어있고 잔여석이 충분하면 차감 후 점유 등록
-        // 4. 그 외 상황(잔여석 부족 등)은 대기열 진입 필요를 알림
+        // Lua 스크립트 설명:
+        // 1. 점유 정보 확인
+        //    a. TOKEN_PROMOTED(승격자 티켓) 보유 시: 재고 확인 후 점유(1 반환) 또는 티켓 삭제 및 다음 대기자 승격 시도(ID 반환)
+        //    b. 이미 다른 점유(PENDING 등) 존재 시: 중복 에러(-2 반환)
+        // 2. 대기열 확인: 이미 대기 중이면 중복 에러(-2 반환)
+        // 3. 대기열 존재 시: 즉시 점유 불가, 대기열 진입 필요(0 반환)
+        // 4. 재고 확인 및 즉시 점유: 재고 충분 시 점유(1 반환), 부족 시 대기열 진입 필요(0 반환)
         String script = 
+                "local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
                 "if redis.call('exists', KEYS[2]) == 1 then " +
                 "  local val = redis.call('get', KEYS[2]) " +
                 "  if val == ARGV[3] then " + // TOKEN_PROMOTED
-                "    local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
                 "    local req = tonumber(ARGV[2]) " +
                 "    if cap >= req then " +
                 "      redis.call('decrby', KEYS[1], req) " +
                 "      redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
-                "      return 1 " + // 승격자 점유 성공
+                "      return '1' " +
                 "    else " +
-                "      return -1 " + // 승격자였으나 재고 부족 (삭제 필요)
+                "      redis.call('del', KEYS[2]) " +
+                "      local nextM = redis.call('zrange', KEYS[3], 0, 0)[1] " +
+                "      if nextM then " +
+                "        local ck = KEYS[5] .. nextM " +
+                "        local nr = tonumber(redis.call('get', ck) or '1') " +
+                "        if cap >= nr then " +
+                "          redis.call('zrem', KEYS[3], nextM) " +
+                "          redis.call('del', ck) " +
+                "          redis.call('setex', KEYS[4] .. nextM, tonumber(ARGV[5]), ARGV[3]) " +
+                "          return nextM " +
+                "        end " +
+                "      end " +
+                "      return '-1' " +
                 "    end " +
                 "  end " +
-                "  return -2 " + // 일반 점유자 이미 존재 -> 중복
+                "  return '-2' " +
                 "end " +
-                "if redis.call('zrank', KEYS[3], ARGV[1]) ~= false then return -2 end " + // 이미 대기 중
-                "if redis.call('zcard', KEYS[3]) > 0 then return 0 end " + // 대기열 존재함
-                "local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
+                "if redis.call('zrank', KEYS[3], ARGV[1]) ~= false then return '-2' end " +
+                "if redis.call('zcard', KEYS[3]) > 0 then return '0' end " +
                 "local req = tonumber(ARGV[2]) " +
                 "if cap >= req then " +
                 "  redis.call('decrby', KEYS[1], req) " +
                 "  redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
-                "  return 1 " + // 즉시 점유 성공
+                "  return '1' " +
                 "end " +
-                "return 0"; // 대기열 진입 필요
+                "return '0'";
 
         RScript rScript = redissonClient.getScript(StringCodec.INSTANCE);
-        Long result = rScript.eval(
+        Object result = rScript.eval(
                 RScript.Mode.READ_WRITE,
                 script,
-                RScript.ReturnType.LONG,
-                List.of(capacityKey, occupancyKey, waitingKey),
+                RScript.ReturnType.VALUE,
+                List.of(capacityKey, occupancyKey, waitingKey, occupancyPrefix, countPrefix),
                 memberId.toString(),
                 String.valueOf(orderCount),
                 OrderConstants.TOKEN_PROMOTED,
-                String.valueOf(Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES).toSeconds())
+                String.valueOf(Duration.ofMinutes(OrderConstants.PENDING_ORDER_EXPIRATION_MINUTES).toSeconds()),
+                String.valueOf(Duration.ofMinutes(OrderConstants.PROMOTION_EXPIRATION_MINUTES).toSeconds())
         );
 
-        if (result == 1) return true;
-        if (result == -1) {
-            redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE).delete();
-            promoteNextInWaitingList(courseId);
-            return false;
+        String resStr = (result != null) ? result.toString() : "0";
+
+        if ("1".equals(resStr)) return true;
+        if ("-2".equals(resStr)) throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
+        
+        // 결과가 ID인 경우 (사용자 실패로 인해 다음 대기자가 승격됨)
+        if (!"-1".equals(resStr) && !"0".equals(resStr)) {
+            UUID nextMemberId = UUID.fromString(resStr);
+            if (sseWaitingRoomRepository.find(courseId, nextMemberId).isEmpty()) {
+                log.warn("승격 대상 SSE 연결 없음. 다음 대기자 시도: courseId={}, memberId={}", courseId, nextMemberId);
+                promoteNextInWaitingList(courseId);
+            } else {
+                log.info("대기열 유저 승격: courseId={}, memberId={}", courseId, nextMemberId);
+                sseWaitingEventPublisher.publish(courseId, nextMemberId, 
+                        WaitingRoomEventResponse.promoted(courseId, nextMemberId));
+            }
         }
-        if (result == -2) throw new ServiceErrorException(OrderExceptionEnum.ERR_DUPLICATE_ORDER);
         
         return false;
     }
@@ -133,54 +159,48 @@ public class WaitingListService {
     }
 
     /**
-     * 대기열 다음 순번 승격 처리
+     * 대기열 다음 순번 승격 처리 (Lua 스크립트 적용)
      */
     private void promoteNextInWaitingList(UUID courseId) {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
-        
-        RScoredSortedSet<String> waitingList = redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE);
-        RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
+        String occupancyPrefix = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":";
+        String countPrefix = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":";
 
-        // 대기자가 있고, 최소 1개 이상의 자리가 있을 때만 승격
-        if (waitingList.isEmpty() || capacity.get() <= 0) {
-            return;
-        }
+        // Lua 스크립트:
+        // 1. 잔여석 확인
+        // 2. 대기열에서 가장 오래된 사람 확인(peek)
+        // 3. 해당 유저의 요구 수량 확인
+        // 4. 잔여석이 충분하면 대기열에서 제거 및 TOKEN_PROMOTED 점유 등록
+        String script = 
+                "local cap = tonumber(redis.call('get', KEYS[1]) or '0') " +
+                "if cap <= 0 then return nil end " +
+                "local nextMember = redis.call('zrange', KEYS[2], 0, 0)[1] " +
+                "if not nextMember then return nil end " +
+                "local countKey = KEYS[4] .. nextMember " +
+                "local req = tonumber(redis.call('get', countKey) or '1') " +
+                "if cap >= req then " +
+                "  redis.call('zrem', KEYS[2], nextMember) " +
+                "  redis.call('del', countKey) " +
+                "  local occupancyKey = KEYS[3] .. nextMember " +
+                "  redis.call('setex', occupancyKey, tonumber(ARGV[2]), ARGV[1]) " +
+                "  return nextMember " +
+                "end " +
+                "return nil";
 
-        String nextMemberIdStr = waitingList.first();
-        if (nextMemberIdStr != null) {
-            UUID nextMemberId = UUID.fromString(nextMemberIdStr);
+        RScript rScript = redissonClient.getScript(StringCodec.INSTANCE);
+        Object result = rScript.eval(
+                RScript.Mode.READ_WRITE,
+                script,
+                RScript.ReturnType.VALUE,
+                List.of(capacityKey, waitingKey, occupancyPrefix, countPrefix),
+                OrderConstants.TOKEN_PROMOTED,
+                String.valueOf(Duration.ofMinutes(OrderConstants.PROMOTION_EXPIRATION_MINUTES).toSeconds())
+        );
 
-            // 대기열 진입 시 저장했던 수량 정보 확인
-            String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + nextMemberId;
-            RBucket<String> countBucket = redissonClient.getBucket(countKey, StringCodec.INSTANCE);
-            String countStr = countBucket.get();
-
-            int requiredCount;
-            try {
-                requiredCount = (countStr != null) ? Integer.parseInt(countStr) : 1;
-                if (requiredCount <= 0) {
-                    throw new NumberFormatException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
-                }
-            } catch (NumberFormatException e) {
-                log.warn("유효하지 않은 대기 수량으로 대기자를 건너뜁니다. 이유: {}, courseId={}, memberId={}, raw={}", 
-                        e.getMessage(), courseId, nextMemberId, countStr);
-                waitingList.pollFirst();
-                countBucket.delete();
-                promoteNextInWaitingList(courseId);
-                return;
-            }
-
-            if (capacity.get() < requiredCount) {
-                log.info("다음 대기자 요구 수량({})이 잔여석({})보다 커서 승격을 보류합니다. courseId={}, memberId={}",
-                        requiredCount, capacity.get(), courseId, nextMemberId);
-                return;
-            }
-
-            // 조건이 맞으므로 대기열에서 완전히 꺼냄
-            waitingList.pollFirst();
-            countBucket.delete();
-
+        if (result != null) {
+            UUID nextMemberId = UUID.fromString(result.toString());
+            
             // SSE 연결 확인 (연결이 없으면 다음 대기자로 넘어감)
             if (sseWaitingRoomRepository.find(courseId, nextMemberId).isEmpty()) {
                 log.warn("승격 대상 SSE 연결 없음. 다음 대기자 시도: courseId={}, memberId={}", courseId, nextMemberId);
@@ -188,13 +208,7 @@ public class WaitingListService {
                 return;
             }
 
-            String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + nextMemberId;
-            RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
-            
-            // 승격 우선권 부여
-            occupancy.set(OrderConstants.TOKEN_PROMOTED, Duration.ofMinutes(OrderConstants.PROMOTION_EXPIRATION_MINUTES));
-            
-            log.info("대기열 유저 승격: courseId={}, memberId={}", courseId, nextMemberId);
+            log.info("대기열 유저 승격 (원자적): courseId={}, memberId={}", courseId, nextMemberId);
             
             // SSE 전송
             sseWaitingEventPublisher.publish(courseId, nextMemberId, 
@@ -222,16 +236,19 @@ public class WaitingListService {
     public void addToWaitingList(UUID courseId, UUID memberId, int orderCount) {
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
         String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
+        String sequenceKey = RedisConstants.WAITING_LIST_SEQUENCE_PREFIX + courseId;
 
         // Lua 스크립트 로직:
         // 1. 이미 대기열에 있는지 확인
         // 2. 대기열 크기 확인
-        // 3. 대기열 진입 및 수량 정보 저장
+        // 3. 시퀀스 증가를 통한 단조 증가 순번 획득 (동시 요청 순서 보장)
+        // 4. 대기열 진입 및 수량 정보 저장
         String script = 
                 "if redis.call('zrank', KEYS[1], ARGV[1]) ~= false then return -1 end " +
                 "if redis.call('zcard', KEYS[1]) >= tonumber(ARGV[3]) then return -2 end " +
+                "local seq = redis.call('incr', KEYS[3]) " +
                 "redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
-                "redis.call('zadd', KEYS[1], tonumber(ARGV[5]), ARGV[1]) " +
+                "redis.call('zadd', KEYS[1], seq, ARGV[1]) " +
                 "return 1";
 
         RScript rScript = redissonClient.getScript(StringCodec.INSTANCE);
@@ -239,12 +256,11 @@ public class WaitingListService {
                 RScript.Mode.READ_WRITE,
                 script,
                 RScript.ReturnType.LONG,
-                List.of(waitingKey, countKey),
+                List.of(waitingKey, countKey, sequenceKey),
                 memberId.toString(),
                 String.valueOf(orderCount),
                 String.valueOf(OrderConstants.MAX_WAITING_SIZE),
-                String.valueOf(Duration.ofHours(1).toSeconds()),
-                String.valueOf(System.currentTimeMillis())
+                String.valueOf(Duration.ofHours(1).toSeconds())
         );
 
         if (result == -1) {
@@ -346,14 +362,55 @@ public class WaitingListService {
     }
 
     /**
+     * 특정 코스의 현재 Redis 내 점유된 모든 좌석 수의 합을 계산합니다.
+     */
+    public int getSumOfOccupancies(UUID courseId) {
+        String prefix = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":";
+        String pattern = prefix + "*";
+        Iterable<String> keys = redissonClient.getKeys().getKeysByPattern(pattern);
+        int totalOccupied = 0;
+
+        for (String key : keys) {
+            RBucket<String> occupancyBucket = redissonClient.getBucket(key, StringCodec.INSTANCE);
+            String val = occupancyBucket.get();
+            if (val != null) {
+                if (OrderConstants.TOKEN_PROMOTED.equals(val)) {
+                    String memberId = key.substring(prefix.length());
+                    String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
+                    RBucket<String> countBucket = redissonClient.getBucket(countKey, StringCodec.INSTANCE);
+                    String countStr = countBucket.get();
+                    if (countStr != null) {
+                        try {
+                            totalOccupied += Integer.parseInt(countStr);
+                        } catch (NumberFormatException e) {
+                            totalOccupied += 1;
+                        }
+                    } else {
+                        totalOccupied += 1;
+                    }
+                } else {
+                    try {
+                        totalOccupied += Integer.parseInt(val);
+                    } catch (NumberFormatException e) {
+                        totalOccupied += 1;
+                    }
+                }
+            }
+        }
+        return totalOccupied;
+    }
+
+    /**
      * 특정 코스와 관련된 모든 Redis 데이터를 삭제합니다. (테스트 데이터 정리용)
      */
     public void clearCourseRedisData(UUID courseId) {
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
+        String sequenceKey = RedisConstants.WAITING_LIST_SEQUENCE_PREFIX + courseId;
 
         redissonClient.getAtomicLong(capacityKey).delete();
         redissonClient.getScoredSortedSet(waitingKey, StringCodec.INSTANCE).delete();
+        redissonClient.getAtomicLong(sequenceKey).delete();
 
         // 멤버별 점유 및 대기 수량 정보 일괄 삭제 (패턴 매칭 활용)
         String occupancyPattern = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":*";

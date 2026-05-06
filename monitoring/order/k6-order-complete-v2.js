@@ -3,20 +3,20 @@ import {check, sleep} from 'k6';
 import {Counter, Trend} from 'k6/metrics';
 
 /**
- * [테스트 설정]
- * 반복 테스트 속도를 높이기 위해 BATCH_SIZE를 키우고 시나리오 시간을 단축함
+ * [V2 테스트 설정]
+ * 100명의 유저가 동시에 진입하는 시나리오에 최적화됨
  */
 const CONFIG = {
-    VU_COUNT: parseInt(__ENV.VU_COUNT || '1200'),
+    VU_COUNT: parseInt(__ENV.VU_COUNT || '100'),
     COURSE_CAPACITY: parseInt(__ENV.COURSE_CAPACITY || '20'),
     BASE_URL: __ENV.BASE_URL || 'http://host.docker.internal:8080',
-    BATCH_SIZE: 100, // 배치 크기 확대 (Setup 시간 단축)
+    BATCH_SIZE: 50,
     TEST_ID: Date.now(),
-    // 매 테스트마다 고유한 유저 생성을 위해 접두사 변경
-    USER_PREFIX: 'p_' + (Date.now() % 100000),
+    // 매 테스트마다 고유한 유저 생성을 위해 TEST_ID 조합
+    USER_PREFIX: 'v2_' + (Date.now() % 100000),
 };
 
-// 커스텀 메트릭 정의
+// 커스텀 메트릭
 const metrics = {
     success: new Counter('order_success_count'),
     waiting: new Counter('order_waiting_count'),
@@ -30,31 +30,19 @@ const metrics = {
 };
 
 export const options = {
-    setupTimeout: '15m',
+    setupTimeout: '5m',
     scenarios: {
-        // 짧고 강력한 폭주 테스트 (락 병목 확인용)
-        surge_order: {
+        burst_100: {
             executor: 'per-vu-iterations',
             vus: CONFIG.VU_COUNT,
             iterations: 1,
             startTime: '0s',
             maxDuration: '1m',
         },
-        // 완만한 부하 테스트 (램핑 시간 단축)
-        ramping_order: {
-            executor: 'ramping-vus',
-            startVUs: 0,
-            stages: [
-                {duration: '30s', target: 200},
-                {duration: '1m', target: 500},
-                {duration: '30s', target: 0},
-            ],
-            startTime: '1m',
-        },
     },
     thresholds: {
         'order_success_count': [`count>=${Math.min(CONFIG.VU_COUNT, CONFIG.COURSE_CAPACITY)}`],
-        'http_req_failed': ['rate<0.05'],
+        'http_req_failed': ['rate<0.01'], // 1% 미만으로 엄격하게 관리
     },
 };
 
@@ -63,93 +51,71 @@ function formatLocalDateTime(date, offsetHours = 0) {
     return d.toISOString().split('.')[0];
 }
 
-// -------------------------------------------------------------------------
-// 1. Setup Phase: 유저 준비 및 코스 생성
-// -------------------------------------------------------------------------
 export function setup() {
-    console.log(`--- [시작] 테스트 환경 준비 (ID: ${CONFIG.TEST_ID}, PREFIX: ${CONFIG.USER_PREFIX}) ---`);
+    console.log(`--- [V2 시작] 100 VU 동시성 테스트 (ID: ${CONFIG.TEST_ID}, PREFIX: ${CONFIG.USER_PREFIX}) ---`);
 
     const adminToken = login('admin@admin.com', 'testTEST123!@#');
     const instructorToken = login('user2@user.com', 'testTEST123!@#');
-
     const baseTime = new Date(new Date().getTime() + (12 * 3600000));
 
-    console.log(`--- 코스 생성 시도 (Capa: ${CONFIG.COURSE_CAPACITY}) ---`);
     const createCourseRes = http.post(`${CONFIG.BASE_URL}/v1/course-requests`, JSON.stringify({
-        title: `성능 테스트 코스 ${CONFIG.TEST_ID}`,
-        description: '자동 생성된 테스트용 코스입니다.',
-        addressMain: '서울특별시 강남구 테헤란로',
-        addressDetail: 'k6 테스트 센터',
-        price: 50000,
+        title: `V2 성능 테스트 ${CONFIG.TEST_ID}`,
+        description: '100 VU 동시성 검증용 코스입니다.',
+        addressMain: '서울특별시 강남구',
+        addressDetail: 'V2 센터',
+        price: 30000,
         capacity: CONFIG.COURSE_CAPACITY,
         orderOpenAt: formatLocalDateTime(baseTime, 0),
         orderCloseAt: formatLocalDateTime(baseTime, 24),
         startAt: formatLocalDateTime(baseTime, 48),
         endAt: formatLocalDateTime(baseTime, 50),
         level: 'BEGINNER',
-        imageUrls: ['https://example.com/test.jpg']
+        imageUrls: ['https://example.com/v2.jpg']
     }), {headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${instructorToken}`}});
 
     if (createCourseRes.status !== 201) throw new Error(`코스 생성 실패: ${createCourseRes.status}`);
     const courseId = JSON.parse(createCourseRes.body).data.courseId;
 
-    // 코스 승인
     const approveRes = http.patch(`${CONFIG.BASE_URL}/v1/admin/course-requests/${courseId}`, JSON.stringify({action: 'APPROVE'}),
         {headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`}});
     if (approveRes.status !== 200) throw new Error(`코스 승인 실패: ${approveRes.status}`);
 
-    // 재고 초기화 (중요: 첫 요청 폭주 시 Lock 대기열 병목 방지)
     const reconcileRes = http.post(`${CONFIG.BASE_URL}/v1/admin/orders/inventory/reconcile?courseId=${courseId}`, null,
         {headers: {'Authorization': `Bearer ${adminToken}`}});
     if (reconcileRes.status !== 200) console.warn(`재고 초기화 경고: ${reconcileRes.status}`);
     else console.log(`--- Redis 재고 초기화 완료 (Capa: ${CONFIG.COURSE_CAPACITY}) ---`);
 
-    console.log(`--- 코스 준비 완료 (ID: ${courseId}) ---`);
-
-    console.log(`--- 학생 사용자 로그인/가입 시작 (Batch: ${CONFIG.BATCH_SIZE}) ---`);
+    console.log(`--- 유저 준비 중 (${CONFIG.VU_COUNT}명) ---`);
     const tokens = [];
     for (let i = 1; i <= CONFIG.VU_COUNT; i += CONFIG.BATCH_SIZE) {
         const signupReqs = [], loginReqs = [];
         for (let j = 0; j < CONFIG.BATCH_SIZE && (i + j) <= CONFIG.VU_COUNT; j++) {
             const email = `${CONFIG.USER_PREFIX}_${i + j}@example.com`, pw = 'Password123!@#';
             signupReqs.push({
-                method: 'POST',
-                url: `${CONFIG.BASE_URL}/v1/auth/signup`,
-                body: JSON.stringify({
-                    email, password: pw, name: `User${i + j}`, phone: `010-0000-${String(i + j).padStart(4, '0')}`
-                }),
+                method: 'POST', url: `${CONFIG.BASE_URL}/v1/auth/signup`,
+                body: JSON.stringify({email, password: pw, name: `V2User${i + j}`, phone: `010-2222-${String(i + j).padStart(4, '0')}`}),
                 params: {headers: {'Content-Type': 'application/json'}}
             });
             loginReqs.push({
-                method: 'POST',
-                url: `${CONFIG.BASE_URL}/v1/auth/login`,
+                method: 'POST', url: `${CONFIG.BASE_URL}/v1/auth/login`,
                 body: JSON.stringify({email, password: pw}),
                 params: {headers: {'Content-Type': 'application/json'}}
             });
         }
-
         http.batch(signupReqs);
         const responses = http.batch(loginReqs);
-
-        responses.forEach(r => {
-            if (r.status === 200) tokens.push(JSON.parse(r.body).data.accessToken);
-        });
-
-        if (i % 500 === 1) console.log(`진행 상황: ${Math.min(i + CONFIG.BATCH_SIZE - 1, CONFIG.VU_COUNT)}/${CONFIG.VU_COUNT} 완료`);
+        responses.forEach(r => { if (r.status === 200) tokens.push(JSON.parse(r.body).data.accessToken); });
     }
 
     if (tokens.length !== CONFIG.VU_COUNT) {
-        throw new Error(`--- [실패] 사용자 준비 부족: 목표 ${CONFIG.VU_COUNT}명 중 ${tokens.length}명만 로그인 성공 (로그인 실패율: ${(((CONFIG.VU_COUNT - tokens.length) / CONFIG.VU_COUNT) * 100).toFixed(2)}%) ---`);
+        throw new Error(`사용자 준비 실패: ${tokens.length}/${CONFIG.VU_COUNT} 성공`);
     }
 
     return {tokens, courseId, adminToken};
 }
 
-/**
- * [Teardown Phase] 테스트 종료 후 데이터 정리
- */
 export function teardown(data) {
-    console.log(`--- [종료] 테스트 데이터 정리 시작 (ID: ${CONFIG.TEST_ID}) ---`);
+    console.log(`--- [V2 종료] 테스트 데이터 정리 시작 (ID: ${CONFIG.TEST_ID}) ---`);
 
     const params = {
         headers: {
@@ -169,37 +135,15 @@ export function teardown(data) {
 }
 
 function login(email, password) {
-    const res = http.post(`${CONFIG.BASE_URL}/v1/auth/login`, JSON.stringify({
-        email, password
-    }), {headers: {'Content-Type': 'application/json'}});
+    const res = http.post(`${CONFIG.BASE_URL}/v1/auth/login`, JSON.stringify({email, password}), {headers: {'Content-Type': 'application/json'}});
     return JSON.parse(res.body).data.accessToken;
 }
 
-// -------------------------------------------------------------------------
-// 2. Main Run Phase
-// -------------------------------------------------------------------------
-let isFinished = false; // VU별로 상태를 추적
-
 export default function (data) {
-    // 1. 설정된 VU_COUNT를 벗어나는 가상 유저는 동작하지 않음
-    // 즉시 return하면 k6가 바로 다음 iteration을 시작하므로 긴 sleep을 주어 지표 오염 방지
-    if (__VU > CONFIG.VU_COUNT) {
-        sleep(60);
-        return;
-    }
-
-    // 2. 이미 주문 시도가 끝난 유저는 아주 긴 잠을 자서 지표 오염을 방지
-    if (isFinished) {
-        sleep(60);
-        return;
-    }
+    if (__VU > CONFIG.VU_COUNT) { sleep(10); return; }
 
     const token = data.tokens[__VU - 1];
-    // 3. 번호표(토큰)가 없는 유저는 에러를 내지 않고 조용히 퇴장
-    if (!token) {
-        isFinished = true;
-        return;
-    }
+    if (!token) return;
 
     const payload = JSON.stringify({courseId: data.courseId, orderCount: 1});
     const params = {headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, timeout: '30s'};
@@ -210,28 +154,17 @@ export default function (data) {
 
     metrics.duration.total.add(duration);
 
-    // 4. 응답 결과 분석
     if (res.status === 201) {
-        // [성공] 주문 완료
         metrics.success.add(1);
         metrics.duration.success.add(duration);
-        isFinished = true;
     } else if (res.status === 202) {
-        // [성공] 대기열 진입
         metrics.waiting.add(1);
         metrics.duration.waiting.add(duration);
-        isFinished = true;
     } else if (res.status === 400) {
-        // [성공적 거절] 이미 주문했거나 대기 중인 경우 (중복 요청)
-        // 서버는 정상 작동 중이므로 에러로 카운트하지 않고 종료
-        isFinished = true;
+        // 이미 주문했거나 대기 중인 정상 거절 케이스
     } else if (res.status === 503) {
-        // [잠시 거절] 대기열이 꽉 참 -> 잠시 쉬었다가 다시 시도
         metrics.queueFull.add(1);
-        sleep(0.5); 
     } else {
-        // [진짜 에러] 500, 404, 타임아웃 등 서버/네트워크 문제 (DB 저장 실패로 인한 롤백 포함)
         metrics.error.add(1);
-        isFinished = true; // 에러 발생 시 재시도하지 않고 완전히 종료하여 지표 오염 방지
     }
 }
