@@ -27,6 +27,58 @@ services:
     networks:
       network-potential:
 
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.74.0
+    container_name: redis-exporter-potential
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "127.0.0.1:9121:9121"
+    depends_on:
+      - redis
+    networks:
+      network-potential:
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    container_name: mysql-exporter-potential
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=${MYSQL_EXPORTER_USER}
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}
+    ports:
+      - "127.0.0.1:9104:9104"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      network-potential:
+
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: loki-potential
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      network-potential:
+
+  promtail:
+    image: grafana/promtail:3.3.0
+    container_name: promtail-potential
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - ./logs:/var/log/potential:ro
+    depends_on:
+      - loki
+    networks:
+      network-potential:
+
   prometheus:
     image: prom/prometheus:v3.1.0
     container_name: prometheus-potential
@@ -55,6 +107,7 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+      - loki
     networks:
       network-potential:
 
@@ -118,3 +171,4 @@ networks:
 
 volumes:
   grafana-data:
+  loki-data:
