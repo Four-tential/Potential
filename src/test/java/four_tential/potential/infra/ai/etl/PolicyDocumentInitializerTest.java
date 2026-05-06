@@ -23,7 +23,8 @@ class PolicyDocumentInitializerTest {
     @Test
     @DisplayName("run — 정상 적재 시 service.loadPolicyDocuments 호출")
     void run_invokes_load() {
-        when(documentEtlService.loadPolicyDocuments()).thenReturn(12);
+        when(documentEtlService.loadPolicyDocuments())
+                .thenReturn(new ReloadResult(8, 0, 0, 0, 24));
 
         initializer.run(new DefaultApplicationArguments());
 

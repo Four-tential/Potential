@@ -19,10 +19,11 @@ public class PolicyDocumentInitializer implements ApplicationRunner {
     @Override
     public void run(@NonNull ApplicationArguments args) {
         try {
-            int count = documentEtlService.loadPolicyDocuments();
-            log.info("정책 문서 초기 적재 완료 — {}개 청크", count);
+            ReloadResult result = documentEtlService.loadPolicyDocuments();
+            log.info("정책 문서 초기 적재 완료 - added={}, updated={}, unchanged={}, removed={}, totalChunks={}",
+                    result.added(), result.updated(), result.unchanged(), result.removed(), result.totalChunks());
         } catch (Exception e) {
-            log.error("정책 문서 초기 적재 실패 — 앱은 정상 기동됩니다", e);
+            log.error("정책 문서 초기 적재 실패 - 앱은 정상 기동됩니다", e);
         }
     }
 }
