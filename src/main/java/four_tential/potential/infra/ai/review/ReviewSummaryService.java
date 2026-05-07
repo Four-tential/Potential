@@ -39,7 +39,7 @@ public class ReviewSummaryService {
             @Value("classpath:ai/prompts/review-summary-init.st") Resource initPrompt,
             @Value("classpath:ai/prompts/review-summary-update.st") Resource updatePrompt,
             @Value("classpath:ai/prompts/review-summary-chunk.st") Resource chunkPrompt,
-            @Value("classpath:ai/prompts/review-summary-reduce.st.st") Resource reducePrompt
+            @Value("classpath:ai/prompts/review-summary-reduce.st") Resource reducePrompt
     ) {
         this.courseRepository = courseRepository;
         this.reviewChatClient = reviewChatClient;
