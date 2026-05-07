@@ -22,4 +22,12 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewRep
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.courseId = :courseId")
     Double findAverageRatingByCourseId(@Param("courseId") UUID courseId);
+
+    // 배치 재요약용 — 후기가 있는 코스 ID 목록 조회
+    @Query("SELECT DISTINCT r.courseId FROM Review r")
+    List<UUID> findDistinctCourseIds();
+
+    // 배치 재요약용 — 코스의 전체 후기 content 조회
+    @Query("SELECT r.content FROM Review r WHERE r.courseId = :courseId ORDER BY r.createdAt ASC")
+    List<String> findAllContentByCourseId(@Param("courseId") UUID courseId);
 }
