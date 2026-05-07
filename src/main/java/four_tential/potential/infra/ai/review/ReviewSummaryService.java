@@ -13,6 +13,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,20 +27,26 @@ public class ReviewSummaryService {
     private final ChatClient reviewChatClient;
     private final Resource initPrompt;
     private final Resource updatePrompt;
-    private final Resource batchPrompt;
+    private final Resource chunkPrompt;
+    private final Resource reducePrompt;
+
+    // 청크당 후기 수 (토큰 제한 고려)
+    private static final int CHUNK_SIZE = 100;
 
     public ReviewSummaryService(
             CourseRepository courseRepository,
             @Qualifier("reviewChatClient") ChatClient reviewChatClient,
             @Value("classpath:ai/prompts/review-summary-init.st") Resource initPrompt,
             @Value("classpath:ai/prompts/review-summary-update.st") Resource updatePrompt,
-            @Value("classpath:ai/prompts/review-summary-batch.st") Resource batchPrompt
+            @Value("classpath:ai/prompts/review-summary-chunk.st") Resource chunkPrompt,
+            @Value("classpath:ai/prompts/review-summary-reduce.st.st") Resource reducePrompt
     ) {
         this.courseRepository = courseRepository;
         this.reviewChatClient = reviewChatClient;
         this.initPrompt = initPrompt;
         this.updatePrompt = updatePrompt;
-        this.batchPrompt = batchPrompt;
+        this.chunkPrompt = chunkPrompt;
+        this.reducePrompt = reducePrompt;
     }
 
     @Async("reviewSummaryExecutor")
@@ -67,27 +74,58 @@ public class ReviewSummaryService {
     }
 
     /**
-     * 배치 재요약 — 전체 후기 원문을 LLM에 전달해 요약을 처음부터 다시 생성한다.
-     * 누적 갱신 방식의 왜곡 문제를 주기적으로 보정하기 위해 사용한다.
-     * @Async 없이 배치 스레드에서 동기 실행
+     * 배치 재요약 — Map-Reduce 방식
+     * 전체 후기를 CHUNK_SIZE개씩 나눠 중간 요약(Map) 후,
+     * 중간 요약들을 합쳐 최종 요약(Reduce)을 생성한다.
+     * 후기 수가 많아도 토큰 제한 없이 처리 가능하다.
      */
     @Transactional
     public void batchSummarize(UUID courseId, List<String> allContents) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        // 후기 목록을 번호 붙여 하나의 문자열로 결합
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < allContents.size(); i++) {
-            sb.append(i + 1).append(". ").append(allContents.get(i)).append("\n");
+        log.info("[배치 재요약] Map-Reduce 시작. courseId={}, 전체 후기={}건, 청크 크기={}",
+                courseId, allContents.size(), CHUNK_SIZE);
+
+        //  Map: CHUNK_SIZE개씩 중간 요약 생성
+        List<String> chunkSummaries = new ArrayList<>();
+        for (int i = 0; i < allContents.size(); i += CHUNK_SIZE) {
+            List<String> chunk = allContents.subList(i, Math.min(i + CHUNK_SIZE, allContents.size()));
+
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < chunk.size(); j++) {
+                sb.append(i + j + 1).append(". ").append(chunk.get(j)).append("\n");
+            }
+
+            String chunkSummary = reviewChatClient
+                    .prompt(new PromptTemplate(chunkPrompt).create(Map.of("reviews", sb.toString())))
+                    .call()
+                    .content();
+
+            chunkSummaries.add(chunkSummary);
+            log.info("[배치 재요약] 청크 요약 완료. courseId={}, 청크={}/{}",
+                    courseId, (i / CHUNK_SIZE) + 1, (int) Math.ceil((double) allContents.size() / CHUNK_SIZE));
         }
 
-        String updatedSummary = reviewChatClient
-                .prompt(new PromptTemplate(batchPrompt).create(Map.of("reviews", sb.toString())))
-                .call()
-                .content();
+        // Reduce: 중간 요약들을 합쳐 최종 요약 생성
+        String finalSummary;
+        if (chunkSummaries.size() == 1) {
+            // 청크가 1개면 Reduce 불필요
+            finalSummary = chunkSummaries.get(0);
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < chunkSummaries.size(); i++) {
+                sb.append(i + 1).append(". ").append(chunkSummaries.get(i)).append("\n");
+            }
 
-        log.info("[배치 재요약] 저장 완료. courseId={}, 후기 수={}건", courseId, allContents.size());
-        course.updateSummary(updatedSummary);
+            finalSummary = reviewChatClient
+                    .prompt(new PromptTemplate(reducePrompt).create(Map.of("summaries", sb.toString())))
+                    .call()
+                    .content();
+        }
+
+        log.info("[배치 재요약] 최종 요약 저장 완료. courseId={}, 청크 수={}",
+                courseId, chunkSummaries.size());
+        course.updateSummary(finalSummary);
     }
 }
