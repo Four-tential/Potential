@@ -1,6 +1,5 @@
 package four_tential.potential.infra.batch.review;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.job.Job;
@@ -13,14 +12,21 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ReviewSummaryBatchJobScheduler {
 
     private final JobOperator jobOperator;
     private final JobRepository jobRepository;
-
-    @Qualifier("reviewSummaryBatchJob")
     private final Job reviewSummaryBatchJob;
+
+    public ReviewSummaryBatchJobScheduler(
+            JobOperator jobOperator,
+            JobRepository jobRepository,
+            @Qualifier("reviewSummaryBatchJob") Job reviewSummaryBatchJob
+    ) {
+        this.jobOperator = jobOperator;
+        this.jobRepository = jobRepository;
+        this.reviewSummaryBatchJob = reviewSummaryBatchJob;
+    }
 
     /**
      * 매일 새벽 3시에 전체 후기 기반 배치 재요약 실행
