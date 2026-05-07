@@ -29,7 +29,7 @@ public class ReviewSummaryBatchJobConfig {
     private final ReviewRepository reviewRepository;
     private final ReviewSummaryService reviewSummaryService;
 
-    // 병렬 처리 스레드 수 - LLM API Rate Limit 고려
+    // 병렬 처리 스레드 수 — LLM API Rate Limit 고려
     private static final int THREAD_COUNT = 5;
 
     @Bean
@@ -42,7 +42,7 @@ public class ReviewSummaryBatchJobConfig {
 
     /**
      * Tasklet 방식으로 전체 후기 재요약 실행
-     * - chunk 방식 베제: 저장이 Processor 내부(@Transactional)에서 이뤄지므로 chunk 이점 없음
+     * - chunk 방식 제거: 저장이 Processor 내부(@Transactional)에서 이뤄지므로 chunk 이점 없음
      * - ForkJoinPool로 병렬 처리: LLM API Rate Limit 고려해 스레드 수 제한
      */
     @Bean
@@ -53,7 +53,7 @@ public class ReviewSummaryBatchJobConfig {
                     log.info("[배치 재요약] 대상 코스 수: {}건", courseIds.size());
 
                     ForkJoinPool pool = new ForkJoinPool(THREAD_COUNT);
-                    try {
+                    try (pool) {
                         pool.submit(() ->
                                 courseIds.parallelStream().forEach(courseId -> {
                                     List<String> contents = reviewRepository.findAllContentByCourseId(courseId);
@@ -70,8 +70,6 @@ public class ReviewSummaryBatchJobConfig {
                                     }
                                 })
                         ).get();
-                    } finally {
-                        pool.shutdown();
                     }
 
                     log.info("[배치 재요약] 전체 완료. 처리 코스 수={}건", courseIds.size());
