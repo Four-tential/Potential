@@ -3,6 +3,7 @@ package four_tential.potential.infra.ai.review;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.domain.review.review.ReviewSummaryItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -12,7 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 
 import java.util.Collections;
@@ -32,16 +33,18 @@ class ReviewSummaryServiceTest {
     @Mock private ChatClient reviewChatClient;
     @Mock private Course course;
 
-    private final Resource initPrompt   = new ClassPathResource("ai/prompts/review-summary-init.st");
-    private final Resource updatePrompt = new ClassPathResource("ai/prompts/review-summary-update.st");
-    private final Resource chunkPrompt  = new ClassPathResource("ai/prompts/review-summary-chunk.st");
-    private final Resource reducePrompt = new ClassPathResource("ai/prompts/review-summary-reduce.st");
+    // 실제 .st 파일 대신 인라인 템플릿 사용 — PromptTemplate 변수 검증 오류 방지
+    private final Resource initPrompt   = new ByteArrayResource("[긍정] {reviews}".getBytes());
+    private final Resource updatePrompt = new ByteArrayResource("[긍정] {existingSummary} {newReview}".getBytes());
+    private final Resource chunkPrompt  = new ByteArrayResource("[긍정] {reviews}".getBytes());
+    private final Resource reducePrompt = new ByteArrayResource("[긍정] {summaries}".getBytes());
 
     private ReviewSummaryService reviewSummaryService;
 
     private static final UUID   COURSE_ID       = UUID.randomUUID();
+    private static final int    NEW_RATING       = 5;
     private static final String NEW_REVIEW       = "강사님이 친절하고 설명이 명확했습니다.";
-    private static final String EXISTING_SUMMARY = "전반적으로 만족도가 높은 클래스입니다.";
+    private static final String EXISTING_SUMMARY = "[긍정] 전반적으로 만족도가 높은 클래스입니다.\n#친절한강사";
 
     @BeforeEach
     void setUp() {
@@ -84,17 +87,18 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("initPrompt 템플릿으로 LLM을 호출한다")
         void callsLlmWithInitPrompt() {
-            mockChatClientReturns("첫 요약 결과");
-            reviewSummaryService.updateSummary(COURSE_ID, NEW_REVIEW);
+            mockChatClientReturns("[긍정] 첫 요약 결과\n#친절한강사");
+            reviewSummaryService.updateSummary(COURSE_ID, NEW_RATING, NEW_REVIEW);
             verify(reviewChatClient).prompt(any(Prompt.class));
         }
 
         @Test
         @DisplayName("LLM 응답으로 course.updateSummary()를 호출한다")
         void updatesCourseSummary() {
-            mockChatClientReturns("첫 요약 결과");
-            reviewSummaryService.updateSummary(COURSE_ID, NEW_REVIEW);
-            verify(course).updateSummary("첫 요약 결과");
+            String llmResponse = "[긍정] 첫 요약 결과\n#친절한강사";
+            mockChatClientReturns(llmResponse);
+            reviewSummaryService.updateSummary(COURSE_ID, NEW_RATING, NEW_REVIEW);
+            verify(course).updateSummary(llmResponse);
         }
     }
 
@@ -111,17 +115,18 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("updatePrompt 템플릿으로 LLM을 호출한다")
         void callsLlmWithUpdatePrompt() {
-            mockChatClientReturns("갱신된 요약 결과");
-            reviewSummaryService.updateSummary(COURSE_ID, NEW_REVIEW);
+            mockChatClientReturns("[긍정] 갱신된 요약\n#친절한강사");
+            reviewSummaryService.updateSummary(COURSE_ID, NEW_RATING, NEW_REVIEW);
             verify(reviewChatClient).prompt(any(Prompt.class));
         }
 
         @Test
         @DisplayName("LLM 응답으로 course.updateSummary()를 호출한다")
         void updatesCourseSummary() {
-            mockChatClientReturns("갱신된 요약");
-            reviewSummaryService.updateSummary(COURSE_ID, NEW_REVIEW);
-            verify(course).updateSummary("갱신된 요약");
+            String llmResponse = "[긍정] 갱신된 요약\n#친절한강사";
+            mockChatClientReturns(llmResponse);
+            reviewSummaryService.updateSummary(COURSE_ID, NEW_RATING, NEW_REVIEW);
+            verify(course).updateSummary(llmResponse);
         }
     }
 
@@ -134,7 +139,7 @@ class ReviewSummaryServiceTest {
         void throwsWhenCourseNotFound() {
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> reviewSummaryService.updateSummary(COURSE_ID, NEW_REVIEW))
+            assertThatThrownBy(() -> reviewSummaryService.updateSummary(COURSE_ID, NEW_RATING, NEW_REVIEW))
                     .isInstanceOf(ServiceErrorException.class);
 
             verify(reviewChatClient, never()).prompt(any(Prompt.class));
@@ -155,22 +160,28 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("LLM을 1번만 호출하고 Reduce 없이 저장한다")
         void callsLlmOnceWithoutReduce() {
-            List<String> contents = List.of("후기1", "후기2", "후기3", "후기4", "후기5");
-            mockChatClientReturns("청크 요약 결과");
+            List<ReviewSummaryItem> items = List.of(
+                    new ReviewSummaryItem(5, "좋아요"),
+                    new ReviewSummaryItem(4, "만족해요"),
+                    new ReviewSummaryItem(3, "보통이에요"),
+                    new ReviewSummaryItem(2, "별로에요"),
+                    new ReviewSummaryItem(1, "나빠요")
+            );
+            mockChatClientReturns("[긍정] 청크 요약 결과\n#친절한강사");
 
-            reviewSummaryService.batchSummarize(COURSE_ID, contents);
+            reviewSummaryService.batchSummarize(COURSE_ID, items);
 
             verify(reviewChatClient, times(1)).prompt(any(Prompt.class));
-            verify(course).updateSummary("청크 요약 결과");
+            verify(course).updateSummary("[긍정] 청크 요약 결과\n#친절한강사");
         }
 
         @Test
         @DisplayName("정확히 100건이면 청크 1개 — Reduce 없이 LLM 1번 호출한다")
         void exactly100ReviewsNoReduce() {
-            List<String> contents = Collections.nCopies(100, "후기 내용");
-            mockChatClientReturns("청크 요약");
+            List<ReviewSummaryItem> items = Collections.nCopies(100, new ReviewSummaryItem(5, "후기 내용"));
+            mockChatClientReturns("[긍정] 청크 요약");
 
-            reviewSummaryService.batchSummarize(COURSE_ID, contents);
+            reviewSummaryService.batchSummarize(COURSE_ID, items);
 
             verify(reviewChatClient, times(1)).prompt(any(Prompt.class));
         }
@@ -180,7 +191,8 @@ class ReviewSummaryServiceTest {
         void throwsWhenCourseNotFound() {
             when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> reviewSummaryService.batchSummarize(COURSE_ID, List.of("후기1")))
+            assertThatThrownBy(() -> reviewSummaryService.batchSummarize(
+                    COURSE_ID, List.of(new ReviewSummaryItem(5, "후기1"))))
                     .isInstanceOf(ServiceErrorException.class);
 
             verify(reviewChatClient, never()).prompt(any(Prompt.class));
@@ -199,10 +211,10 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("101건이면 Map 2번 + Reduce 1번 = LLM 3번 호출한다")
         void oneOverChunkSizeCallsReduce() {
-            List<String> contents = Collections.nCopies(101, "후기 내용");
-            mockChatClientAlwaysReturns("요약");
+            List<ReviewSummaryItem> items = Collections.nCopies(101, new ReviewSummaryItem(5, "후기 내용"));
+            mockChatClientAlwaysReturns("[긍정] 요약");
 
-            reviewSummaryService.batchSummarize(COURSE_ID, contents);
+            reviewSummaryService.batchSummarize(COURSE_ID, items);
 
             verify(reviewChatClient, times(3)).prompt(any(Prompt.class));
         }
@@ -210,10 +222,10 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("250건이면 Map 3번 + Reduce 1번 = LLM 4번 호출한다")
         void twoFiftyReviewsCallsLlmFourTimes() {
-            List<String> contents = Collections.nCopies(250, "후기 내용");
-            mockChatClientAlwaysReturns("요약");
+            List<ReviewSummaryItem> items = Collections.nCopies(250, new ReviewSummaryItem(4, "후기 내용"));
+            mockChatClientAlwaysReturns("[긍정] 요약");
 
-            reviewSummaryService.batchSummarize(COURSE_ID, contents);
+            reviewSummaryService.batchSummarize(COURSE_ID, items);
 
             verify(reviewChatClient, times(4)).prompt(any(Prompt.class));
         }
@@ -221,12 +233,12 @@ class ReviewSummaryServiceTest {
         @Test
         @DisplayName("최종 요약으로 course.updateSummary()를 호출한다")
         void savesFinalSummary() {
-            List<String> contents = Collections.nCopies(101, "후기 내용");
-            mockChatClientAlwaysReturns("최종 요약");
+            List<ReviewSummaryItem> items = Collections.nCopies(101, new ReviewSummaryItem(5, "후기 내용"));
+            mockChatClientAlwaysReturns("[긍정] 최종 요약\n#친절한강사");
 
-            reviewSummaryService.batchSummarize(COURSE_ID, contents);
+            reviewSummaryService.batchSummarize(COURSE_ID, items);
 
-            verify(course).updateSummary("최종 요약");
+            verify(course).updateSummary("[긍정] 최종 요약\n#친절한강사");
         }
     }
 }
