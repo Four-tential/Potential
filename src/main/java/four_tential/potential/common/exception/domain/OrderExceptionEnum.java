@@ -23,6 +23,7 @@ public enum OrderExceptionEnum implements ServiceErrorCode {
     ERR_INVALID_ORDER_COUNT(HttpStatus.BAD_REQUEST, "주문 수량은 1개 이상이어야 합니다"),
     ERR_LOCK_INTERRUPTED(HttpStatus.INTERNAL_SERVER_ERROR, "락 획득 중 인터럽트가 발생했습니다"),
     ERR_LOCK_ACQUISITION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "락을 획득하지 못했습니다"),
+    ERR_NON_PROD_ONLY(HttpStatus.FORBIDDEN, "비운영 환경에서만 제공되는 기능입니다"),
     ERR_SYSTEM_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "시스템 내부 오류가 발생했습니다")
     ;
 
