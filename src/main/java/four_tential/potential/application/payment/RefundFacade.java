@@ -73,24 +73,30 @@ public class RefundFacade {
         long startedAt = System.nanoTime();
         String result = "success";
 
-        // 락을 잡기 전에 먼저 조회해서 pgKey와 courseId를 알아둔다
-        Order order = getOrder(orderId);
-        Payment payment = getPaymentByOrderId(orderId);
-        log.info(
-                "[PORTONE_REFUND] refund requested. orderId={} paymentId={} pgKey={} memberId={} cancelCount={}",
-                orderId,
-                payment.getId(),
-                payment.getPgKey(),
-                memberId,
-                cancelCount
-        );
+        Order order = null;
+        Payment payment = null;
 
         try {
+            // 락을 잡기 전에 먼저 조회해서 pgKey와 courseId를 알아둔다
+            order = getOrder(orderId);
+            payment = getPaymentByOrderId(orderId);
+            UUID courseId = order.getCourseId();
+            String pgKey = payment.getPgKey();
+
+            log.info(
+                    "[PORTONE_REFUND] refund requested. orderId={} paymentId={} pgKey={} memberId={} cancelCount={}",
+                    orderId,
+                    payment.getId(),
+                    pgKey,
+                    memberId,
+                    cancelCount
+            );
+
             // pgKey 기준 분산락 적용
-            return paymentLockExecutor.executeWithPgKeyLock(payment.getPgKey(), () ->
+            return paymentLockExecutor.executeWithPgKeyLock(pgKey, () ->
                     // courseId 기준 분산락 적용 - 코스의 confirmCount를 동시에 줄이는 충돌 방지
-                    paymentLockExecutor.executeWithCourseLock(order.getCourseId(), () ->
-                            refundInLock(memberId, orderId, cancelCount, payment.getPgKey())
+                    paymentLockExecutor.executeWithCourseLock(courseId, () ->
+                            refundInLock(memberId, orderId, cancelCount, pgKey)
                     )
             );
         } catch (RuntimeException e) {
@@ -98,8 +104,8 @@ public class RefundFacade {
             log.warn(
                     "[PORTONE_REFUND] refund failed. orderId={} paymentId={} pgKey={} memberId={} cancelCount={} reason={}",
                     orderId,
-                    payment.getId(),
-                    payment.getPgKey(),
+                    payment != null ? payment.getId() : null,
+                    payment != null ? payment.getPgKey() : "unknown",
                     memberId,
                     cancelCount,
                     e.getClass().getSimpleName(),
