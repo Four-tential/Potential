@@ -129,7 +129,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "mysql_up{release=\"$release\"}",
+          "expr": "mysql_up{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -209,7 +209,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "mysql_global_status_uptime{release=\"$release\"}",
+          "expr": "mysql_global_status_uptime{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -265,14 +265,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "mysql_global_status_max_used_connections{release=\"$release\"}",
+          "expr": "mysql_global_status_max_used_connections{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "current",
           "refId": "A"
         },
         {
-          "expr": "mysql_global_variables_max_connections{release=\"$release\"}",
+          "expr": "mysql_global_variables_max_connections{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Max",
@@ -374,14 +374,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(mysql_global_status_innodb_data_reads{release=\"$release\"}[10m])",
+          "expr": "irate(mysql_global_status_innodb_data_reads{instance=~\"$instance\"}[10m])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "reads",
           "refId": "A"
         },
         {
-          "expr": "irate(mysql_global_status_innodb_data_writes{release=\"$release\"}[10m])",
+          "expr": "irate(mysql_global_status_innodb_data_writes{instance=~\"$instance\"}[10m])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "write",
@@ -470,14 +470,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(mysql_global_status_bytes_received{release=\"$release\"}[5m])",
+          "expr": "irate(mysql_global_status_bytes_received{instance=~\"$instance\"}[5m])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "received",
           "refId": "A"
         },
         {
-          "expr": "irate(mysql_global_status_bytes_sent{release=\"$release\"}[5m])",
+          "expr": "irate(mysql_global_status_bytes_sent{instance=~\"$instance\"}[5m])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "sent",
@@ -561,10 +561,10 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(mysql_global_status_commands_total{release=\"$release\"}[5m]) > 0",
+          "expr": "irate(mysql_global_status_commands_total{instance=~\"$instance\"}[5m]) > 0",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "{{ command }} - {{ release }}",
+          "legendFormat": "{{ command }} - {{ instance }}",
           "refId": "A"
         }
       ],
@@ -645,7 +645,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "mysql_global_status_threads_running{release=\"$release\"} ",
+          "expr": "mysql_global_status_threads_running{instance=~\"$instance\"} ",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -743,7 +743,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "mysql_global_status_aborted_clients{release=\"$release\"}",
+          "expr": "mysql_global_status_aborted_clients{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "B"
@@ -827,7 +827,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "mysql_global_status_aborted_connects{release=\"$release\"}",
+          "expr": "mysql_global_status_aborted_connects{instance=~\"$instance\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "",
@@ -924,14 +924,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(mysql_info_schema_table_size{component=\"data_length\",release=\"$release\"})",
+          "expr": "sum(mysql_info_schema_table_size{component=\"data_length\",instance=~\"$instance\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Tables",
           "refId": "A"
         },
         {
-          "expr": "sum(mysql_info_schema_table_size{component=\"index_length\",release=\"$release\"})",
+          "expr": "sum(mysql_info_schema_table_size{component=\"index_length\",instance=~\"$instance\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Indexes",
@@ -1015,7 +1015,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(mysql_info_schema_table_rows{release=\"$release\"})",
+          "expr": "sum(mysql_info_schema_table_rows{instance=~\"$instance\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1079,9 +1079,9 @@
         "includeAll": false,
         "label": null,
         "multi": false,
-        "name": "release",
+        "name": "instance",
         "options": [],
-        "query": "label_values(mysql_up,release)",
+        "query": "label_values(mysql_up, instance)",
         "refresh": 1,
         "regex": "",
         "sort": 0,

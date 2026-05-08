@@ -1567,7 +1567,7 @@
       },
       "id": 110,
       "panels": [],
-      "repeat": "persistence_counts",
+      "repeat": "jvm_memory_pool_heap",
       "title": "JVM Memory Pools (Heap)",
       "type": "row"
     },
