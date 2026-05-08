@@ -73,6 +73,7 @@ services:
     command: -config.file=/etc/promtail/promtail.yml
     volumes:
       - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - promtail-data:/var/lib/promtail
       - ./logs:/var/log/potential:ro
     depends_on:
       - loki
@@ -174,3 +175,4 @@ networks:
 volumes:
   grafana-data:
   loki-data:
+  promtail-data:
