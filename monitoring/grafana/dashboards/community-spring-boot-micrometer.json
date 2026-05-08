@@ -889,7 +889,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "(process_memory_pss_bytes + process_memory_swap_bytes  - on(application,instance) sum(jvm_memory_committed_bytes)  by(application,instance)) >= 0",
+          "expr": "clamp_min(process_memory_pss_bytes + process_memory_swap_bytes - on(application,instance) sum(jvm_memory_committed_bytes) by(application,instance), 0)",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 2,
@@ -1127,12 +1127,6 @@
           "metric": "",
           "refId": "A",
           "step": 2400
-        },
-        {
-          "expr": "",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "refId": "B"
         },
         {
           "expr": "system_cpu_count",
