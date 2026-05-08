@@ -106,7 +106,7 @@ public class ReviewService {
         long reviewCount = reviewRepository.countByCourseId(courseId);
         if (reviewCount == 1 || reviewCount % 5 == 0) {
             log.info("[후기 요약 갱신 조건 충족] courseId={}, reviewCount={}", courseId, reviewCount);
-            reviewSummaryService.updateSummary(courseId, content);
+            reviewSummaryService.updateSummary(courseId, rating, content);
         }
 
         // 이미지 저장
