@@ -66,16 +66,17 @@ public class WaitingListService {
                 "    if cap >= req then " +
                 "      redis.call('decrby', KEYS[1], req) " +
                 "      redis.call('setex', KEYS[2], tonumber(ARGV[4]), ARGV[2]) " +
+                "      redis.call('del', KEYS[5] .. ARGV[1]) " +
                 "      return '1' " +
                 "    else " +
                 "      redis.call('del', KEYS[2]) " +
+                "      redis.call('del', KEYS[5] .. ARGV[1]) " +
                 "      local nextM = redis.call('zrange', KEYS[3], 0, 0)[1] " +
                 "      if nextM then " +
                 "        local ck = KEYS[5] .. nextM " +
                 "        local nr = tonumber(redis.call('get', ck) or '1') " +
                 "        if cap >= nr then " +
                 "          redis.call('zrem', KEYS[3], nextM) " +
-                "          redis.call('del', ck) " +
                 "          redis.call('setex', KEYS[4] .. nextM, tonumber(ARGV[5]), ARGV[3]) " +
                 "          return nextM " +
                 "        end " +
@@ -136,6 +137,7 @@ public class WaitingListService {
     public void rollbackOccupiedSeat(UUID courseId, UUID memberId) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
 
         RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
@@ -148,12 +150,14 @@ public class WaitingListService {
                     capacity.addAndGet(reservedCount);
                 }
                 occupancy.delete();
+                redissonClient.getBucket(countKey, StringCodec.INSTANCE).delete();
                 log.info("잔여석 롤백 완료: courseId={}, memberId={}", courseId, memberId);
                 
                 // 자리가 났으므로 승격 시도
                 promoteNextInWaitingList(courseId);
             } catch (NumberFormatException e) {
                 occupancy.delete();
+                redissonClient.getBucket(countKey, StringCodec.INSTANCE).delete();
             }
         }
     }
@@ -181,7 +185,6 @@ public class WaitingListService {
                 "local req = tonumber(redis.call('get', countKey) or '1') " +
                 "if cap >= req then " +
                 "  redis.call('zrem', KEYS[2], nextMember) " +
-                "  redis.call('del', countKey) " +
                 "  local occupancyKey = KEYS[3] .. nextMember " +
                 "  redis.call('setex', occupancyKey, tonumber(ARGV[2]), ARGV[1]) " +
                 "  return nextMember " +
@@ -222,10 +225,12 @@ public class WaitingListService {
     @DistributedLock(key = "'order:course:' + #courseId")
     public void completeOccupyingSeat(UUID courseId, UUID memberId) {
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
         RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
 
         if (occupancy.isExists()) {
             occupancy.delete();
+            redissonClient.getBucket(countKey, StringCodec.INSTANCE).delete();
             log.info("잔여석 점유 확정 완료: courseId={}, memberId={}", courseId, memberId);
         }
     }
@@ -234,6 +239,10 @@ public class WaitingListService {
      * 대기열 진입 완료
      */
     public void addToWaitingList(UUID courseId, UUID memberId, int orderCount) {
+        if (orderCount <= 0) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
+        }
+
         String waitingKey = RedisConstants.WAITING_LIST_PREFIX + courseId;
         String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
         String sequenceKey = RedisConstants.WAITING_LIST_SEQUENCE_PREFIX + courseId;
@@ -319,12 +328,14 @@ public class WaitingListService {
 
         String capacityKey = RedisConstants.COURSE_CAPACITY_PREFIX + courseId;
         String occupancyKey = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":" + memberId;
+        String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
 
         RAtomicLong capacity = redissonClient.getAtomicLong(capacityKey);
         RBucket<String> occupancy = redissonClient.getBucket(occupancyKey, StringCodec.INSTANCE);
 
         capacity.addAndGet(orderCount);
         occupancy.delete();
+        redissonClient.getBucket(countKey, StringCodec.INSTANCE).delete();
         
         log.info("잔여석 복구 및 점유 정보 정리 완료: courseId={}, memberId={}, 복구수량={}", courseId, memberId, orderCount);
         

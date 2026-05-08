@@ -192,6 +192,15 @@ class WaitingListServiceTest {
     }
 
     @Test
+    @DisplayName("대기열 추가 시 수량이 0 이하이면 예외가 발생한다")
+    void addToWaitingList_fail_invalidCount() {
+        // when & then
+        assertThatThrownBy(() -> waitingListService.addToWaitingList(courseId, memberId, 0))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT.getMessage());
+    }
+
+    @Test
     @DisplayName("취소 시 잔여석 수량을 복구하고 점유 정보를 삭제한다")
     void recoverCapacity_success() {
         // given
