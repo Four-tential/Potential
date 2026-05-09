@@ -13,14 +13,17 @@ import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
 import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
+import four_tential.potential.presentation.auth.model.SocialLinkConfirmResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
 import four_tential.potential.presentation.auth.model.request.OAuthTicketExchangeRequest;
+import four_tential.potential.presentation.auth.model.request.SocialLinkConfirmRequest;
 import four_tential.potential.presentation.auth.model.request.SocialLinkRequest;
 import four_tential.potential.presentation.auth.model.response.LoginResponse;
 import four_tential.potential.presentation.auth.model.response.OAuthLinkExchangeResponse;
 import four_tential.potential.presentation.auth.model.response.OAuthLoginExchangeResponse;
 import four_tential.potential.presentation.auth.model.response.RefreshResponse;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
+import four_tential.potential.presentation.auth.model.response.SocialLinkConfirmResponse;
 import four_tential.potential.presentation.auth.model.response.SocialLinkResponse;
 
 import java.util.Optional;
@@ -217,6 +220,29 @@ class AuthControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(authFacade).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 성공 - accessToken/연동 정보 반환 + refreshToken 쿠키")
+    void confirmSocialLink_success() {
+        SocialLinkConfirmRequest request = new SocialLinkConfirmRequest("challenge-1", "rawPassword");
+        SocialLinkConfirmResult result = new SocialLinkConfirmResult(
+                "access-token", "refresh-token", true, false, SocialProvider.KAKAO, "user@example.com"
+        );
+        given(authFacade.confirmSocialLink("challenge-1", "rawPassword")).willReturn(result);
+
+        ResponseEntity<BaseResponse<SocialLinkConfirmResponse>> response =
+                authController.confirmSocialLink(request, httpServletResponse);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assert response.getBody() != null;
+        assertThat(response.getBody().data().accessToken()).isEqualTo("access-token");
+        assertThat(response.getBody().data().hasOnboarding()).isTrue();
+        assertThat(response.getBody().data().requiresPhoneSetup()).isFalse();
+        assertThat(response.getBody().data().linkedProvider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(response.getBody().data().email()).isEqualTo("user@example.com");
+
+        verify(httpServletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), contains("refreshToken=refresh-token"));
     }
 
     @Test
