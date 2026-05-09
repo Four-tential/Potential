@@ -3,14 +3,21 @@ package four_tential.potential.presentation.auth;
 import four_tential.potential.application.auth.AuthFacade;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.member.social.SocialProvider;
+import four_tential.potential.infra.oauth2.OAuth2UserAttributes;
+import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
 import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
+import four_tential.potential.presentation.auth.model.request.SocialLinkRequest;
 import four_tential.potential.presentation.auth.model.response.LoginResponse;
 import four_tential.potential.presentation.auth.model.response.RefreshResponse;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
+import four_tential.potential.presentation.auth.model.response.SocialLinkResponse;
+
+import java.util.UUID;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -166,5 +173,38 @@ class AuthControllerTest {
     void logOut_invalidHeader() {
         assertThatThrownBy(() -> authController.logOut("InvalidHeader", httpServletResponse))
                 .isInstanceOf(ServiceErrorException.class);
+    }
+
+    @Test
+    @DisplayName("소셜 계정 연동 성공 - 200 OK 및 provider/email 반환")
+    void linkSocialAccount_success() {
+        UUID memberId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "user@example.com", "ROLE_STUDENT");
+        SocialLinkRequest request = new SocialLinkRequest("rawPassword", "code-123", "https://app/cb");
+        OAuth2UserAttributes attributes = new OAuth2UserAttributes(SocialProvider.KAKAO, "kakao-1", "user@kakao.com", "홍길동");
+
+        given(authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "rawPassword", "code-123", "https://app/cb"))
+                .willReturn(attributes);
+
+        ResponseEntity<BaseResponse<SocialLinkResponse>> response =
+                authController.linkSocialAccount(SocialProvider.KAKAO, principal, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assert response.getBody() != null;
+        assertThat(response.getBody().data().provider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(response.getBody().data().email()).isEqualTo("user@kakao.com");
+    }
+
+    @Test
+    @DisplayName("소셜 계정 연동 해제 성공 - 200 OK 반환 및 Facade 위임")
+    void unlinkSocialAccount_success() {
+        UUID memberId = UUID.randomUUID();
+        MemberPrincipal principal = new MemberPrincipal(memberId, "user@example.com", "ROLE_STUDENT");
+
+        ResponseEntity<BaseResponse<Void>> response =
+                authController.unlinkSocialAccount(SocialProvider.GOOGLE, principal);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(authFacade).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
     }
 }

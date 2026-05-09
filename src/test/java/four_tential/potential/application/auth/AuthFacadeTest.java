@@ -6,8 +6,11 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.member.member.MemberRole;
 import four_tential.potential.domain.member.member.MemberStatus;
+import four_tential.potential.domain.member.social.SocialProvider;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
+import four_tential.potential.infra.oauth2.OAuth2TokenExchangeClient;
+import four_tential.potential.infra.oauth2.OAuth2UserAttributes;
 import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
 import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
@@ -24,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,6 +51,10 @@ class AuthFacadeTest {
     private JwtRepository jwtRepository;
     @Mock
     private AuthService authService;
+    @Mock
+    private SocialAuthService socialAuthService;
+    @Mock
+    private OAuth2TokenExchangeClient oAuth2TokenExchangeClient;
 
     @InjectMocks
     private AuthFacade authFacade;
@@ -293,5 +301,84 @@ class AuthFacadeTest {
 
         verify(jwtRepository, never()).deleteRefreshToken(any());
         verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 성공 - 비밀번호 검증 후 SocialAuthService 위임")
+    void linkSocialAccount_success() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+        OAuth2UserAttributes attributes = new OAuth2UserAttributes(SocialProvider.KAKAO, "kakao-1", "user@kakao.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPassword", member.getPassword())).willReturn(true);
+        given(oAuth2TokenExchangeClient.exchangeAndFetch("kakao", "code-123", "https://app/cb"))
+                .willReturn(attributes);
+
+        OAuth2UserAttributes result = authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "rawPassword", "code-123", "https://app/cb");
+
+        assertThat(result).isEqualTo(attributes);
+        verify(socialAuthService).linkExistingMember(memberId, attributes);
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - 비밀번호 미설정 회원이면 ERR_NO_PASSWORD_SET")
+    void linkSocialAccount_noPasswordSet() {
+        UUID memberId = UUID.randomUUID();
+        Member socialOnlyMember = Member.registerSocial("social@example.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(socialOnlyMember));
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "any", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 설정되지 않은 계정입니다");
+
+        verify(oAuth2TokenExchangeClient, never()).exchangeAndFetch(any(), any(), any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - 비밀번호 불일치 시 ERR_WRONG_PASSWORD")
+    void linkSocialAccount_wrongPassword() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("wrong", member.getPassword())).willReturn(false);
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "wrong", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+
+        verify(oAuth2TokenExchangeClient, never()).exchangeAndFetch(any(), any(), any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - provider 가 path 와 다르면 ERR_SOCIAL_PROVIDER_NOT_SUPPORTED")
+    void linkSocialAccount_providerMismatch() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+        OAuth2UserAttributes returnedAttrs = new OAuth2UserAttributes(SocialProvider.GOOGLE, "google-1", "user@google.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPassword", member.getPassword())).willReturn(true);
+        given(oAuth2TokenExchangeClient.exchangeAndFetch("kakao", "code", "uri")).willReturn(returnedAttrs);
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "rawPassword", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("지원하지 않는 소셜 로그인입니다");
+
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 연동 해제 - SocialAuthService 위임")
+    void unlinkSocialAccount_delegates() {
+        UUID memberId = UUID.randomUUID();
+
+        authFacade.unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+
+        verify(socialAuthService).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
     }
 }
