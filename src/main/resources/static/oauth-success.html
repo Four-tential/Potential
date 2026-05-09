@@ -29,7 +29,7 @@
         <div class="label">Access Token</div>
         <div class="value">
             <span id="accessToken">-</span>
-            <button class="copy-btn" onclick="copy('accessToken')">복사</button>
+            <button type="button" class="copy-btn" onclick="copy('accessToken')">복사</button>
         </div>
     </div>
 
@@ -52,30 +52,80 @@
 
     <script>
         const params = new URLSearchParams(window.location.search);
-        const accessToken = params.get("accessToken") || "(없음)";
-        const hasOnboarding = params.get("hasOnboarding");
-        const requiresPhoneSetup = params.get("requiresPhoneSetup");
-
-        document.getElementById("accessToken").textContent = accessToken;
+        const ticket = params.get("ticket");
+        const source = params.get("source");
 
         const onboardEl = document.getElementById("hasOnboarding");
-        onboardEl.textContent = hasOnboarding ?? "-";
-        onboardEl.classList.add(hasOnboarding === "true" ? "badge-true" : "badge-false");
-
         const phoneEl = document.getElementById("requiresPhoneSetup");
-        phoneEl.textContent = requiresPhoneSetup ?? "-";
-        phoneEl.classList.add(requiresPhoneSetup === "true" ? "badge-true" : "badge-false");
 
-        if (requiresPhoneSetup === "true" && accessToken && accessToken !== "(없음)") {
-            const nextBtn = document.getElementById("nextBtn");
-            nextBtn.href = "/oauth-phone-setup.html?accessToken=" + encodeURIComponent(accessToken);
-            nextBtn.style.display = "inline-block";
+        function renderFromSession() {
+            const accessToken = sessionStorage.getItem("accessToken");
+            if (!accessToken) return false;
+            const hasOnboarding = sessionStorage.getItem("hasOnboarding") === "true";
+            const requiresPhoneSetup = sessionStorage.getItem("requiresPhoneSetup") === "true";
+            document.getElementById("accessToken").textContent = accessToken;
+            onboardEl.textContent = String(hasOnboarding);
+            onboardEl.classList.add(hasOnboarding ? "badge-true" : "badge-false");
+            phoneEl.textContent = String(requiresPhoneSetup);
+            phoneEl.classList.add(requiresPhoneSetup ? "badge-true" : "badge-false");
+            if (requiresPhoneSetup) {
+                const nextBtn = document.getElementById("nextBtn");
+                nextBtn.href = "/oauth-phone-setup.html";
+                nextBtn.style.display = "inline-block";
+            }
+            return true;
+        }
+
+        async function exchange() {
+            // 연동 흐름은 sessionStorage 에 이미 저장됨 — 티켓 교환 생략
+            if (source === "link" && renderFromSession()) return;
+            if (!ticket) {
+                document.getElementById("accessToken").textContent = "(ticket 없음)";
+                onboardEl.textContent = "-";
+                phoneEl.textContent = "-";
+                return;
+            }
+            try {
+                const res = await fetch("/v1/auth/oauth/ticket/exchange", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ticket })
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok || body.success === false) {
+                    document.getElementById("accessToken").textContent = "(교환 실패: " + (body.message || res.status) + ")";
+                    return;
+                }
+                const data = body.data || {};
+                const accessToken = data.accessToken || "(없음)";
+                const hasOnboarding = data.hasOnboarding;
+                const requiresPhoneSetup = data.requiresPhoneSetup;
+
+                // sessionStorage 보관 — URL 노출 회피
+                sessionStorage.setItem("accessToken", accessToken);
+
+                document.getElementById("accessToken").textContent = accessToken;
+                onboardEl.textContent = String(hasOnboarding);
+                onboardEl.classList.add(hasOnboarding ? "badge-true" : "badge-false");
+                phoneEl.textContent = String(requiresPhoneSetup);
+                phoneEl.classList.add(requiresPhoneSetup ? "badge-true" : "badge-false");
+
+                if (requiresPhoneSetup) {
+                    const nextBtn = document.getElementById("nextBtn");
+                    nextBtn.href = "/oauth-phone-setup.html";
+                    nextBtn.style.display = "inline-block";
+                }
+            } catch (err) {
+                document.getElementById("accessToken").textContent = "(네트워크 오류: " + err.message + ")";
+            }
         }
 
         function copy(id) {
             const text = document.getElementById(id).textContent;
             navigator.clipboard.writeText(text).then(() => alert("복사되었습니다"));
         }
+
+        exchange();
     </script>
 </body>
 </html>

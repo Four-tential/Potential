@@ -141,6 +141,8 @@ oauth2:
   success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:8080/oauth-success.html}
   failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:8080/oauth-failure.html}
   link-confirm-redirect-uri: ${OAUTH2_LINK_CONFIRM_REDIRECT_URI:http://localhost:8080/oauth-link-confirm.html}
+  cookie:
+    secure: false   # 로컬 HTTP 환경 — 운영/dev에서는 default(true) 사용
 
 # PortOne
 portone:

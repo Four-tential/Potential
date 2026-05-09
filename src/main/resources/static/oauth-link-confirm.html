@@ -45,36 +45,60 @@
     </div>
 
     <p class="meta" style="margin-top: 24px;">
-        challengeToken: <code id="tokenPreview">-</code><br>
         만료 시간: 5분 — 만료되면 소셜 로그인을 다시 시도해주세요.
     </p>
 
     <script>
         const params = new URLSearchParams(window.location.search);
-        const challengeToken = params.get("challengeToken");
-        const email = params.get("email");
-        const provider = params.get("provider");
-
-        document.getElementById("emailLabel").textContent = email || "(없음)";
-        document.getElementById("providerLabel").textContent = provider || "(없음)";
-        document.getElementById("tokenPreview").textContent = challengeToken
-                ? challengeToken.substring(0, 24) + "..."
-                : "(없음)";
+        const linkTicket = params.get("linkTicket");
 
         const form = document.getElementById("confirmForm");
         const submitBtn = document.getElementById("submitBtn");
         const alertError = document.getElementById("alertError");
         const errorMessage = document.getElementById("errorMessage");
 
-        if (!challengeToken) {
-            submitBtn.disabled = true;
-            errorMessage.textContent = "challengeToken 이 없습니다. 소셜 로그인을 다시 시도해주세요.";
-            alertError.style.display = "block";
+        let challengeToken = null;
+
+        async function bootstrap() {
+            if (!linkTicket) {
+                submitBtn.disabled = true;
+                errorMessage.textContent = "linkTicket 이 없습니다. 소셜 로그인을 다시 시도해주세요.";
+                alertError.style.display = "block";
+                return;
+            }
+            try {
+                const res = await fetch("/v1/auth/oauth/link-ticket/exchange", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ticket: linkTicket })
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok || body.success === false) {
+                    submitBtn.disabled = true;
+                    errorMessage.textContent = body.message || ("티켓 교환 실패: HTTP " + res.status);
+                    alertError.style.display = "block";
+                    return;
+                }
+                const data = body.data || {};
+                challengeToken = data.challengeToken;
+                document.getElementById("emailLabel").textContent = data.email || "(없음)";
+                document.getElementById("providerLabel").textContent = data.provider || "(없음)";
+            } catch (err) {
+                submitBtn.disabled = true;
+                errorMessage.textContent = "네트워크 오류: " + err.message;
+                alertError.style.display = "block";
+            }
         }
 
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             alertError.style.display = "none";
+
+            if (!challengeToken) {
+                errorMessage.textContent = "챌린지 토큰이 없습니다. 페이지를 새로고침해주세요.";
+                alertError.style.display = "block";
+                return;
+            }
 
             const password = document.getElementById("password").value;
             if (!password) return;
@@ -92,12 +116,10 @@
 
                 if (res.ok && body.success !== false) {
                     const data = body.data || {};
-                    const params = new URLSearchParams({
-                        accessToken: data.accessToken || "",
-                        hasOnboarding: String(data.hasOnboarding ?? ""),
-                        requiresPhoneSetup: String(data.requiresPhoneSetup ?? "")
-                    });
-                    window.location.replace("/oauth-success.html?" + params.toString());
+                    sessionStorage.setItem("accessToken", data.accessToken || "");
+                    sessionStorage.setItem("hasOnboarding", String(data.hasOnboarding ?? ""));
+                    sessionStorage.setItem("requiresPhoneSetup", String(data.requiresPhoneSetup ?? ""));
+                    window.location.replace("/oauth-success.html?source=link");
                 } else {
                     errorMessage.textContent = body.message || ("HTTP " + res.status);
                     alertError.style.display = "block";
@@ -111,6 +133,8 @@
                 submitBtn.textContent = "연동하고 로그인";
             }
         });
+
+        bootstrap();
     </script>
 </body>
 </html>

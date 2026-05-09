@@ -108,3 +108,5 @@ oauth2:
   success-redirect-uri: http://localhost:3000/oauth/callback
   failure-redirect-uri: http://localhost:3000/oauth/callback
   link-confirm-redirect-uri: http://localhost:8080/oauth-link-confirm.html
+  cookie:
+    secure: false

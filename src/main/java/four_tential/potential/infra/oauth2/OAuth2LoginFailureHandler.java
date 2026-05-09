@@ -1,8 +1,11 @@
 package four_tential.potential.infra.oauth2;
 
-import jakarta.servlet.ServletException;
+import four_tential.potential.application.auth.OAuthLinkTicketData;
+import four_tential.potential.application.auth.OAuthRedirectTicketRepository;
+import four_tential.potential.domain.member.social.SocialProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,14 +19,17 @@ import java.io.IOException;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OAuth2LoginFailureHandler extends SimpleUrlAuthenticationFailureHandler {
 
     private static final String EMAIL_CONFLICT_CODE = "ERR_SOCIAL_EMAIL_CONFLICT";
 
-    @Value("${oauth2.failure-redirect-uri:http://localhost:3000/oauth/callback}")
+    private final OAuthRedirectTicketRepository ticketRepository;
+
+    @Value("${oauth2.failure-redirect-uri}")
     private String failureRedirectUri;
 
-    @Value("${oauth2.link-confirm-redirect-uri:http://localhost:8080/oauth-link-confirm.html}")
+    @Value("${oauth2.link-confirm-redirect-uri}")
     private String linkConfirmRedirectUri;
 
     @Override
@@ -48,11 +54,10 @@ public class OAuth2LoginFailureHandler extends SimpleUrlAuthenticationFailureHan
             return;
         }
 
-        log.warn("소셜 로그인 실패 - code={}, message={}", errorCode, description);
+        log.warn("소셜 로그인 실패 - code={}", errorCode);
 
         String redirectUrl = UriComponentsBuilder.fromUriString(failureRedirectUri)
                 .queryParam("error", errorCode)
-                .queryParam("message", description)
                 .build()
                 .encode()
                 .toUriString();
@@ -91,12 +96,16 @@ public class OAuth2LoginFailureHandler extends SimpleUrlAuthenticationFailureHan
             }
         }
 
-        return UriComponentsBuilder.fromUriString(linkConfirmRedirectUri)
-                .queryParam("challengeToken", challengeToken)
-                .queryParam("email", email)
-                .queryParam("provider", provider)
-                .build()
-                .encode()
-                .toUriString();
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(linkConfirmRedirectUri);
+        if (challengeToken != null && email != null && provider != null) {
+            String linkTicket = ticketRepository.issueLink(new OAuthLinkTicketData(
+                    challengeToken, email, SocialProvider.valueOf(provider)
+            ));
+            builder.queryParam("linkTicket", linkTicket);
+        } else {
+            builder.queryParam("error", "missing_challenge");
+        }
+
+        return builder.build().encode().toUriString();
     }
 }

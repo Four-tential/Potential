@@ -81,7 +81,9 @@ public class SecurityConfig {
                 //.requestMatchers("/ai/test/**").permitAll()
 
                 // Auth
-                .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/social-link/confirm").permitAll()
+                .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh",
+                        "/v1/auth/social-link/confirm",
+                        "/v1/auth/oauth/ticket/exchange", "/v1/auth/oauth/link-ticket/exchange").permitAll()
 
                 // OAuth2 (Kakao / Google)
                 .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()

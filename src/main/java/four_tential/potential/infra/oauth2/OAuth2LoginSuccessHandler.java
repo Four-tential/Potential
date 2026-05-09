@@ -1,5 +1,7 @@
 package four_tential.potential.infra.oauth2;
 
+import four_tential.potential.application.auth.OAuthLoginTicketData;
+import four_tential.potential.application.auth.OAuthRedirectTicketRepository;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
 import jakarta.servlet.ServletException;
@@ -26,12 +28,16 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
     private final JwtUtil jwtUtil;
     private final JwtRepository jwtRepository;
+    private final OAuthRedirectTicketRepository ticketRepository;
 
     @Value("${jwt.secret.refreshExpire:604800000}")
     private Long refreshTokenExpire;
 
     @Value("${oauth2.success-redirect-uri}")
     private String successRedirectUri;
+
+    @Value("${oauth2.cookie.secure:true}")
+    private boolean cookieSecure;
 
     @Override
     public void onAuthenticationSuccess(
@@ -53,10 +59,14 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
         response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie(refreshToken).toString());
 
+        String ticket = ticketRepository.issueLogin(new OAuthLoginTicketData(
+                accessToken,
+                principal.isHasOnboarding(),
+                principal.isRequiresPhoneSetup()
+        ));
+
         String redirectUrl = UriComponentsBuilder.fromUriString(successRedirectUri)
-                .queryParam("accessToken", accessToken)
-                .queryParam("hasOnboarding", principal.isHasOnboarding())
-                .queryParam("requiresPhoneSetup", principal.isRequiresPhoneSetup())
+                .queryParam("ticket", ticket)
                 .build()
                 .toUriString();
 
@@ -67,6 +77,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private ResponseCookie refreshTokenCookie(String refreshToken) {
         return ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path("/v1/auth")
                 .maxAge(Duration.ofMillis(refreshTokenExpire))

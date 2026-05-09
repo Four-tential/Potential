@@ -47,7 +47,8 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_SOCIAL_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 동일 provider 의 소셜 계정이 연동되어 있습니다"),
     ERR_SOCIAL_LINK_NOT_FOUND(HttpStatus.NOT_FOUND, "해제할 소셜 연동 정보가 없습니다"),
     ERR_PHONE_REQUIRED(HttpStatus.BAD_REQUEST, "전화번호를 먼저 등록해주세요"),
-    ERR_NO_PASSWORD_SET(HttpStatus.BAD_REQUEST, "비밀번호가 설정되지 않은 계정입니다")
+    ERR_NO_PASSWORD_SET(HttpStatus.BAD_REQUEST, "비밀번호가 설정되지 않은 계정입니다"),
+    ERR_OAUTH_TICKET_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 티켓입니다")
     ;
 
     private final HttpStatus httpStatus;
