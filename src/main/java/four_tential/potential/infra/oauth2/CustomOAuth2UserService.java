@@ -23,7 +23,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
-        OAuth2User oAuth2User = super.loadUser(userRequest);
+        OAuth2User oAuth2User = delegateLoadUser(userRequest);
 
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
         OAuth2UserAttributes attributes = OAuth2UserAttributes.from(registrationId, oAuth2User.getAttributes());
@@ -58,5 +58,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             );
             throw new InternalAuthenticationServiceException(e.getMessage(), oauth2Ex);
         }
+    }
+
+    protected OAuth2User delegateLoadUser(OAuth2UserRequest userRequest) {
+        return super.loadUser(userRequest);
     }
 }

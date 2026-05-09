@@ -153,4 +153,30 @@ class MemberTest {
 
         assertThat(member.getPassword()).isEqualTo("secondNewPassword!");
     }
+
+    @Test
+    @DisplayName("registerSocial() - 비밀번호/전화번호 null 로 ROLE_STUDENT/ACTIVE 회원 생성, requiresPhoneSetup true")
+    void registerSocial_initialState() {
+        Member social = Member.registerSocial("social@example.com", "유저");
+
+        assertThat(social.getEmail()).isEqualTo("social@example.com");
+        assertThat(social.getName()).isEqualTo("유저");
+        assertThat(social.getPassword()).isNull();
+        assertThat(social.getPhone()).isNull();
+        assertThat(social.isHasOnboarding()).isFalse();
+        assertThat(social.getRole()).isEqualTo(MemberRole.ROLE_STUDENT);
+        assertThat(social.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(social.requiresPhoneSetup()).isTrue();
+    }
+
+    @Test
+    @DisplayName("setupPhone() - 전화번호 등록 후 requiresPhoneSetup false")
+    void setupPhone_setsPhoneNumber() {
+        Member social = Member.registerSocial("social@example.com", "유저");
+
+        social.setupPhone("010-1234-5678");
+
+        assertThat(social.getPhone()).isEqualTo("010-1234-5678");
+        assertThat(social.requiresPhoneSetup()).isFalse();
+    }
 }

@@ -460,6 +460,39 @@ class AuthFacadeTest {
     }
 
     @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 챌린지 데이터 email 누락 시 invalidate + ERR_INVALID_AUTHORIZE")
+    void confirmSocialLink_blankEmail() {
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", "", "홍길동"
+        );
+        given(socialLinkChallengeRepository.peek("ch-blank")).willReturn(Optional.of(data));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-blank", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(socialLinkChallengeRepository).invalidate("ch-blank");
+        verify(memberRepository, never()).findByEmail(any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 탈퇴 회원이면 ERR_WRONG_LOGIN")
+    void confirmSocialLink_withdrawn() {
+        Member member = MemberFixture.defaultMember();
+        member.withdraw();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-w")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-w", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("아이디와 비밀번호를 확인하시기 바랍니다");
+    }
+
+    @Test
     @DisplayName("소셜 연동 챌린지 확인 - 정지 회원이면 ERR_SUSPENDED")
     void confirmSocialLink_suspended() {
         Member member = MemberFixture.defaultMember();
