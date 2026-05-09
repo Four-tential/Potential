@@ -1,6 +1,7 @@
 package four_tential.potential.infra.ai.chatbot;
 
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.infra.ai.AiMetrics;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,6 +27,7 @@ class ChatbotServiceTest {
     private ChatClient.CallResponseSpec responseSpec;
     private ChatbotRateLimiter chatbotRateLimiter;
     private ChatbotService chatbotService;
+    private AiMetrics aiMetrics;
 
     @BeforeEach
     void setUp() {
@@ -32,12 +35,14 @@ class ChatbotServiceTest {
         requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
         responseSpec = mock(ChatClient.CallResponseSpec.class);
         chatbotRateLimiter = mock(ChatbotRateLimiter.class);
+        aiMetrics = mock(AiMetrics.class);
 
         when(chatbotChatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
 
-        chatbotService = new ChatbotService(chatbotChatClient, chatbotRateLimiter);
+        chatbotService = new ChatbotService(chatbotChatClient, chatbotRateLimiter, aiMetrics);
     }
 
     private MemberPrincipal principal() {

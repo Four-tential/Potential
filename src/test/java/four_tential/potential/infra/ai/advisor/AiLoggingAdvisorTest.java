@@ -6,6 +6,8 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import four_tential.potential.infra.ai.AiMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,7 +19,7 @@ class AiLoggingAdvisorTest {
     @DisplayName("adviseCall 정상 흐름")
     void adviseCall_success() {
         // given
-        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1);
+        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1, new AiMetrics(new SimpleMeterRegistry()));
 
         ChatClientRequest request = mock(ChatClientRequest.class);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
@@ -37,7 +39,7 @@ class AiLoggingAdvisorTest {
     @DisplayName("adviseStream 정상 흐름")
     void adviseStream_success() {
         // given
-        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1);
+        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1, new AiMetrics(new SimpleMeterRegistry()));
 
         ChatClientRequest request = mock(ChatClientRequest.class);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -58,7 +60,7 @@ class AiLoggingAdvisorTest {
     @DisplayName("extractModel 예외 케이스 커버")
     void extractModel_exception() {
         // given
-        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1);
+        AiLoggingAdvisor advisor = new AiLoggingAdvisor(1, new AiMetrics(new SimpleMeterRegistry()));
 
         ChatClientRequest request = mock(ChatClientRequest.class);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
