@@ -185,6 +185,11 @@ resilience4j:
 member:
   default-profile-image-url: ${DEFAULT_PROFILE_IMAGE_URL:https://localhost/default-profile.png}
 
+# 로컬 프로파일 전용 테스트 시드 계정 — 환경변수로 주입 (소스 하드코딩 금지)
+app:
+  test-account:
+    password: ${TEST_ACCOUNT_PASSWORD}
+
 # SpringDocs With Swagger
 springdoc:
   swagger-ui:

@@ -5,6 +5,7 @@ import four_tential.potential.domain.member.member.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -18,12 +19,14 @@ import org.springframework.stereotype.Component;
 public class TestMemberInitializer implements ApplicationRunner {
 
     private static final String TEST_EMAIL = "nananan1213@gmail.com";
-    private static final String TEST_PASSWORD = "test1234!";
     private static final String TEST_NAME = "테스트 사용자";
     private static final String TEST_PHONE = "010-0000-0000";
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.test-account.password}")
+    private String testPassword;
 
     @Override
     public void run(@NonNull ApplicationArguments args) {
@@ -34,7 +37,7 @@ public class TestMemberInitializer implements ApplicationRunner {
 
         Member member = Member.register(
                 TEST_EMAIL,
-                passwordEncoder.encode(TEST_PASSWORD),
+                passwordEncoder.encode(testPassword),
                 TEST_NAME,
                 TEST_PHONE
         );
