@@ -28,10 +28,10 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String email;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String password;
 
-    @Column(nullable = false, length = 40)
+    @Column(length = 40)
     private String phone;
 
     @Enumerated(EnumType.STRING)
@@ -65,6 +65,26 @@ public class Member extends BaseTimeEntity {
         member.role = MemberRole.ROLE_STUDENT;
         member.status = MemberStatus.ACTIVE;
         return member;
+    }
+
+    public static Member registerSocial(String email, String name) {
+        Member member = new Member();
+        member.email = email;
+        member.password = null;
+        member.name = name;
+        member.phone = null;
+        member.hasOnboarding = false;
+        member.role = MemberRole.ROLE_STUDENT;
+        member.status = MemberStatus.ACTIVE;
+        return member;
+    }
+
+    public boolean requiresPhoneSetup() {
+        return this.phone == null || this.phone.isBlank();
+    }
+
+    public void setupPhone(String phone) {
+        this.phone = phone;
     }
 
     public void completeOnboarding() {
