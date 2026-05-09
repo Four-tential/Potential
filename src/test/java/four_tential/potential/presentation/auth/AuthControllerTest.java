@@ -1,6 +1,9 @@
 package four_tential.potential.presentation.auth;
 
 import four_tential.potential.application.auth.AuthFacade;
+import four_tential.potential.application.auth.OAuthLinkTicketData;
+import four_tential.potential.application.auth.OAuthLoginTicketData;
+import four_tential.potential.application.auth.OAuthRedirectTicketRepository;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.member.social.SocialProvider;
@@ -11,12 +14,16 @@ import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
+import four_tential.potential.presentation.auth.model.request.OAuthTicketExchangeRequest;
 import four_tential.potential.presentation.auth.model.request.SocialLinkRequest;
 import four_tential.potential.presentation.auth.model.response.LoginResponse;
+import four_tential.potential.presentation.auth.model.response.OAuthLinkExchangeResponse;
+import four_tential.potential.presentation.auth.model.response.OAuthLoginExchangeResponse;
 import four_tential.potential.presentation.auth.model.response.RefreshResponse;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
 import four_tential.potential.presentation.auth.model.response.SocialLinkResponse;
 
+import java.util.Optional;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +51,9 @@ class AuthControllerTest {
     private AuthFacade authFacade;
 
     @Mock
+    private OAuthRedirectTicketRepository oauthTicketRepository;
+
+    @Mock
     private HttpServletResponse httpServletResponse;
 
     @InjectMocks
@@ -52,6 +62,7 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(authController, "refreshTokenExpire", 1_209_600_000L); // 14일
+        ReflectionTestUtils.setField(authController, "cookieSecure", false);
     }
 
     @Test
@@ -206,5 +217,61 @@ class AuthControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(authFacade).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+    }
+
+    @Test
+    @DisplayName("OAuth 로그인 티켓 교환 성공 - accessToken/온보딩 정보 반환")
+    void exchangeLoginTicket_success() {
+        OAuthTicketExchangeRequest request = new OAuthTicketExchangeRequest("ticket-1");
+        OAuthLoginTicketData data = new OAuthLoginTicketData("access-token", true, false);
+        given(oauthTicketRepository.consumeLogin("ticket-1")).willReturn(Optional.of(data));
+
+        ResponseEntity<BaseResponse<OAuthLoginExchangeResponse>> response =
+                authController.exchangeLoginTicket(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assert response.getBody() != null;
+        assertThat(response.getBody().data().accessToken()).isEqualTo("access-token");
+        assertThat(response.getBody().data().hasOnboarding()).isTrue();
+        assertThat(response.getBody().data().requiresPhoneSetup()).isFalse();
+    }
+
+    @Test
+    @DisplayName("OAuth 로그인 티켓 교환 - 만료/유효하지 않으면 ERR_OAUTH_TICKET_INVALID")
+    void exchangeLoginTicket_invalid() {
+        OAuthTicketExchangeRequest request = new OAuthTicketExchangeRequest("expired");
+        given(oauthTicketRepository.consumeLogin("expired")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authController.exchangeLoginTicket(request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("유효하지 않거나 만료된 티켓입니다");
+    }
+
+    @Test
+    @DisplayName("OAuth 연동 티켓 교환 성공 - challengeToken/email/provider 반환")
+    void exchangeLinkTicket_success() {
+        OAuthTicketExchangeRequest request = new OAuthTicketExchangeRequest("link-ticket-1");
+        OAuthLinkTicketData data = new OAuthLinkTicketData("challenge-1", "user@example.com", SocialProvider.KAKAO);
+        given(oauthTicketRepository.consumeLink("link-ticket-1")).willReturn(Optional.of(data));
+
+        ResponseEntity<BaseResponse<OAuthLinkExchangeResponse>> response =
+                authController.exchangeLinkTicket(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assert response.getBody() != null;
+        assertThat(response.getBody().data().challengeToken()).isEqualTo("challenge-1");
+        assertThat(response.getBody().data().email()).isEqualTo("user@example.com");
+        assertThat(response.getBody().data().provider()).isEqualTo(SocialProvider.KAKAO);
+    }
+
+    @Test
+    @DisplayName("OAuth 연동 티켓 교환 - 만료/유효하지 않으면 ERR_OAUTH_TICKET_INVALID")
+    void exchangeLinkTicket_invalid() {
+        OAuthTicketExchangeRequest request = new OAuthTicketExchangeRequest("nope");
+        given(oauthTicketRepository.consumeLink("nope")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authController.exchangeLinkTicket(request))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("유효하지 않거나 만료된 티켓입니다");
     }
 }

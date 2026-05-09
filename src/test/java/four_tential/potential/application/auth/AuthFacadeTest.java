@@ -15,6 +15,7 @@ import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
 import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
+import four_tential.potential.presentation.auth.model.SocialLinkConfirmResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
 import four_tential.potential.presentation.auth.model.request.SignUpRequest;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
@@ -55,6 +56,8 @@ class AuthFacadeTest {
     private SocialAuthService socialAuthService;
     @Mock
     private OAuth2TokenExchangeClient oAuth2TokenExchangeClient;
+    @Mock
+    private SocialLinkChallengeRepository socialLinkChallengeRepository;
 
     @InjectMocks
     private AuthFacade authFacade;
@@ -380,5 +383,96 @@ class AuthFacadeTest {
         authFacade.unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
 
         verify(socialAuthService).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 일치 시 연동 + 토큰 발급")
+    void confirmSocialLink_success() {
+        Member member = MemberFixture.defaultMember();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-1")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPwd", member.getPassword())).willReturn(true);
+        given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("at");
+        given(jwtUtil.createRefreshToken(any())).willReturn("rt");
+
+        SocialLinkConfirmResult result = authFacade.confirmSocialLink("ch-1", "rawPwd");
+
+        assertThat(result.accessToken()).isEqualTo("at");
+        assertThat(result.refreshToken()).isEqualTo("rt");
+        assertThat(result.linkedProvider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(result.email()).isEqualTo(member.getEmail());
+
+        verify(socialLinkChallengeRepository).invalidate("ch-1");
+        verify(socialAuthService).linkExistingMember(eq(member.getId()), any(OAuth2UserAttributes.class));
+        verify(jwtRepository).saveRefreshToken(eq(member.getEmail()), eq("rt"), anyLong());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 챌린지 만료/시도 초과 시 ERR_INVALID_AUTHORIZE")
+    void confirmSocialLink_challengeMissing() {
+        given(socialLinkChallengeRepository.peek("ch-x")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-x", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 불일치 시 ERR_WRONG_PASSWORD, 챌린지 invalidate 안 함")
+    void confirmSocialLink_wrongPassword() {
+        Member member = MemberFixture.defaultMember();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-2")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("wrong", member.getPassword())).willReturn(false);
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-2", "wrong"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+
+        verify(socialLinkChallengeRepository, never()).invalidate(any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 미설정 회원이면 ERR_NO_PASSWORD_SET")
+    void confirmSocialLink_noPasswordSet() {
+        Member socialOnly = Member.registerSocial("social@example.com", "유저");
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.GOOGLE, "google-1", socialOnly.getEmail(), "유저"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-3")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(socialOnly.getEmail())).willReturn(Optional.of(socialOnly));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-3", "anything"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 설정되지 않은 계정입니다");
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 정지 회원이면 ERR_SUSPENDED")
+    void confirmSocialLink_suspended() {
+        Member member = MemberFixture.defaultMember();
+        member.suspend();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-s")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-s", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("정지된 회원입니다, 관리자에게 문의 바랍니다");
     }
 }
