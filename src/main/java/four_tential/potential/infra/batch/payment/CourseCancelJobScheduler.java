@@ -31,13 +31,13 @@ public class CourseCancelJobScheduler {
         try {
             boolean running = !jobRepository.findRunningJobExecutions(courseCancelJob.getName()).isEmpty();
             if (running) {
-                log.info("[SCHEDULER] courseCancelJob 실행 중 - 스킵");
+                //log.info("[SCHEDULER] courseCancelJob 실행 중 - 스킵");
                 return;
             }
 
             boolean hasPending = courseCancelOutboxRepository.existsByStatus(CourseCancelOutboxStatus.PENDING);
             if (!hasPending) {
-                log.info("[SCHEDULER] PENDING course_cancel_outbox 없음 - 스킵");
+                //log.info("[SCHEDULER] PENDING course_cancel_outbox 없음 - 스킵");
                 return;
             }
 

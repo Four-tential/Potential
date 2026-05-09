@@ -37,14 +37,14 @@ public class RefundTaskJobScheduler {
             // 이미 실행 중이면 중복 실행 방지
             boolean running = !jobRepository.findRunningJobExecutions(refundTaskJob.getName()).isEmpty();
             if (running) {
-                log.info("[SCHEDULER] refundTaskJob 실행 중 - 스킵");
+                //log.info("[SCHEDULER] refundTaskJob 실행 중 - 스킵");
                 return;
             }
 
             // 할 일이 없으면 불필요 실행 방지
             boolean hasPending = refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING);
             if (!hasPending) {
-                log.info("[SCHEDULER] PENDING refund_task 없음 - 스킵");
+                //log.info("[SCHEDULER] PENDING refund_task 없음 - 스킵");
                 return;
             }
 

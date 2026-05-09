@@ -37,7 +37,7 @@ public class OrderExpirationScheduler {
             boolean isLocked = lock.tryLock(0, 50, TimeUnit.SECONDS);
 
             if (isLocked) {
-                log.info("만료된 주문 자동 만료 스케줄러 시작");
+                //log.info("만료된 주문 자동 만료 스케줄러 시작");
 
                 LocalDateTime now = LocalDateTime.now();
                 int totalProcessed = 0;
