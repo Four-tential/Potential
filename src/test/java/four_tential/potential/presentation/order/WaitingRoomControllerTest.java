@@ -2,6 +2,7 @@ package four_tential.potential.presentation.order;
 
 import four_tential.potential.application.order.WaitingListService;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
+import four_tential.potential.common.security.WebMvcSecurityTestSupport;
 import four_tential.potential.infra.jwt.JwtFilter;
 import four_tential.potential.infra.security.SecurityConfig;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
@@ -36,7 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(WaitingRoomController.class)
-@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebMvcSecurityTestSupport.class})
 class WaitingRoomControllerTest {
 
     @Autowired

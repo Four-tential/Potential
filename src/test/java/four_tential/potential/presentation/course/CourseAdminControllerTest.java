@@ -2,6 +2,7 @@ package four_tential.potential.presentation.course;
 
 import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
+import four_tential.potential.common.security.WebMvcSecurityTestSupport;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseStatus;
 import four_tential.potential.infra.jwt.JwtFilter;
@@ -38,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CourseAdminController.class)
-@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebMvcSecurityTestSupport.class})
 class CourseAdminControllerTest {
 
     @Autowired

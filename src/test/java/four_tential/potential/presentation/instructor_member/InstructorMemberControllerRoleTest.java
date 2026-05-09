@@ -3,6 +3,7 @@ package four_tential.potential.presentation.instructor_member;
 import four_tential.potential.application.instructor_member.InstructorMemberService;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
+import four_tential.potential.common.security.WebMvcSecurityTestSupport;
 import four_tential.potential.domain.member.instructor_member.InstructorMemberStatus;
 import four_tential.potential.infra.jwt.JwtFilter;
 import four_tential.potential.infra.security.SecurityConfig;
@@ -37,7 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(InstructorMemberController.class)
-@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebMvcSecurityTestSupport.class})
 class InstructorMemberControllerRoleTest {
 
     @Autowired

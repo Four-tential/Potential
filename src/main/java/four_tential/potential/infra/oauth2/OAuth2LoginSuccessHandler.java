@@ -27,10 +27,10 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private final JwtUtil jwtUtil;
     private final JwtRepository jwtRepository;
 
-    @Value("${jwt.secret.refreshExpire}")
+    @Value("${jwt.secret.refreshExpire:604800000}")
     private Long refreshTokenExpire;
 
-    @Value("${oauth2.success-redirect-uri:http://localhost:3000/oauth/callback}")
+    @Value("${oauth2.success-redirect-uri}")
     private String successRedirectUri;
 
     @Override

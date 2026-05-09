@@ -36,6 +36,9 @@ class SocialAuthServiceTest {
     @Mock
     private MemberSocialAccountRepository socialAccountRepository;
 
+    @Mock
+    private SocialLinkChallengeRepository linkChallengeRepository;
+
     @InjectMocks
     private SocialAuthService socialAuthService;
 
@@ -93,9 +96,10 @@ class SocialAuthServiceTest {
         given(socialAccountRepository.findByProviderAndProviderId(SocialProvider.GOOGLE, "google-1"))
                 .willReturn(Optional.empty());
         given(memberRepository.existsByEmail("dup@google.com")).willReturn(true);
+        given(linkChallengeRepository.issue(org.mockito.ArgumentMatchers.any())).willReturn("challenge-token");
 
         assertThatThrownBy(() -> socialAuthService.loginOrSignup(attributes))
-                .isInstanceOf(ServiceErrorException.class)
+                .isInstanceOf(SocialEmailConflictException.class)
                 .hasMessage("동일 이메일로 가입된 계정이 있습니다, 로그인 후 마이페이지에서 연동해주세요");
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());

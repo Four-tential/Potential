@@ -1,6 +1,7 @@
 package four_tential.potential.presentation.image;
 
 import four_tential.potential.common.exception.GlobalExceptionHandler;
+import four_tential.potential.common.security.WebMvcSecurityTestSupport;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.infra.jwt.JwtFilter;
 import four_tential.potential.infra.s3.ImageType;
@@ -40,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ImageController.class)
-@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebMvcSecurityTestSupport.class})
 class ImageControllerTest {
 
     private static final UUID MEMBER_ID = UUID.randomUUID();
