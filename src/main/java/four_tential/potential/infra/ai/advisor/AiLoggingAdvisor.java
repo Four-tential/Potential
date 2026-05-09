@@ -25,6 +25,10 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
     public static final String FEATURE_CHATBOT = "chatbot";
     public static final String FEATURE_REVIEW_SUMMARY = "review_summary";
 
+    private static final String RESULT_SUCCESS = "success";
+    private static final String RESULT_FAIL = "fail";
+    private static final String UNKNOWN = "unknown";
+
     private final int order;
     private final AiMetrics aiMetrics;
 
@@ -56,8 +60,8 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
             ChatClientResponse response = chain.nextCall(request);
             long elapsed = System.nanoTime() - startedAt;
 
-            aiMetrics.recordChatCallRequest(feature, model, "success");
-            aiMetrics.recordChatCallDuration(feature, model, "success", elapsed);
+            aiMetrics.recordChatCallRequest(feature, model, RESULT_SUCCESS);
+            aiMetrics.recordChatCallDuration(feature, model, RESULT_SUCCESS, elapsed);
 
             UsageSnapshot usage = extractUsage(response);
             aiMetrics.recordPromptTokens(feature, model, usage.promptTokens());
@@ -77,8 +81,8 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
         } catch (RuntimeException e) {
             long elapsed = System.nanoTime() - startedAt;
 
-            aiMetrics.recordChatCallRequest(feature, model, "fail");
-            aiMetrics.recordChatCallDuration(feature, model, "fail", elapsed);
+            aiMetrics.recordChatCallRequest(feature, model, RESULT_FAIL);
+            aiMetrics.recordChatCallDuration(feature, model, RESULT_FAIL, elapsed);
             aiMetrics.recordChatCallError(feature, model, e.getClass().getSimpleName());
 
             log.warn(
@@ -105,15 +109,15 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
         return chain.nextStream(request)
                 .doOnComplete(() -> {
                     long elapsed = System.nanoTime() - startedAt;
-                    aiMetrics.recordChatCallRequest(feature, model, "success");
-                    aiMetrics.recordChatCallDuration(feature, model, "success", elapsed);
+                    aiMetrics.recordChatCallRequest(feature, model, RESULT_SUCCESS);
+                    aiMetrics.recordChatCallDuration(feature, model, RESULT_SUCCESS, elapsed);
 
                     log.info("[AI_STREAM] 응답 완료. feature={} model={} durationMs={}", feature, model, TimeUnit.NANOSECONDS.toMillis(elapsed));
                 })
                 .doOnError(throwable -> {
                     long elapsed = System.nanoTime() - startedAt;
-                    aiMetrics.recordChatCallRequest(feature, model, "fail");
-                    aiMetrics.recordChatCallDuration(feature, model, "fail", elapsed);
+                    aiMetrics.recordChatCallRequest(feature, model, RESULT_FAIL);
+                    aiMetrics.recordChatCallDuration(feature, model, RESULT_FAIL, elapsed);
                     aiMetrics.recordChatCallError(feature, model, throwable.getClass().getSimpleName());
 
                     log.warn(
@@ -132,18 +136,18 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
         try {
             return request.prompt().getOptions() != null
                     ? request.prompt().getOptions().getModel()
-                    : "unknown";
+                    : UNKNOWN;
         } catch (Exception e) {
-            return "unknown";
+            return UNKNOWN;
         }
     }
 
     private String extractFeature(ChatClientRequest request) {
         try {
-            Object feature = request.context() != null ? request.context().get(CONTEXT_FEATURE) : null;
-            return feature != null ? feature.toString() : "unknown";
+            Object feature = request.context().get(CONTEXT_FEATURE);
+            return feature != null ? feature.toString() : UNKNOWN;
         } catch (Exception e) {
-            return "unknown";
+            return UNKNOWN;
         }
     }
 

@@ -3,7 +3,6 @@ package four_tential.potential.infra.ai;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -17,6 +16,12 @@ public class AiMetrics {
 
     private final MeterRegistry registry;
 
+    private static final String TAG_RESULT = "result";
+    private static final String TAG_FEATURE = "feature";
+    private static final String TAG_MODEL = "model";
+    private static final String TAG_ERROR_TYPE = "errorType";
+    private static final String UNKNOWN = "unknown";
+
     public AiMetrics(MeterRegistry registry) {
         this.registry = registry;
     }
@@ -25,7 +30,7 @@ public class AiMetrics {
     public void recordChatbotRequest(String result) {
         Counter.builder("chatbot.request")
                 .description("Chatbot request count")
-                .tag("result", normalize(result))
+                .tag(TAG_RESULT, normalize(result))
                 .register(registry)
                 .increment();
     }
@@ -34,7 +39,7 @@ public class AiMetrics {
     public void recordChatbotRequestDuration(String result, long nanos) {
         Timer.builder("chatbot.request.duration")
                 .description("Chatbot request duration")
-                .tag("result", normalize(result))
+                .tag(TAG_RESULT, normalize(result))
                 .publishPercentileHistogram()
                 .minimumExpectedValue(Duration.ofMillis(10))
                 .maximumExpectedValue(Duration.ofSeconds(60))
@@ -46,9 +51,9 @@ public class AiMetrics {
     public void recordChatCallRequest(String feature, String model, String result) {
         Counter.builder("ai.chat.call.request")
                 .description("AI chat model call count")
-                .tag("feature", normalize(feature))
-                .tag("model", normalize(model))
-                .tag("result", normalize(result))
+                .tag(TAG_FEATURE, normalize(feature))
+                .tag(TAG_MODEL, normalize(model))
+                .tag(TAG_RESULT, normalize(result))
                 .register(registry)
                 .increment();
     }
@@ -57,9 +62,9 @@ public class AiMetrics {
     public void recordChatCallDuration(String feature, String model, String result, long nanos) {
         Timer.builder("ai.chat.call.duration")
                 .description("AI chat model call duration")
-                .tag("feature", normalize(feature))
-                .tag("model", normalize(model))
-                .tag("result", normalize(result))
+                .tag(TAG_FEATURE, normalize(feature))
+                .tag(TAG_MODEL, normalize(model))
+                .tag(TAG_RESULT, normalize(result))
                 .publishPercentileHistogram()
                 .minimumExpectedValue(Duration.ofMillis(50))
                 .maximumExpectedValue(Duration.ofSeconds(60))
@@ -71,9 +76,9 @@ public class AiMetrics {
     public void recordChatCallError(String feature, String model, String errorType) {
         Counter.builder("ai.chat.call.error")
                 .description("AI chat model call errors")
-                .tag("feature", normalize(feature))
-                .tag("model", normalize(model))
-                .tag("errorType", normalize(errorType))
+                .tag(TAG_FEATURE, normalize(feature))
+                .tag(TAG_MODEL, normalize(model))
+                .tag(TAG_ERROR_TYPE, normalize(errorType))
                 .register(registry)
                 .increment();
     }
@@ -101,8 +106,8 @@ public class AiMetrics {
 
         Counter.builder(metricName)
                 .description(description)
-                .tag("feature", normalize(feature))
-                .tag("model", normalize(model))
+                .tag(TAG_FEATURE, normalize(feature))
+                .tag(TAG_MODEL, normalize(model))
                 .register(registry)
                 .increment(tokens.doubleValue());
     }
@@ -110,7 +115,7 @@ public class AiMetrics {
     // 메트릭 태그 값이 null/blank이면 unknown으로 바꾸고 공백은 밑줄로 정리
     private String normalize(String value) {
         if (value == null || value.isBlank()) {
-            return "unknown";
+            return UNKNOWN;
         }
         return value.trim().replaceAll("\\s+", "_");
     }
