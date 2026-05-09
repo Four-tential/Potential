@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>OAuth2 로그인 성공</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 40px auto; padding: 24px; color: #1f2937; }
+        h1 { color: #059669; margin-bottom: 8px; }
+        .subtitle { color: #6b7280; margin-bottom: 32px; }
+        .row { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; word-break: break-all; }
+        .copy-btn { margin-left: 8px; padding: 4px 10px; font-size: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .copy-btn:hover { background: #1d4ed8; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+        .badge-true { background: #dcfce7; color: #166534; }
+        .badge-false { background: #fee2e2; color: #991b1b; }
+        .hint { margin-top: 24px; padding: 16px; background: #eff6ff; border-radius: 8px; font-size: 13px; color: #1e40af; }
+        code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+        .next-btn { display: none; margin-top: 24px; padding: 12px 24px; background: #059669; color: white; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600; }
+        .next-btn:hover { background: #047857; }
+    </style>
+</head>
+<body>
+    <h1>로그인 성공</h1>
+    <p class="subtitle">소셜 로그인 흐름이 정상 동작했습니다. 아래 토큰으로 API 호출을 테스트할 수 있습니다.</p>
+
+    <div class="row">
+        <div class="label">Access Token</div>
+        <div class="value">
+            <span id="accessToken">-</span>
+            <button class="copy-btn" onclick="copy('accessToken')">복사</button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="label">has Onboarding</div>
+        <div class="value"><span id="hasOnboarding" class="badge">-</span></div>
+    </div>
+
+    <div class="row">
+        <div class="label">requires Phone Setup</div>
+        <div class="value"><span id="requiresPhoneSetup" class="badge">-</span></div>
+    </div>
+
+    <div class="hint">
+        Refresh Token 은 <code>HttpOnly Cookie</code> 로 자동 저장되었습니다 (path=/v1/auth).<br>
+        <strong>requiresPhoneSetup=true</strong> 라면 <code>PATCH /v1/members/me</code> 에 phone 을 보내 채워야 합니다.
+    </div>
+
+    <a id="nextBtn" class="next-btn" href="#">다음 - 전화번호 입력 →</a>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const accessToken = params.get("accessToken") || "(없음)";
+        const hasOnboarding = params.get("hasOnboarding");
+        const requiresPhoneSetup = params.get("requiresPhoneSetup");
+
+        document.getElementById("accessToken").textContent = accessToken;
+
+        const onboardEl = document.getElementById("hasOnboarding");
+        onboardEl.textContent = hasOnboarding ?? "-";
+        onboardEl.classList.add(hasOnboarding === "true" ? "badge-true" : "badge-false");
+
+        const phoneEl = document.getElementById("requiresPhoneSetup");
+        phoneEl.textContent = requiresPhoneSetup ?? "-";
+        phoneEl.classList.add(requiresPhoneSetup === "true" ? "badge-true" : "badge-false");
+
+        if (requiresPhoneSetup === "true" && accessToken && accessToken !== "(없음)") {
+            const nextBtn = document.getElementById("nextBtn");
+            nextBtn.href = "/oauth-phone-setup.html?accessToken=" + encodeURIComponent(accessToken);
+            nextBtn.style.display = "inline-block";
+        }
+
+        function copy(id) {
+            const text = document.getElementById(id).textContent;
+            navigator.clipboard.writeText(text).then(() => alert("복사되었습니다"));
+        }
+    </script>
+</body>
+</html>
