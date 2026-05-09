@@ -52,6 +52,7 @@ public class PaymentFacade {
     private final PaymentDistributedLockExecutor paymentLockExecutor;
     private final OrderService orderService;
     private final WaitingListService waitingListService;
+    private final PaymentMetrics paymentMetrics;
 
     /**
      * 결제 준비 요청을 처리한다.
@@ -59,13 +60,40 @@ public class PaymentFacade {
      * 프론트는 응답으로 받은 pgKey로 PortOne 결제창을 연다.
      */
     public PaymentCreateResponse createPayment(UUID memberId, PaymentCreateRequest request) {
-        Payment payment = paymentLockExecutor.executeWithOrderLock(
-                request.orderId(),
-                () -> createPaymentInOrderLock(memberId, request)
-        );
+        long startedAt = System.nanoTime();
+        String result = "success";
 
-        paymentService.evictPaymentList();
-        return PaymentCreateResponse.from(payment);
+        try {
+            PaymentCreateOutcome outcome = paymentLockExecutor.executeWithOrderLock(
+                    request.orderId(),
+                    () -> createPaymentInOrderLock(memberId, request)
+            );
+
+            result = outcome.result();
+            paymentService.evictPaymentList();
+
+            log.info(
+                    "[PORTONE_PAYMENT] prepare completed. orderId={} pgKey={} memberId={} result={}",
+                    outcome.payment().getOrderId(),
+                    outcome.payment().getPgKey(),
+                    outcome.payment().getMemberId(),
+                    result
+            );
+            return PaymentCreateResponse.from(outcome.payment());
+        } catch (RuntimeException e) {
+            result = "fail";
+            log.warn(
+                    "[PORTONE_PAYMENT] prepare failed. orderId={} memberId={} reason={}",
+                    request.orderId(),
+                    memberId,
+                    e.getClass().getSimpleName(),
+                    e
+            );
+            throw e;
+        } finally {
+            paymentMetrics.recordPrepareRequest(result);
+            paymentMetrics.recordPrepareDuration(result, System.nanoTime() - startedAt);
+        }
     }
 
     /**
@@ -91,8 +119,13 @@ public class PaymentFacade {
             String webhookId,
             io.portone.sdk.server.webhook.Webhook verified
     ) {
+        long startedAt = System.nanoTime();
+        String eventType = verified.getClass().getSimpleName();
+        paymentMetrics.recordWebhookReceived(eventType);
+
         Optional<Webhook> receivedWebhook = receiveWebhook(rawBody, webhookId);
         if (receivedWebhook.isEmpty()) {
+            paymentMetrics.recordWebhookDuration("ignored", eventType, System.nanoTime() - startedAt);
             return;
         }
 
@@ -107,6 +140,8 @@ public class PaymentFacade {
                     PaymentWebhookConstants.FAIL_REASON_WEBHOOK_BUSINESS_FAILED,
                     e.getMessage()
             );
+            paymentMetrics.recordWebhookFailed(eventType, PaymentWebhookConstants.FAIL_REASON_WEBHOOK_BUSINESS_FAILED);
+            paymentMetrics.recordWebhookDuration("fail", eventType, System.nanoTime() - startedAt);
             log.error("[PORTONE_WEBHOOK] business handling failed. id={} reason={}", webhookId, e.getMessage(), e);
             return;
         } catch (RuntimeException e) {
@@ -115,11 +150,14 @@ public class PaymentFacade {
                     PaymentWebhookConstants.FAIL_REASON_WEBHOOK_UNEXPECTED_ERROR,
                     e.getMessage()
             );
+            paymentMetrics.recordWebhookFailed(eventType, PaymentWebhookConstants.FAIL_REASON_WEBHOOK_UNEXPECTED_ERROR);
+            paymentMetrics.recordWebhookDuration("fail", eventType, System.nanoTime() - startedAt);
             log.error("[PORTONE_WEBHOOK] business handling failed. id={}", webhookId, e);
             throw e;
         }
 
         if (result != null && result.cancelRequired()) {
+            paymentMetrics.recordCancelRequest(result.cancelReason());
             try {
                 cancelGatewayPayment(result.pgKey(), result.cancelAmount(), result.cancelReason());
                 webhookService.failWebhook(
@@ -127,6 +165,8 @@ public class PaymentFacade {
                         result.cancelReason(),
                         "결제 확정 불가로 내부 상태를 실패로 반영하고 PortOne 취소까지 완료"
                 );
+                paymentMetrics.recordWebhookFailed(eventType, result.cancelReason());
+                paymentMetrics.recordWebhookDuration("cancelled", eventType, System.nanoTime() - startedAt);
                 return;
             } catch (RuntimeException e) {
                 webhookService.failWebhook(
@@ -141,6 +181,8 @@ public class PaymentFacade {
                         result.cancelReason(),
                         e
                 );
+                paymentMetrics.recordWebhookFailed(eventType, PaymentWebhookConstants.FAIL_REASON_PORTONE_CANCEL_FAILED);
+                paymentMetrics.recordWebhookDuration("fail", eventType, System.nanoTime() - startedAt);
                 return;
             }
         }
@@ -148,12 +190,16 @@ public class PaymentFacade {
         if (result == null || result.webhookCompletionRequired()) {
             webhookService.completeWebhook(webhook);
         }
+        paymentMetrics.recordWebhookDuration("success", eventType, System.nanoTime() - startedAt);
     }
 
     /**
      * 서명 검증에 실패한 웹훅을 실패 이력으로 남긴다.
      */
     public void handleInvalidWebhook(String rawBody, String webhookId, String failMessage) {
+        paymentMetrics.recordWebhookReceived("UNVERIFIED");
+        paymentMetrics.recordWebhookFailed("UNVERIFIED", PaymentWebhookConstants.FAIL_REASON_WEBHOOK_SIGNATURE_INVALID);
+
         Optional<Webhook> receivedWebhook = receiveWebhook(rawBody, webhookId);
         if (receivedWebhook.isEmpty()) {
             return;
@@ -190,7 +236,7 @@ public class PaymentFacade {
      * 주문 락 안에서 결제 준비를 완료한다.
      * 이 단계에서 pgKey를 서버가 만들고 payments row를 먼저 저장한다.
      */
-    private Payment createPaymentInOrderLock(UUID memberId, PaymentCreateRequest request) {
+    private PaymentCreateOutcome createPaymentInOrderLock(UUID memberId, PaymentCreateRequest request) {
         Order order = getOrder(request.orderId());
 
         if (!order.getMemberId().equals(memberId)) {
@@ -215,21 +261,22 @@ public class PaymentFacade {
         );
 
         String pgKey = generatePgKey();
-        return paymentService.createPendingPayment(preparation, pgKey, request.payWay());
+        Payment payment = paymentService.createPendingPayment(preparation, pgKey, request.payWay());
+        return new PaymentCreateOutcome(payment, "success");
     }
 
     /**
      * 같은 주문에 대해 이미 준비된 결제가 있으면 그대로 재사용하고,
      * 이미 끝난 결제라면 새 결제를 만들지 않는다.
      */
-    private Payment getExistingPaymentOrReject(Payment existingPayment) {
+    private PaymentCreateOutcome getExistingPaymentOrReject(Payment existingPayment) {
         if (existingPayment.isPending()) {
             log.info(
                     "[PORTONE_PAYMENT] duplicate payment prepare request ignored. orderId={} pgKey={}",
                     existingPayment.getOrderId(),
                     existingPayment.getPgKey()
             );
-            return existingPayment;
+            return new PaymentCreateOutcome(existingPayment, "duplicate");
         }
 
         if (existingPayment.isPaid()) {
@@ -466,6 +513,9 @@ public class PaymentFacade {
         orderService.completePayment(order.getId());
         completeOccupyingSeatQuietly(order);
 
+        paymentMetrics.recordPaymentConfirmSuccess();
+        log.info("[PORTONE_WEBHOOK] payment confirmed. orderId={} pgKey={} memberId={}", order.getId(), pgKey, payment.getMemberId());
+
         paymentService.evictPaymentDetail(payment.getId(), payment.getMemberId());
         paymentService.evictPaymentList();
 
@@ -573,4 +623,6 @@ public class PaymentFacade {
             return new PortOneWebhookEvent(true, eventType, data.getPaymentId());
         }
     }
+
+    private record PaymentCreateOutcome(Payment payment, String result) {}
 }

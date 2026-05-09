@@ -95,6 +95,9 @@ class PaymentFacadeTest {
     private WaitingListService waitingListService;
 
     @Mock
+    private PaymentMetrics paymentMetrics;
+
+    @Mock
     private TransactionStatus transactionStatus;
 
     private Webhook savedWebhook;
@@ -118,7 +121,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment prepares a pending payment with a server generated pgKey")
+    @DisplayName("createPayment는 서버에서 생성한 pgKey로 PENDING 결제를 준비한다")
     void createPayment_success() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -154,7 +157,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment returns the existing pending payment when one already exists")
+    @DisplayName("createPayment는 기존 PENDING 결제가 있으면 그 결제를 그대로 반환한다")
     void createPayment_returnsExistingPendingPayment() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -182,7 +185,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects already paid orders")
+    @DisplayName("createPayment는 이미 결제 완료된 주문이면 예외를 던진다")
     void createPayment_alreadyPaid_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -201,7 +204,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when an ended payment already exists")
+    @DisplayName("createPayment는 종료된 결제가 이미 있으면 예외를 던진다")
     void createPayment_alreadyRequested_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -220,7 +223,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when order member does not match")
+    @DisplayName("createPayment는 주문 회원과 요청 회원이 다르면 예외를 던진다")
     void createPayment_memberMismatch_throws() {
         UUID requestMemberId = UUID.randomUUID();
         UUID orderMemberId = UUID.randomUUID();
@@ -240,7 +243,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when the order does not exist")
+    @DisplayName("createPayment는 주문이 없으면 예외를 던진다")
     void createPayment_orderNotFound_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -253,7 +256,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when the course does not exist")
+    @DisplayName("createPayment는 코스가 없으면 예외를 던진다")
     void createPayment_courseNotFound_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -271,7 +274,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when the order is not pending")
+    @DisplayName("createPayment는 주문 상태가 PENDING이 아니면 예외를 던진다")
     void createPayment_invalidOrderStatus_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -291,7 +294,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when the order has expired")
+    @DisplayName("createPayment는 주문이 만료되었으면 예외를 던진다")
     void createPayment_expiredOrder_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -311,7 +314,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when there are no seats left")
+    @DisplayName("createPayment는 남은 좌석이 없으면 예외를 던진다")
     void createPayment_noAvailableSeats_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -332,7 +335,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment rejects when the amount cannot be converted to long")
+    @DisplayName("createPayment는 금액을 long으로 변환할 수 없으면 예외를 던진다")
     void createPayment_amountOverflow_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -352,7 +355,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("createPayment fails when every generated pgKey collides")
+    @DisplayName("createPayment는 생성한 모든 pgKey가 충돌하면 실패한다")
     void createPayment_pgKeyGenerationFail_throws() {
         UUID memberId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -373,7 +376,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("handleInvalidWebhook stores a failed webhook record")
+    @DisplayName("handleInvalidWebhook는 실패한 웹훅 기록을 저장한다")
     void handleInvalidWebhook_recordsFailedWebhook() {
         paymentFacade.handleInvalidWebhook("{}", "invalid-webhook-id", "signature mismatch");
 
@@ -385,7 +388,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("finished webhook is ignored before it is received")
+    @DisplayName("이미 처리 완료된 웹훅은 수신 전에 무시한다")
     void handleWebhook_finishedWebhookIgnoredBeforeReceive() throws Exception {
         given(webhookService.isFinished("finished-webhook-id")).willReturn(true);
 
@@ -400,7 +403,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("finished webhook is ignored after it is reloaded")
+    @DisplayName("재조회 후 이미 완료된 웹훅은 무시한다")
     void handleWebhook_finishedWebhookIgnoredAfterReceive() throws Exception {
         Webhook finishedWebhook = Webhook.createPendingRecord("finished-after-receive", "UNKNOWN", null);
         finishedWebhook.markCompleted();
@@ -417,7 +420,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("paid webhook confirms the payment exactly once")
+    @DisplayName("paid 웹훅은 결제를 한 번만 확정한다")
     void handleWebhook_paid() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -445,7 +448,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("paid webhook without payment row triggers a PortOne cancel")
+    @DisplayName("결제 행이 없는 paid 웹훅은 PortOne 취소를 요청한다")
     void handleWebhook_paid_withoutPaymentRow_cancelsGatewayPayment() throws Exception {
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "payment-not-found",
@@ -474,7 +477,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("service errors mark the webhook as failed without rethrowing")
+    @DisplayName("서비스 예외가 발생하면 웹훅을 실패 처리하고 예외를 다시 던지지 않는다")
     void handleWebhook_businessServiceError_recordsFailedWebhook() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -501,7 +504,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("unexpected runtime errors mark the webhook as failed and are rethrown")
+    @DisplayName("예상치 못한 런타임 예외가 발생하면 웹훅을 실패 처리하고 예외를 다시 던진다")
     void handleWebhook_businessRuntimeError_marksFailedAndRethrows() throws Exception {
         given(paymentService.findByPgKey("payment-runtime-error")).willReturn(Optional.empty());
         given(paymentGateway.getPayment("payment-runtime-error"))
@@ -522,7 +525,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("PortOne cancel failures are stored as webhook failures")
+    @DisplayName("PortOne 취소 실패는 웹훅 실패로 저장한다")
     void handleWebhook_cancelGatewayFail_marksWebhookFailed() throws Exception {
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse(
                 "payment-cancel-fail",
@@ -550,7 +553,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("already paid payments are handled idempotently")
+    @DisplayName("이미 결제 완료된 결제는 멱등하게 처리한다")
     void handleWebhook_paid_alreadyPaid() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -573,7 +576,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("member mismatch fails the payment and cancels it")
+    @DisplayName("회원 정보가 다르면 결제를 실패 처리하고 취소한다")
     void handleWebhook_paid_memberMismatch_cancelGatewayPayment() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID paymentMemberId = UUID.randomUUID();
@@ -603,7 +606,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("non pending payments are cancelled when a paid webhook arrives")
+    @DisplayName("PENDING이 아닌 결제에 paid 웹훅이 오면 결제를 취소한다")
     void handleWebhook_paid_invalidPaymentStatus_cancelGatewayPayment() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -629,7 +632,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("invalid order status fails the payment and cancels it")
+    @DisplayName("주문 상태가 유효하지 않으면 결제를 실패 처리하고 취소한다")
     void handleWebhook_paid_invalidOrderStatus_cancelGatewayPayment() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -659,7 +662,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("expired orders fail the payment and cancel it")
+    @DisplayName("만료된 주문은 결제를 실패 처리하고 취소한다")
     void handleWebhook_paid_expiredOrder_cancelGatewayPayment() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -689,7 +692,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("no seats left fails the payment and cancels it")
+    @DisplayName("남은 좌석이 없으면 결제를 실패 처리하고 취소한다")
     void handleWebhook_paid_noAvailableSeats_cancelGatewayPayment() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -756,7 +759,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("failed webhook marks the existing payment as failed")
+    @DisplayName("failed 웹훅은 기존 결제를 실패 처리한다")
     void handleWebhook_failed() throws Exception {
         Payment payment = createPendingPayment(UUID.randomUUID(), UUID.randomUUID(), "payment-2");
 
@@ -772,7 +775,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("failed webhook without a payment row only completes the webhook")
+    @DisplayName("결제 행이 없는 failed 웹훅은 웹훅만 완료 처리한다")
     void handleWebhook_failedWithoutPayment_completesWebhookOnly() throws Exception {
         given(paymentService.findByPgKeyForUpdate("payment-missing")).willReturn(Optional.empty());
 
@@ -787,7 +790,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("refund completed webhook only completes the webhook")
+    @DisplayName("환불 완료 웹훅은 웹훅만 완료 처리한다")
     void handleWebhook_refundCompletedEvent_completesWebhookOnly() throws Exception {
         WebhookTransactionCancelledData verified =
                 new WebhookTransactionCancelledData(new TestWebhookTransactionData("payment-refund-complete"));
@@ -800,7 +803,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("partial refund completed webhook only completes the webhook")
+    @DisplayName("부분 환불 완료 웹훅은 웹훅만 완료 처리한다")
     void handleWebhook_partialRefundCompletedEvent_completesWebhookOnly() throws Exception {
         WebhookTransactionCancelledDataPartialCancelled verified =
                 new WebhookTransactionCancelledDataPartialCancelled(new TestWebhookTransactionData("payment-partial-refund-complete"));
@@ -813,7 +816,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("unsupported transaction types only complete the webhook")
+    @DisplayName("지원하지 않는 거래 타입은 웹훅만 완료 처리한다")
     void handleWebhook_unknownTransactionType() throws Exception {
         WebhookTransactionUnknown verified =
                 new WebhookTransactionUnknown(new TestWebhookTransactionData("payment-unknown"));
@@ -826,7 +829,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("non transaction webhooks only update the event status")
+    @DisplayName("트랜잭션이 아닌 웹훅은 이벤트 상태만 갱신한다")
     void handleWebhook_nonTransactionWebhook() throws Exception {
         PlainWebhook verified = new PlainWebhook();
 
@@ -837,7 +840,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("occupancy cleanup failure does not break payment confirmation")
+    @DisplayName("좌석 점유 정리 실패가 발생해도 결제 확정은 계속 진행된다")
     void handleWebhook_paid_occupancyCleanupFail_stillCompletesWebhook() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
@@ -867,7 +870,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("getMyPayment delegates to PaymentService")
+    @DisplayName("getMyPayment는 PaymentService에 위임한다")
     void getMyPayment_returns_detail_response() {
         UUID memberId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
@@ -892,7 +895,7 @@ class PaymentFacadeTest {
     }
 
     @Test
-    @DisplayName("getAllMyPayments wraps the result with PageResponse")
+    @DisplayName("getAllMyPayments는 결과를 PageResponse로 감싸서 반환한다")
     void getMyPayments_returns_page_response() {
         UUID memberId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 10);

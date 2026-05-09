@@ -50,6 +50,7 @@ public class RefundFacade {
     private final PaymentDistributedLockExecutor paymentLockExecutor;
     private final TransactionTemplate transactionTemplate;
     private final CourseCancelOutboxRepository courseCancelOutboxRepository;
+    private final PaymentMetrics paymentMetrics;
 
     /**
      * 환불 가능 여부를 조회
@@ -69,18 +70,52 @@ public class RefundFacade {
      * 주문 취소 흐름에서 호출되며, 주문을 먼저 취소하지 않고 환불 성공 후 DB를 정리한다.
      */
     public RefundResponse refundPaidOrderByStudent(UUID memberId, UUID orderId, int cancelCount) {
+        long startedAt = System.nanoTime();
+        String result = "success";
 
-        // 락을 잡기 전에 먼저 조회해서 pgKey와 courseId를 알아둔다
-        Order order = getOrder(orderId);
-        Payment payment = getPaymentByOrderId(orderId);
+        Order order = null;
+        Payment payment = null;
 
-        // pgKey 기준 분산락 적용
-        return paymentLockExecutor.executeWithPgKeyLock(payment.getPgKey(), () ->
-                // courseId 기준 분산락 적용 - 코스의 confirmCount를 동시에 줄이는 충돌 방지
-                paymentLockExecutor.executeWithCourseLock(order.getCourseId(), () ->
-                        refundInLock(memberId, orderId, cancelCount, payment.getPgKey())
-                )
-        );
+        try {
+            // 락을 잡기 전에 먼저 조회해서 pgKey와 courseId를 알아둔다
+            order = getOrder(orderId);
+            payment = getPaymentByOrderId(orderId);
+            UUID courseId = order.getCourseId();
+            String pgKey = payment.getPgKey();
+
+            log.info(
+                    "[PORTONE_REFUND] refund requested. orderId={} paymentId={} pgKey={} memberId={} cancelCount={}",
+                    orderId,
+                    payment.getId(),
+                    pgKey,
+                    memberId,
+                    cancelCount
+            );
+
+            // pgKey 기준 분산락 적용
+            return paymentLockExecutor.executeWithPgKeyLock(pgKey, () ->
+                    // courseId 기준 분산락 적용 - 코스의 confirmCount를 동시에 줄이는 충돌 방지
+                    paymentLockExecutor.executeWithCourseLock(courseId, () ->
+                            refundInLock(memberId, orderId, cancelCount, pgKey)
+                    )
+            );
+        } catch (RuntimeException e) {
+            result = "fail";
+            log.warn(
+                    "[PORTONE_REFUND] refund failed. orderId={} paymentId={} pgKey={} memberId={} cancelCount={} reason={}",
+                    orderId,
+                    payment != null ? payment.getId() : null,
+                    payment != null ? payment.getPgKey() : "unknown",
+                    memberId,
+                    cancelCount,
+                    e.getClass().getSimpleName(),
+                    e
+            );
+            throw e;
+        } finally {
+            paymentMetrics.recordRefundRequest(result);
+            paymentMetrics.recordRefundDuration(result, System.nanoTime() - startedAt);
+        }
     }
 
     private RefundResponse refundInLock(UUID memberId, UUID orderId, int cancelCount, String pgKey) {

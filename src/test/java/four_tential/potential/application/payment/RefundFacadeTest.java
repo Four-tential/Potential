@@ -95,6 +95,9 @@ class RefundFacadeTest {
     @Mock
     private CourseCancelOutboxRepository courseCancelOutboxRepository;
 
+    @Mock
+    private PaymentMetrics paymentMetrics;
+
     @BeforeEach
     void setUp() {
         lenient().when(paymentLockExecutor.executeWithPgKeyLock(any(String.class), any()))
