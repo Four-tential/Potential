@@ -1,0 +1,10 @@
+apiVersion: 1
+contactPoints:
+    - orgId: 1
+      name: Slack Alert
+      receivers:
+        - uid: dflkss4yp3y0xe
+          type: slack
+          disableResolveMessage: false
+          settings:
+            url: $GRAFANA_AI_ALERT_SLACK_WEBHOOK
