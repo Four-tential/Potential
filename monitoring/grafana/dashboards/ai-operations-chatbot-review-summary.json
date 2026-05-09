@@ -456,7 +456,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 11,
+        "w": 6,
         "x": 0,
         "y": 7
       },
@@ -549,7 +549,7 @@
       "gridPos": {
         "h": 8,
         "w": 6,
-        "x": 11,
+        "x": 6,
         "y": 7
       },
       "id": 6,
@@ -640,8 +640,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
-        "x": 17,
+        "w": 6,
+        "x": 12,
         "y": 7
       },
       "id": 7,
@@ -669,6 +669,48 @@
       ],
       "title": "Chatbot Rate Limit 초과",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 7
+      },
+      "id": 11,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{job=\"potential-app\"} |= \"[CHATBOT]\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Chatbot Activity Logs",
+      "type": "logs"
     },
     {
       "datasource": {
@@ -731,8 +773,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 7,
+        "w": 6,
         "x": 0,
         "y": 15
       },
@@ -823,9 +865,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 7,
+        "w": 6,
+        "x": 6,
         "y": 15
       },
       "id": 9,
@@ -851,7 +893,191 @@
           "refId": "A"
         }
       ],
-      "title": "Review Summary AI 에러",
+      "title": "Review Summary AI 에러 수",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 15
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "1000 *\r\nhistogram_quantile(\r\n  0.95,\r\n  sum by (le, model) (\r\n    rate(ai_chat_call_duration_seconds_bucket{\r\n      application=\"$application\",\r\n      instance=~\"$instance\",\r\n      feature=\"review_summary\",\r\n      model=~\"$model\",\r\n      result=\"success\"\r\n    }[$__rate_interval])\r\n  )\r\n)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Review Summary AI p95 응답시간",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 15
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (model) (\r\n  increase(ai_chat_tokens_total{\r\n    application=\"$application\",\r\n    instance=~\"$instance\",\r\n    feature=\"review_summary\",\r\n    model=~\"$model\"\r\n  }[$__rate_interval])\r\n)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Review Summary AI 총 토큰",
       "type": "timeseries"
     },
     {
@@ -864,10 +1090,52 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 22
+      },
+      "id": 12,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{job=\"potential-app\"} |= \"[AI_CALL]\" |= \"feature=review_summary\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Review Summary AI Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 22
       },
       "id": 10,
       "options": {
@@ -907,11 +1175,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 23
+        "w": 8,
+        "x": 0,
+        "y": 29
       },
-      "id": 11,
+      "id": 16,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -930,12 +1198,12 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{job=\"potential-app\"} |= \"[CHATBOT]\"",
+          "expr": "{job=\"potential-app\"} |= \"[후기 요약 갱신]\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Chatbot Activity Logs",
+      "title": "Review Summary Update Logs",
       "type": "logs"
     },
     {
@@ -949,9 +1217,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 31
+        "w": 8,
+        "x": 8,
+        "y": 29
       },
       "id": 13,
       "options": {
@@ -972,7 +1240,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{job=\"potential-app\"} |= \"reviewSummaryBatchJob\"",
+          "expr": "{job=\"potential-app\"} |= \"[배치 재요약]\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -991,11 +1259,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 31
+        "w": 8,
+        "x": 16,
+        "y": 29
       },
-      "id": 12,
+      "id": 17,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -1014,12 +1282,12 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{job=\"potential-app\"} |= \"[AI_CALL]\" |= \"feature=review_summary\"",
+          "expr": "{job=\"potential-app\"} |= \"[배치 재요약]\" |= \"실패\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Review Summary AI Logs",
+      "title": "Review Summary Batch Failures",
       "type": "logs"
     }
   ],
@@ -1121,13 +1389,13 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "AI 챗봇 / 후기요약",
   "uid": "efljwhw8x181sd",
-  "version": 22,
+  "version": 31,
   "weekStart": ""
 }
