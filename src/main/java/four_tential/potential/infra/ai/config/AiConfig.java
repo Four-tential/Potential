@@ -1,7 +1,8 @@
 package four_tential.potential.infra.ai.config;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import four_tential.potential.infra.ai.AiMetrics;
+import four_tential.potential.infra.ai.advisor.AiLoggingAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -37,26 +38,32 @@ public class AiConfig {
     }
 
     @Bean
+    public AiLoggingAdvisor aiLoggingAdvisor(AiMetrics aiMetrics) {
+        return new AiLoggingAdvisor(Ordered.LOWEST_PRECEDENCE - 1, aiMetrics);
+    }
+
+
+    @Bean
     @Profile("!ollama")
     public ChatClient reviewChatClient(
-            @Qualifier("openAiChatModel") ChatModel chatModel
+            @Qualifier("openAiChatModel") ChatModel chatModel,
+            AiLoggingAdvisor aiLoggingAdvisor
     ) {
-        return buildChatClient(chatModel);
+        return buildChatClient(chatModel, aiLoggingAdvisor);
     }
 
     @Bean("reviewChatClient")
     @Profile("ollama")
     public ChatClient reviewChatClientOllama(
-            @Qualifier("ollamaChatModel") ChatModel chatModel
+            @Qualifier("ollamaChatModel") ChatModel chatModel,
+            AiLoggingAdvisor aiLoggingAdvisor
     ) {
-        return buildChatClient(chatModel);
+        return buildChatClient(chatModel, aiLoggingAdvisor);
     }
 
-    private ChatClient buildChatClient(ChatModel chatModel) {
+    private ChatClient buildChatClient(ChatModel chatModel, AiLoggingAdvisor aiLoggingAdvisor) {
         return ChatClient.builder(chatModel)
-                .defaultAdvisors(
-                        new SimpleLoggerAdvisor(Ordered.LOWEST_PRECEDENCE - 1)
-                )
+                .defaultAdvisors(aiLoggingAdvisor)
                 .build();
     }
 
@@ -64,21 +71,23 @@ public class AiConfig {
     @Profile("!ollama & !test")
     public ChatClient chatbotChatClient(
             @Qualifier("openAiChatModel") ChatModel chatModel,
-            VectorStore vectorStore
+            VectorStore vectorStore,
+            AiLoggingAdvisor aiLoggingAdvisor
     ) {
-        return buildChatbotChatClient(chatModel, vectorStore);
+        return buildChatbotChatClient(chatModel, vectorStore, aiLoggingAdvisor);
     }
 
     @Bean("chatbotChatClient")
     @Profile("ollama & !test")
     public ChatClient chatbotChatClientOllama(
             @Qualifier("ollamaChatModel") ChatModel chatModel,
-            VectorStore vectorStore
+            VectorStore vectorStore,
+            AiLoggingAdvisor aiLoggingAdvisor
     ) {
-        return buildChatbotChatClient(chatModel, vectorStore);
+        return buildChatbotChatClient(chatModel, vectorStore, aiLoggingAdvisor);
     }
 
-    private ChatClient buildChatbotChatClient(ChatModel chatModel, VectorStore vectorStore) {
+    private ChatClient buildChatbotChatClient(ChatModel chatModel, VectorStore vectorStore, AiLoggingAdvisor aiLoggingAdvisor) {
         SearchRequest searchRequest = SearchRequest.builder()
                 .similarityThreshold(0.3)
                 .topK(5)
@@ -100,7 +109,7 @@ public class AiConfig {
                         QuestionAnswerAdvisor.builder(vectorStore)
                                 .searchRequest(searchRequest)
                                 .build(),
-                        new SimpleLoggerAdvisor(Ordered.LOWEST_PRECEDENCE - 1)
+                        aiLoggingAdvisor
                 )
                 .build();
     }
