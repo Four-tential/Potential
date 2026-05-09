@@ -133,7 +133,9 @@ class AiLoggingAdvisorTest {
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
         when(chain.nextStream(request)).thenReturn(Flux.error(new IllegalArgumentException("stream fail")));
 
-        assertThatThrownBy(() -> advisor.adviseStream(request, chain).collectList().block())
+        var result = advisor.adviseStream(request, chain).collectList();
+
+        assertThatThrownBy(result::block)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("stream fail");
 

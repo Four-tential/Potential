@@ -166,10 +166,6 @@ public class AiLoggingAdvisor implements CallAdvisor, StreamAdvisor {
             Integer completionTokens = usage.getCompletionTokens();
             Integer totalTokens = usage.getTotalTokens();
 
-            if (totalTokens == null && promptTokens != null && completionTokens != null) {
-                totalTokens = promptTokens + completionTokens;
-            }
-
             return new UsageSnapshot(promptTokens, completionTokens, totalTokens);
         } catch (Exception e) {
             return UsageSnapshot.empty();
