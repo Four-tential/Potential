@@ -8,6 +8,11 @@ public class RedisConstants {
     public static final String REFRESH_TOKEN_PREFIX = "Refresh-Token:";
     public static final String BLACK_LIST_PREFIX = "BlackList:";
 
+    public static final String SOCIAL_LINK_CHALLENGE_PREFIX = "social-link-challenge:";
+    public static final String SOCIAL_LINK_ATTEMPTS_PREFIX = "social-link-attempts:";
+    public static final long   SOCIAL_LINK_CHALLENGE_TTL_SECONDS = 300L;
+    public static final int    SOCIAL_LINK_MAX_ATTEMPTS = 3;
+
     // Order
     public static final String COURSE_CAPACITY_PREFIX = "Course:Capacity:";
     public static final String WAITING_LIST_PREFIX = "WaitingList:";
