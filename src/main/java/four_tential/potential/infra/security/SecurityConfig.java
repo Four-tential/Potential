@@ -1,6 +1,9 @@
 package four_tential.potential.infra.security;
 
 import four_tential.potential.infra.jwt.JwtFilter;
+import four_tential.potential.infra.oauth2.CustomOAuth2UserService;
+import four_tential.potential.infra.oauth2.OAuth2LoginFailureHandler;
+import four_tential.potential.infra.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,6 +33,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
 
     @Value("${cors.allowed-origins:http://localhost:3000}")
     private List<String> allowedOrigins;
@@ -74,7 +80,13 @@ public class SecurityConfig {
                 //.requestMatchers("/ai/test/**").permitAll()
 
                 // Auth
-                .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh").permitAll()
+                .requestMatchers(HttpMethod.POST, "/v1/auth/signup", "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/social-link/confirm").permitAll()
+
+                // OAuth2 (Kakao / Google)
+                .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+
+                // OAuth2 간이 검증 페이지 (백엔드 정적 자원)
+                .requestMatchers(HttpMethod.GET, "/oauth-success.html", "/oauth-failure.html", "/oauth-phone-setup.html", "/oauth-link-confirm.html").permitAll()
 
                 // PortOne 웹훅
                 .requestMatchers(HttpMethod.POST, "/v1/webhooks/portone").permitAll()
@@ -96,6 +108,11 @@ public class SecurityConfig {
 
                 // 그 외 모든 요청은 인증 필요
                 .anyRequest().authenticated()
+            )
+            .oauth2Login(oauth2 -> oauth2
+                    .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                    .successHandler(oAuth2LoginSuccessHandler)
+                    .failureHandler(oAuth2LoginFailureHandler)
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

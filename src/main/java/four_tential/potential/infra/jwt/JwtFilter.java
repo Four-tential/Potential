@@ -64,6 +64,7 @@ public class JwtFilter extends OncePerRequestFilter {
             post("/v1/auth/signup"),
             post("/v1/auth/login"),
             post("/v1/auth/refresh"),
+            post("/v1/auth/social-link/confirm"),
 
             // Course
             get("/v1/courses"),
@@ -81,7 +82,13 @@ public class JwtFilter extends OncePerRequestFilter {
             get("/v1/payments/portone-config"),
 
             // 결제 테스트 페이지
-            any("/payment-test.html")
+            any("/payment-test.html"),
+
+            // OAuth2 간이 검증 페이지
+            any("/oauth-success.html"),
+            any("/oauth-failure.html"),
+            any("/oauth-phone-setup.html"),
+            any("/oauth-link-confirm.html")
     );
 
     @Override
