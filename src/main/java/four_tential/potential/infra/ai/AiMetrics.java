@@ -37,7 +37,7 @@ public class AiMetrics {
                 .tag("result", normalize(result))
                 .publishPercentileHistogram()
                 .minimumExpectedValue(Duration.ofMillis(10))
-                .maximumExpectedValue(Duration.ofSeconds(30))
+                .maximumExpectedValue(Duration.ofSeconds(60))
                 .register(registry)
                 .record(nanos, TimeUnit.NANOSECONDS);
     }
