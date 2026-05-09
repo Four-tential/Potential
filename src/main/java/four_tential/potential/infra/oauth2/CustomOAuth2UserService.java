@@ -39,7 +39,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     oAuth2User.getAttributes()
             );
         } catch (SocialEmailConflictException e) {
-            String code = ((Enum<?>) e.getErrorCode()).name();
+            String code = e.getErrorCode() instanceof Enum<?> en ? en.name() : "social_email_conflict";
             String description = "challengeToken=" + e.getChallengeToken()
                     + "&email=" + e.getConflictEmail()
                     + "&provider=" + e.getProvider().name();

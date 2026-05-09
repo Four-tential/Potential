@@ -43,7 +43,6 @@ public class TestMemberInitializer implements ApplicationRunner {
         log.info("=========================================================");
         log.info(" 테스트 계정 생성 완료");
         log.info("   email   : {}", TEST_EMAIL);
-        log.info("   password: {}", TEST_PASSWORD);
         log.info("   phone   : {}", TEST_PHONE);
         log.info("=========================================================");
     }
