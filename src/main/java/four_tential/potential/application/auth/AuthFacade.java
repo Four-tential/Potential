@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_NO_PASSWORD_SET;
@@ -139,6 +140,7 @@ public class AuthFacade {
         socialAuthService.unlinkSocialAccount(memberId, provider);
     }
 
+    @Transactional
     public SocialLinkConfirmResult confirmSocialLink(String challengeToken, String password) {
         SocialLinkChallengeData data = socialLinkChallengeRepository.peek(challengeToken)
                 .orElseThrow(() -> new ServiceErrorException(ERR_INVALID_AUTHORIZE));

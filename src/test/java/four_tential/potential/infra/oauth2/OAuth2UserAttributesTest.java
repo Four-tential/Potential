@@ -32,15 +32,23 @@ class OAuth2UserAttributesTest {
     }
 
     @Test
-    @DisplayName("Kakao - kakao_account 누락 시에도 NPE 없이 파싱")
-    void fromKakao_missingAccount() {
+    @DisplayName("Kakao - email 동의 누락 시 ERR_SOCIAL_PROFILE_INCOMPLETE")
+    void fromKakao_missingEmail() {
         Map<String, Object> attributes = Map.of("id", 7777L);
 
-        OAuth2UserAttributes result = OAuth2UserAttributes.from("kakao", attributes);
+        assertThatThrownBy(() -> OAuth2UserAttributes.from("kakao", attributes))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("소셜 계정에서 필수 프로필 정보를 받지 못했습니다, 동의 항목을 확인해주세요");
+    }
 
-        assertThat(result.providerId()).isEqualTo("7777");
-        assertThat(result.email()).isNull();
-        assertThat(result.name()).isNull();
+    @Test
+    @DisplayName("Google - email 누락 시 ERR_SOCIAL_PROFILE_INCOMPLETE")
+    void fromGoogle_missingEmail() {
+        Map<String, Object> attributes = Map.of("sub", "google-sub-1", "name", "이름만");
+
+        assertThatThrownBy(() -> OAuth2UserAttributes.from("google", attributes))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("소셜 계정에서 필수 프로필 정보를 받지 못했습니다, 동의 항목을 확인해주세요");
     }
 
     @Test

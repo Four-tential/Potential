@@ -23,7 +23,11 @@ public record OAuth2UserAttributes(
 
     @SuppressWarnings("unchecked")
     private static OAuth2UserAttributes fromKakao(Map<String, Object> attributes) {
-        String providerId = String.valueOf(attributes.get("id"));
+        Object id = attributes.get("id");
+        if (id == null) {
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_SOCIAL_PROFILE_INCOMPLETE);
+        }
+        String providerId = String.valueOf(id);
 
         Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.getOrDefault("kakao_account", Map.of());
         String email = (String) kakaoAccount.get("email");
@@ -31,13 +35,20 @@ public record OAuth2UserAttributes(
         Map<String, Object> profile = (Map<String, Object>) kakaoAccount.getOrDefault("profile", Map.of());
         String nickname = (String) profile.get("nickname");
 
-        return new OAuth2UserAttributes(SocialProvider.KAKAO, providerId, email, nickname);
+        return validated(SocialProvider.KAKAO, providerId, email, nickname);
     }
 
     private static OAuth2UserAttributes fromGoogle(Map<String, Object> attributes) {
         String providerId = (String) attributes.get("sub");
         String email = (String) attributes.get("email");
         String name = (String) attributes.get("name");
-        return new OAuth2UserAttributes(SocialProvider.GOOGLE, providerId, email, name);
+        return validated(SocialProvider.GOOGLE, providerId, email, name);
+    }
+
+    private static OAuth2UserAttributes validated(SocialProvider provider, String providerId, String email, String name) {
+        if (providerId == null || providerId.isBlank() || email == null || email.isBlank()) {
+            throw new ServiceErrorException(MemberExceptionEnum.ERR_SOCIAL_PROFILE_INCOMPLETE);
+        }
+        return new OAuth2UserAttributes(provider, providerId, email, name);
     }
 }

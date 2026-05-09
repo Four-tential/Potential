@@ -55,15 +55,15 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         );
         String refreshToken = jwtUtil.createRefreshToken(principal.getEmail());
 
-        jwtRepository.saveRefreshToken(principal.getEmail(), refreshToken, refreshTokenExpire);
-
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie(refreshToken).toString());
-
+        // 티켓 발급이 성공한 뒤에 토큰/쿠키를 저장해야 부분 성공이 남지 않음
         String ticket = ticketRepository.issueLogin(new OAuthLoginTicketData(
                 accessToken,
                 principal.isHasOnboarding(),
                 principal.isRequiresPhoneSetup()
         ));
+
+        jwtRepository.saveRefreshToken(principal.getEmail(), refreshToken, refreshTokenExpire);
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie(refreshToken).toString());
 
         String redirectUrl = UriComponentsBuilder.fromUriString(successRedirectUri)
                 .queryParam("ticket", ticket)
