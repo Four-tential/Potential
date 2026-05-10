@@ -1,0 +1,327 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: Ai
+      folder: Potential
+      interval: 1m
+      rules:
+        - uid: dflkruxbz9r0gc
+          title: AI Chatbot Call Failures
+          condition: A
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                editorMode: code
+                expr: "sum(\r\n  increase(ai_chat_call_request_total{\r\n    application=\"potential\",\r\n    feature=\"chatbot\",\r\n    result=\"fail\"\r\n  }[5m])\r\n)"
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 3m
+          annotations:
+            description: 최근 5분 동안 챗봇 AI 호출 실패가 감지되었습니다.
+            summary: 챗봇 AI 호출 실패 발생
+          labels:
+            env: local
+            feature: chatbot
+            service: ai
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Slack Alert
+        - uid: dflks1mfjy8sgb
+          title: AI Chatbot Rate Limit Spike
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                editorMode: code
+                expr: "sum(\r\n  increase(chatbot_rate_limit_exceeded_total{\r\n    application=\"potential\"\r\n  }[10m])\r\n)"
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 1m
+          annotations:
+            description: 챗봇 Rate Limit 급증했습니다
+            summary: 챗봇 Rate Limit 급증
+          isPaused: false
+          notification_settings:
+            receiver: Slack Alert
+        - uid: fflks7smpsfswc
+          title: AI Review Summary Failures
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                editorMode: code
+                expr: "sum(\r\n  increase(ai_chat_call_request_total{\r\n    application=\"potential\",\r\n    feature=\"review_summary\",\r\n    result=\"fail\"\r\n  }[15m])\r\n)"
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 1m
+          annotations:
+            description: 최근 15분 동안 후기요약 AI 실패가 감지되었습니다.
+            summary: 후기요약 AI 실패 감지
+          labels:
+            env: local
+            feature: review_summary
+            service: ai
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: Slack Alert
+        - uid: bflksiujdi1a8b
+          title: AI Review Summary Batch Failure
+          condition: C
+          data:
+            - refId: A
+              queryType: instant
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: loki
+              model:
+                datasource:
+                    type: loki
+                    uid: loki
+                editorMode: code
+                expr: "sum(\r\n  count_over_time({job=\"potential-app\"} |= \"[배치 재요약]\" |= \"실패\" [15m])\r\n)"
+                intervalMs: 1000
+                maxDataPoints: 43200
+                queryType: instant
+                refId: A
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 1m
+          annotations:
+            description: 최근 15분 내 후기요약 배치 실패 로그 감지되었습니다.
+            summary: 후기요약 배치 실패 로그 감지
+          isPaused: false
+          notification_settings:
+            receiver: Slack Alert

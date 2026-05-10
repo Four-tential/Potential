@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,6 +59,7 @@ class ReviewSummaryServiceTest {
         ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
         ChatClient.CallResponseSpec responseSpec     = mock(ChatClient.CallResponseSpec.class);
         when(reviewChatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.content()).thenReturn(content);
     }
@@ -66,6 +68,7 @@ class ReviewSummaryServiceTest {
         when(reviewChatClient.prompt(any(Prompt.class))).thenAnswer(inv -> {
             ChatClient.ChatClientRequestSpec spec = mock(ChatClient.ChatClientRequestSpec.class);
             ChatClient.CallResponseSpec resp      = mock(ChatClient.CallResponseSpec.class);
+            when(spec.advisors(any(Consumer.class))).thenReturn(spec);
             when(spec.call()).thenReturn(resp);
             when(resp.content()).thenReturn(content);
             return spec;

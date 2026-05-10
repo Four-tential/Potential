@@ -6,6 +6,7 @@ import four_tential.potential.domain.review.review.ReviewSummaryItem;
 import four_tential.potential.common.exception.domain.CourseExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
 import four_tential.potential.domain.course.course.CourseRepository;
+import four_tential.potential.infra.ai.advisor.AiLoggingAdvisor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -71,6 +72,7 @@ public class ReviewSummaryService {
                 "newReview", "[" + newRating + "점] " + newReviewContent);
 
         String updatedSummary = reviewChatClient.prompt(template.create(variables))
+                .advisors(advisor -> advisor.param(AiLoggingAdvisor.CONTEXT_FEATURE, AiLoggingAdvisor.FEATURE_REVIEW_SUMMARY))
                 .call()
                 .content();
 
@@ -105,6 +107,7 @@ public class ReviewSummaryService {
 
             String chunkSummary = reviewChatClient
                     .prompt(new PromptTemplate(chunkPrompt).create(Map.of("reviews", sb.toString())))
+                    .advisors(advisor -> advisor.param(AiLoggingAdvisor.CONTEXT_FEATURE, AiLoggingAdvisor.FEATURE_REVIEW_SUMMARY))
                     .call()
                     .content();
 
@@ -124,6 +127,7 @@ public class ReviewSummaryService {
             }
             finalSummary = reviewChatClient
                     .prompt(new PromptTemplate(reducePrompt).create(Map.of("summaries", sb.toString())))
+                    .advisors(advisor -> advisor.param(AiLoggingAdvisor.CONTEXT_FEATURE, AiLoggingAdvisor.FEATURE_REVIEW_SUMMARY))
                     .call()
                     .content();
         }

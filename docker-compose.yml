@@ -103,8 +103,10 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GRAFANA_AI_ALERT_SLACK_WEBHOOK=${GRAFANA_AI_ALERT_SLACK_WEBHOOK}
     volumes:
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
       - grafana-data:/var/lib/grafana
