@@ -30,4 +30,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewRep
     // 배치 재요약용 — 코스의 전체 후기 content 조회
     @Query("SELECT r.content FROM Review r WHERE r.courseId = :courseId ORDER BY r.createdAt ASC")
     List<String> findAllContentByCourseId(@Param("courseId") UUID courseId);
+
+    // 배치 재요약용 — 코스의 전체 후기 rating + content 조회
+    @Query("SELECT new four_tential.potential.domain.review.review.ReviewSummaryItem(r.rating, r.content) FROM Review r WHERE r.courseId = :courseId ORDER BY r.createdAt ASC")
+    List<ReviewSummaryItem> findAllSummaryItemsByCourseId(@Param("courseId") UUID courseId);
 }

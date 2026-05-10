@@ -56,14 +56,15 @@ public class ReviewSummaryBatchJobConfig {
                     try (pool) {
                         pool.submit(() ->
                                 courseIds.parallelStream().forEach(courseId -> {
-                                    List<String> contents = reviewRepository.findAllContentByCourseId(courseId);
-                                    if (contents.isEmpty()) {
+                                    List<four_tential.potential.domain.review.review.ReviewSummaryItem> items =
+                                            reviewRepository.findAllSummaryItemsByCourseId(courseId);
+                                    if (items.isEmpty()) {
                                         log.info("[배치 재요약] 후기 없음, 스킵. courseId={}", courseId);
                                         return;
                                     }
-                                    log.info("[배치 재요약] 요약 시작. courseId={}, 후기 수={}건", courseId, contents.size());
+                                    log.info("[배치 재요약] 요약 시작. courseId={}, 후기 수={}건", courseId, items.size());
                                     try {
-                                        reviewSummaryService.batchSummarize(courseId, contents);
+                                        reviewSummaryService.batchSummarize(courseId, items);
                                         log.info("[배치 재요약] 완료. courseId={}", courseId);
                                     } catch (Exception e) {
                                         log.error("[배치 재요약] 실패. courseId={}", courseId, e);

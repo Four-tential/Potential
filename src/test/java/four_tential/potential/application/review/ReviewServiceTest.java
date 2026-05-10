@@ -138,7 +138,7 @@ class ReviewServiceTest {
             assertThat(response.rating()).isEqualTo(5);
             assertThat(response.content()).isEqualTo("좋아요");
             verify(reviewRepository).save(any(Review.class));
-            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+            verify(reviewSummaryService).updateSummary(COURSE_ID, 5, "좋아요");
         }
 
         @Test
@@ -161,7 +161,7 @@ class ReviewServiceTest {
             reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
 
             // then
-            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+            verify(reviewSummaryService).updateSummary(COURSE_ID, 5, "좋아요");
         }
 
         @Test
@@ -184,7 +184,7 @@ class ReviewServiceTest {
             reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
 
             // then
-            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+            verify(reviewSummaryService).updateSummary(COURSE_ID, 5, "좋아요");
         }
 
         @Test
@@ -207,7 +207,7 @@ class ReviewServiceTest {
             reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
 
             // then
-            verify(reviewSummaryService).updateSummary(COURSE_ID, "좋아요");
+            verify(reviewSummaryService).updateSummary(COURSE_ID, 5, "좋아요");
         }
 
         @Test
@@ -230,7 +230,7 @@ class ReviewServiceTest {
             reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "좋아요", List.of());
 
             // then
-            verify(reviewSummaryService, never()).updateSummary(any(), any());
+            verify(reviewSummaryService, never()).updateSummary(any(), anyInt(), any());
         }
 
         @Test
