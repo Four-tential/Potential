@@ -65,6 +65,12 @@ public class JwtFilter extends OncePerRequestFilter {
             post("/v1/auth/login"),
             post("/v1/auth/refresh"),
             post("/v1/auth/social-link/confirm"),
+            post("/v1/auth/oauth/ticket/exchange"),
+            post("/v1/auth/oauth/link-ticket/exchange"),
+
+            // OAuth2 (Spring Security 자체 처리 경로)
+            any("/oauth2/**"),
+            any("/login/oauth2/**"),
 
             // Course
             get("/v1/courses"),
