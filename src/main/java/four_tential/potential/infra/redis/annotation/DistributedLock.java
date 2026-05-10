@@ -31,16 +31,8 @@ public @interface DistributedLock {
     TimeUnit timeUnit() default TimeUnit.SECONDS;
 
     /**
-     * 락 안에서 트랜잭션을 포함할지 여부
-     *
-     * true (기본값):
-     *   AopInTransaction.proceed() 를 통해 REQUIRES_NEW 트랜잭션 안에서 실행
-     *   일반 결제/환불 흐름에서 사용 (DB 변경이 트랜잭션으로 보호되어야 하는 경우)
-     *
-     * false:
-     *   joinPoint.proceed() 를 직접 호출 - 트랜잭션 없이 락만 적용
-     *   Batch Job 에서 PortOne API 호출이 포함된 경우 사용
-     *   이유: 트랜잭션이 PortOne API 호출까지 묶이면 외부 API 대기 중 DB 커넥션을 점유함
+     * true (기본값): AopInTransaction을 통해 트랜잭션 포함 실행 - 기존 방식 유지
+     * false: joinPoint.proceed() 직접 호출 - 트랜잭션 없이 락만 적용 (Batch 전용)
      */
     boolean withTransaction() default true;
 }
