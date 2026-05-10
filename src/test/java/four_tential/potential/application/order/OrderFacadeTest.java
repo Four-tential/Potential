@@ -281,4 +281,33 @@ class OrderFacadeTest {
         verify(orderService, never()).cancelOrder(orderId, memberId);
         verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
     }
+
+    @Test
+    @DisplayName("성능 테스트 데이터 삭제를 성공적으로 호출한다")
+    void deletePerformanceTestData_success() {
+        // when
+        orderFacade.deletePerformanceTestData();
+
+        // then
+        verify(performanceTestDataService).deletePerformanceTestData();
+    }
+
+    @Test
+    @DisplayName("PerformanceTestDataService가 없는 경우(운영 환경 등) 예외를 발생시킨다")
+    void deletePerformanceTestData_fail_when_null() {
+        // given
+        OrderFacade prodOrderFacade = new OrderFacade(
+                orderService,
+                waitingListService,
+                refundFacade,
+                Optional.empty()
+        );
+
+        // when & then
+        assertThatThrownBy(prodOrderFacade::deletePerformanceTestData)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_NON_PROD_ONLY.getMessage());
+
+        verify(performanceTestDataService, never()).deletePerformanceTestData();
+    }
 }

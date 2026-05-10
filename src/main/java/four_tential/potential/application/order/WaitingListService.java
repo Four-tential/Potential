@@ -373,45 +373,6 @@ public class WaitingListService {
     }
 
     /**
-     * 특정 코스의 현재 Redis 내 점유된 모든 좌석 수의 합을 계산합니다.
-     */
-    public int getSumOfOccupancies(UUID courseId) {
-        String prefix = RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":";
-        String pattern = prefix + "*";
-        Iterable<String> keys = redissonClient.getKeys().getKeysByPattern(pattern);
-        int totalOccupied = 0;
-
-        for (String key : keys) {
-            RBucket<String> occupancyBucket = redissonClient.getBucket(key, StringCodec.INSTANCE);
-            String val = occupancyBucket.get();
-            if (val != null) {
-                if (OrderConstants.TOKEN_PROMOTED.equals(val)) {
-                    String memberId = key.substring(prefix.length());
-                    String countKey = RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":" + memberId;
-                    RBucket<String> countBucket = redissonClient.getBucket(countKey, StringCodec.INSTANCE);
-                    String countStr = countBucket.get();
-                    if (countStr != null) {
-                        try {
-                            totalOccupied += Integer.parseInt(countStr);
-                        } catch (NumberFormatException e) {
-                            totalOccupied += 1;
-                        }
-                    } else {
-                        totalOccupied += 1;
-                    }
-                } else {
-                    try {
-                        totalOccupied += Integer.parseInt(val);
-                    } catch (NumberFormatException e) {
-                        totalOccupied += 1;
-                    }
-                }
-            }
-        }
-        return totalOccupied;
-    }
-
-    /**
      * 특정 코스와 관련된 모든 Redis 데이터를 삭제합니다. (테스트 데이터 정리용)
      */
     public void clearCourseRedisData(UUID courseId) {

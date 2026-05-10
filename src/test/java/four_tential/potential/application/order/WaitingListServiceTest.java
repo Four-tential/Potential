@@ -261,6 +261,52 @@ class WaitingListServiceTest {
     }
 
     @Test
+    @DisplayName("잔여석 정보가 초기화되었는지 확인한다")
+    void isCapacityInitialized_success() {
+        // given
+        given(capacityAtomic.isExists()).willReturn(true);
+
+        // when
+        boolean result = waitingListService.isCapacityInitialized(courseId);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("잔여석 정보가 초기화되지 않았음을 확인한다")
+    void isCapacityInitialized_fail() {
+        // given
+        given(capacityAtomic.isExists()).willReturn(false);
+
+        // when
+        boolean result = waitingListService.isCapacityInitialized(courseId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("특정 코스와 관련된 모든 Redis 데이터를 성공적으로 삭제한다")
+    void clearCourseRedisData_success() {
+        // given
+        RKeys rKeys = mock(RKeys.class);
+        given(redissonClient.getKeys()).willReturn(rKeys);
+
+        // when
+        waitingListService.clearCourseRedisData(courseId);
+
+        // then
+        // AtomicLong (capacityKey, sequenceKey) 삭제 확인 - capacityAtomic이 anyString()에 대해 반환되도록 설정됨
+        verify(capacityAtomic, times(2)).delete();
+        // ScoredSortedSet 삭제 확인
+        verify(waitingListSet).delete();
+        // 패턴 기반 삭제 확인
+        verify(rKeys).deleteByPattern(RedisConstants.USER_COURSE_OCCUPANCY_PREFIX + courseId + ":*");
+        verify(rKeys).deleteByPattern(RedisConstants.WAITING_ORDER_COUNT_PREFIX + courseId + ":*");
+    }
+
+    @Test
     @DisplayName("잔여석 점유 확정 시 점유 정보가 삭제된다")
     void completeOccupyingSeat_success() {
         // given
