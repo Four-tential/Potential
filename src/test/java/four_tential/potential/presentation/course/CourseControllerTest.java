@@ -3,6 +3,7 @@ package four_tential.potential.presentation.course;
 import four_tential.potential.application.course.CourseFacade;
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.common.exception.GlobalExceptionHandler;
+import four_tential.potential.common.security.WebMvcSecurityTestSupport;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.domain.course.course.CourseLevel;
 import four_tential.potential.domain.course.course.CourseStatus;
@@ -58,7 +59,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CourseController.class)
-@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, WebMvcSecurityTestSupport.class})
 class CourseControllerTest {
 
     private static final UUID MEMBER_ID = UUID.randomUUID();
@@ -249,11 +250,11 @@ class CourseControllerTest {
     }
 
     @Test
-    @DisplayName("찜 등록 - 비인증 유저이면 403")
-    void addWishlist_forbidden() throws Exception {
+    @DisplayName("찜 등록 - 비인증 유저이면 401")
+    void addWishlist_unauthorized() throws Exception {
         mockMvc.perform(post("/v1/courses/{courseId}/wishlist-courses", UUID.randomUUID())
                         .with(csrf()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -298,11 +299,11 @@ class CourseControllerTest {
     }
 
     @Test
-    @DisplayName("찜 해제 - 비인증 유저이면 403")
+    @DisplayName("찜 해제 - 비인증 유저이면 401")
     void removeWishlist_unauthorized() throws Exception {
         mockMvc.perform(delete("/v1/courses/{courseId}/wishlist-courses", UUID.randomUUID())
                         .with(csrf()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

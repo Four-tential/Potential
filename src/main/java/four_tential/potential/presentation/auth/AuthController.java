@@ -1,15 +1,31 @@
 package four_tential.potential.presentation.auth;
 
 import four_tential.potential.application.auth.AuthFacade;
+import four_tential.potential.application.auth.OAuthLinkTicketData;
+import four_tential.potential.application.auth.OAuthLoginTicketData;
+import four_tential.potential.application.auth.OAuthRedirectTicketRepository;
 import four_tential.potential.common.dto.BaseResponse;
 import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.domain.member.social.SocialProvider;
+import four_tential.potential.infra.oauth2.OAuth2UserAttributes;
+import four_tential.potential.infra.security.principal.MemberPrincipal;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
+import four_tential.potential.presentation.auth.model.SocialLinkConfirmResult;
+import four_tential.potential.presentation.auth.model.request.OAuthTicketExchangeRequest;
 import four_tential.potential.presentation.auth.model.request.SignUpRequest;
+import four_tential.potential.presentation.auth.model.request.SocialLinkConfirmRequest;
+import four_tential.potential.presentation.auth.model.request.SocialLinkRequest;
 import four_tential.potential.presentation.auth.model.response.LoginResponse;
+import four_tential.potential.presentation.auth.model.response.OAuthLinkExchangeResponse;
+import four_tential.potential.presentation.auth.model.response.OAuthLoginExchangeResponse;
 import four_tential.potential.presentation.auth.model.response.RefreshResponse;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
+import four_tential.potential.presentation.auth.model.response.SocialLinkConfirmResponse;
+import four_tential.potential.presentation.auth.model.response.SocialLinkResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +38,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 
+import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_OAUTH_TICKET_INVALID;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_TOKEN_NULL;
 
 @RestController
@@ -29,9 +46,13 @@ import static four_tential.potential.common.exception.domain.MemberExceptionEnum
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthFacade authFacade;
+    private final OAuthRedirectTicketRepository oauthTicketRepository;
 
     @Value("${jwt.secret.refreshExpire}")
     private Long refreshTokenExpire;
+
+    @Value("${oauth2.cookie.secure:true}")
+    private boolean cookieSecure;
 
     @PostMapping("/signup")
     public ResponseEntity<BaseResponse<SignUpResponse>> signUp(@Valid @RequestBody SignUpRequest request) {
@@ -86,12 +107,105 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(HttpStatus.OK.name(), "로그아웃 성공", null));
     }
 
+    @Operation(
+            summary = "소셜 계정 수동 연동",
+            description = "현재 로그인한 회원의 비밀번호 검증 후, 프론트가 받아온 OAuth2 인가 코드를 교환해 소셜 계정을 연동합니다."
+    )
+    @PostMapping("/social-link/{provider}")
+    public ResponseEntity<BaseResponse<SocialLinkResponse>> linkSocialAccount(
+            @PathVariable("provider") SocialProvider provider,
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @Valid @RequestBody SocialLinkRequest request
+    ) {
+        OAuth2UserAttributes attributes = authFacade.linkSocialAccount(
+                principal.memberId(), provider, request.password(), request.code(), request.redirectUri()
+        );
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(
+                HttpStatus.OK.name(),
+                "소셜 계정 연동 완료",
+                new SocialLinkResponse(attributes.provider(), attributes.email())
+        ));
+    }
+
+    @Operation(
+            summary = "소셜 계정 연동 챌린지 확인 (이메일 충돌 흐름)",
+            description = "소셜 로그인 시 동일 이메일의 기존 계정과 충돌한 경우, 비밀번호 검증 후 자동 연동 + 로그인."
+    )
+    @PostMapping("/social-link/confirm")
+    public ResponseEntity<BaseResponse<SocialLinkConfirmResponse>> confirmSocialLink(
+            @Valid @RequestBody SocialLinkConfirmRequest request,
+            HttpServletResponse response
+    ) {
+        SocialLinkConfirmResult result = authFacade.confirmSocialLink(request.challengeToken(), request.password());
+        response.addHeader(HttpHeaders.SET_COOKIE, createRefreshTokenCookie(result.refreshToken()).toString());
+
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(
+                HttpStatus.OK.name(),
+                "소셜 계정 연동 + 로그인 완료",
+                new SocialLinkConfirmResponse(
+                        result.accessToken(),
+                        result.hasOnboarding(),
+                        result.requiresPhoneSetup(),
+                        result.linkedProvider(),
+                        result.email()
+                )
+        ));
+    }
+
+    @Operation(
+            summary = "소셜 로그인 1회용 티켓 교환",
+            description = "OAuth2 로그인 성공 후 받은 ticket 으로 accessToken/온보딩 정보를 교환합니다. URL 노출 방지용 1회용 토큰."
+    )
+    @PostMapping("/oauth/ticket/exchange")
+    public ResponseEntity<BaseResponse<OAuthLoginExchangeResponse>> exchangeLoginTicket(
+            @Valid @RequestBody OAuthTicketExchangeRequest request
+    ) {
+        OAuthLoginTicketData data = oauthTicketRepository.consumeLogin(request.ticket())
+                .orElseThrow(() -> new ServiceErrorException(ERR_OAUTH_TICKET_INVALID));
+
+        return ResponseEntity.ok(BaseResponse.success(
+                HttpStatus.OK.name(),
+                "소셜 로그인 티켓 교환 성공",
+                new OAuthLoginExchangeResponse(data.accessToken(), data.hasOnboarding(), data.requiresPhoneSetup())
+        ));
+    }
+
+    @Operation(
+            summary = "소셜 연동 챌린지 1회용 티켓 교환",
+            description = "이메일 충돌 흐름에서 받은 linkTicket 으로 challengeToken/이메일/provider 를 교환합니다."
+    )
+    @PostMapping("/oauth/link-ticket/exchange")
+    public ResponseEntity<BaseResponse<OAuthLinkExchangeResponse>> exchangeLinkTicket(
+            @Valid @RequestBody OAuthTicketExchangeRequest request
+    ) {
+        OAuthLinkTicketData data = oauthTicketRepository.consumeLink(request.ticket())
+                .orElseThrow(() -> new ServiceErrorException(ERR_OAUTH_TICKET_INVALID));
+
+        return ResponseEntity.ok(BaseResponse.success(
+                HttpStatus.OK.name(),
+                "소셜 연동 티켓 교환 성공",
+                new OAuthLinkExchangeResponse(data.challengeToken(), data.email(), data.provider())
+        ));
+    }
+
+    @Operation(summary = "소셜 계정 연동 해제", description = "마이페이지에서 특정 provider 의 연동을 해제합니다.")
+    @DeleteMapping("/social-link/{provider}")
+    public ResponseEntity<BaseResponse<Void>> unlinkSocialAccount(
+            @PathVariable("provider") SocialProvider provider,
+            @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        authFacade.unlinkSocialAccount(principal.memberId(), provider);
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(
+                HttpStatus.OK.name(), "소셜 계정 연동 해제 완료", null
+        ));
+    }
+
     private ResponseCookie createRefreshTokenCookie(String refreshToken) {
         return ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
-                //.secure(true) // 우선 개발 환경에 맞추어 https 전송은 주석처리
+                .secure(cookieSecure)
                 .sameSite("Strict")
-                .path("/v1/auth") // RTR/logout 에서만
+                .path("/v1/auth")
                 .maxAge(Duration.ofMillis(refreshTokenExpire))
                 .build();
     }
@@ -99,9 +213,10 @@ public class AuthController {
     private ResponseCookie expireRefreshTokenCookie() {
         return ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path("/v1/auth")
-                .maxAge(Duration.ZERO) // 즉시 만료
+                .maxAge(Duration.ZERO)
                 .build();
     }
 

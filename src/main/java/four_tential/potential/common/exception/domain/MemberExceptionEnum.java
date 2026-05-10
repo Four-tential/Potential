@@ -40,7 +40,16 @@ public enum MemberExceptionEnum implements ServiceErrorCode {
     ERR_NOT_FOUND_FOLLOW(HttpStatus.NOT_FOUND, "팔로우한 기록이 없습니다"),
     ERR_INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "jpg, jpeg, png, webp 형식의 이미지만 업로드할 수 있습니다"),
     ERR_IMAGE_FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "이미지 파일 크기는 5MB를 초과할 수 없습니다"),
-    ERR_IMAGE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다")
+    ERR_IMAGE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다"),
+    ERR_SOCIAL_EMAIL_CONFLICT(HttpStatus.CONFLICT, "동일 이메일로 가입된 계정이 있습니다, 로그인 후 마이페이지에서 연동해주세요"),
+    ERR_SOCIAL_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 소셜 로그인입니다"),
+    ERR_SOCIAL_LINK_DUPLICATED(HttpStatus.CONFLICT, "이미 다른 계정에 연동된 소셜 계정입니다"),
+    ERR_SOCIAL_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 동일 provider 의 소셜 계정이 연동되어 있습니다"),
+    ERR_SOCIAL_LINK_NOT_FOUND(HttpStatus.NOT_FOUND, "해제할 소셜 연동 정보가 없습니다"),
+    ERR_PHONE_REQUIRED(HttpStatus.BAD_REQUEST, "전화번호를 먼저 등록해주세요"),
+    ERR_NO_PASSWORD_SET(HttpStatus.BAD_REQUEST, "비밀번호가 설정되지 않은 계정입니다"),
+    ERR_OAUTH_TICKET_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 티켓입니다"),
+    ERR_SOCIAL_PROFILE_INCOMPLETE(HttpStatus.BAD_REQUEST, "소셜 계정에서 필수 프로필 정보를 받지 못했습니다, 동의 항목을 확인해주세요")
     ;
 
     private final HttpStatus httpStatus;

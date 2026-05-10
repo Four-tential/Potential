@@ -8,6 +8,16 @@ public class RedisConstants {
     public static final String REFRESH_TOKEN_PREFIX = "Refresh-Token:";
     public static final String BLACK_LIST_PREFIX = "BlackList:";
 
+    public static final String SOCIAL_LINK_CHALLENGE_PREFIX = "social-link-challenge:";
+    public static final String SOCIAL_LINK_ATTEMPTS_PREFIX = "social-link-attempts:";
+    public static final long   SOCIAL_LINK_CHALLENGE_TTL_SECONDS = 300L;
+    public static final int    SOCIAL_LINK_MAX_ATTEMPTS = 3;
+
+    // OAuth2 1회용 리다이렉트 티켓 — accessToken/challengeToken을 URL에 노출하지 않기 위한 인디렉션
+    public static final String OAUTH_LOGIN_TICKET_PREFIX = "oauth-login-ticket:";
+    public static final String OAUTH_LINK_TICKET_PREFIX  = "oauth-link-ticket:";
+    public static final long   OAUTH_TICKET_TTL_SECONDS  = 60L;
+
     // Order
     public static final String COURSE_CAPACITY_PREFIX = "Course:Capacity:";
     public static final String WAITING_LIST_PREFIX = "WaitingList:";

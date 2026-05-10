@@ -6,12 +6,16 @@ import four_tential.potential.domain.member.member.Member;
 import four_tential.potential.domain.member.member.MemberRepository;
 import four_tential.potential.domain.member.member.MemberRole;
 import four_tential.potential.domain.member.member.MemberStatus;
+import four_tential.potential.domain.member.social.SocialProvider;
 import four_tential.potential.infra.jwt.JwtRepository;
 import four_tential.potential.infra.jwt.JwtUtil;
+import four_tential.potential.infra.oauth2.OAuth2TokenExchangeClient;
+import four_tential.potential.infra.oauth2.OAuth2UserAttributes;
 import four_tential.potential.presentation.auth.fixture.LoginRequestFixture;
 import four_tential.potential.presentation.auth.fixture.SignUpRequestFixture;
 import four_tential.potential.presentation.auth.model.LoginResult;
 import four_tential.potential.presentation.auth.model.RefreshResult;
+import four_tential.potential.presentation.auth.model.SocialLinkConfirmResult;
 import four_tential.potential.presentation.auth.model.request.LoginRequest;
 import four_tential.potential.presentation.auth.model.request.SignUpRequest;
 import four_tential.potential.presentation.auth.model.response.SignUpResponse;
@@ -24,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,6 +52,12 @@ class AuthFacadeTest {
     private JwtRepository jwtRepository;
     @Mock
     private AuthService authService;
+    @Mock
+    private SocialAuthService socialAuthService;
+    @Mock
+    private OAuth2TokenExchangeClient oAuth2TokenExchangeClient;
+    @Mock
+    private SocialLinkChallengeRepository socialLinkChallengeRepository;
 
     @InjectMocks
     private AuthFacade authFacade;
@@ -293,5 +304,208 @@ class AuthFacadeTest {
 
         verify(jwtRepository, never()).deleteRefreshToken(any());
         verify(jwtRepository, never()).addBlacklist(any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 성공 - 비밀번호 검증 후 SocialAuthService 위임")
+    void linkSocialAccount_success() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+        OAuth2UserAttributes attributes = new OAuth2UserAttributes(SocialProvider.KAKAO, "kakao-1", "user@kakao.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPassword", member.getPassword())).willReturn(true);
+        given(oAuth2TokenExchangeClient.exchangeAndFetch("kakao", "code-123", "https://app/cb"))
+                .willReturn(attributes);
+
+        OAuth2UserAttributes result = authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "rawPassword", "code-123", "https://app/cb");
+
+        assertThat(result).isEqualTo(attributes);
+        verify(socialAuthService).linkExistingMember(memberId, attributes);
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - 비밀번호 미설정 회원이면 ERR_NO_PASSWORD_SET")
+    void linkSocialAccount_noPasswordSet() {
+        UUID memberId = UUID.randomUUID();
+        Member socialOnlyMember = Member.registerSocial("social@example.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(socialOnlyMember));
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "any", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 설정되지 않은 계정입니다");
+
+        verify(oAuth2TokenExchangeClient, never()).exchangeAndFetch(any(), any(), any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - 비밀번호 불일치 시 ERR_WRONG_PASSWORD")
+    void linkSocialAccount_wrongPassword() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("wrong", member.getPassword())).willReturn(false);
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "wrong", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+
+        verify(oAuth2TokenExchangeClient, never()).exchangeAndFetch(any(), any(), any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 수동 연동 - provider 가 path 와 다르면 ERR_SOCIAL_PROVIDER_NOT_SUPPORTED")
+    void linkSocialAccount_providerMismatch() {
+        UUID memberId = UUID.randomUUID();
+        Member member = MemberFixture.defaultMember();
+        OAuth2UserAttributes returnedAttrs = new OAuth2UserAttributes(SocialProvider.GOOGLE, "google-1", "user@google.com", "홍길동");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPassword", member.getPassword())).willReturn(true);
+        given(oAuth2TokenExchangeClient.exchangeAndFetch("kakao", "code", "uri")).willReturn(returnedAttrs);
+
+        assertThatThrownBy(() -> authFacade.linkSocialAccount(memberId, SocialProvider.KAKAO, "rawPassword", "code", "uri"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("지원하지 않는 소셜 로그인입니다");
+
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 계정 연동 해제 - SocialAuthService 위임")
+    void unlinkSocialAccount_delegates() {
+        UUID memberId = UUID.randomUUID();
+
+        authFacade.unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+
+        verify(socialAuthService).unlinkSocialAccount(memberId, SocialProvider.GOOGLE);
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 일치 시 연동 + 토큰 발급")
+    void confirmSocialLink_success() {
+        Member member = MemberFixture.defaultMember();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-1")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("rawPwd", member.getPassword())).willReturn(true);
+        given(jwtUtil.createAccessToken(any(), any(), any())).willReturn("at");
+        given(jwtUtil.createRefreshToken(any())).willReturn("rt");
+
+        SocialLinkConfirmResult result = authFacade.confirmSocialLink("ch-1", "rawPwd");
+
+        assertThat(result.accessToken()).isEqualTo("at");
+        assertThat(result.refreshToken()).isEqualTo("rt");
+        assertThat(result.linkedProvider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(result.email()).isEqualTo(member.getEmail());
+
+        verify(socialLinkChallengeRepository).invalidate("ch-1");
+        verify(socialAuthService).linkExistingMember(eq(member.getId()), any(OAuth2UserAttributes.class));
+        verify(jwtRepository).saveRefreshToken(eq(member.getEmail()), eq("rt"), anyLong());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 챌린지 만료/시도 초과 시 ERR_INVALID_AUTHORIZE")
+    void confirmSocialLink_challengeMissing() {
+        given(socialLinkChallengeRepository.peek("ch-x")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-x", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 불일치 시 ERR_WRONG_PASSWORD, 챌린지 invalidate 안 함")
+    void confirmSocialLink_wrongPassword() {
+        Member member = MemberFixture.defaultMember();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-2")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+        given(passwordEncoder.matches("wrong", member.getPassword())).willReturn(false);
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-2", "wrong"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 올바르지 않습니다");
+
+        verify(socialLinkChallengeRepository, never()).invalidate(any());
+        verify(socialAuthService, never()).linkExistingMember(any(), any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 비밀번호 미설정 회원이면 ERR_NO_PASSWORD_SET")
+    void confirmSocialLink_noPasswordSet() {
+        Member socialOnly = Member.registerSocial("social@example.com", "유저");
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.GOOGLE, "google-1", socialOnly.getEmail(), "유저"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-3")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(socialOnly.getEmail())).willReturn(Optional.of(socialOnly));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-3", "anything"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("비밀번호가 설정되지 않은 계정입니다");
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 챌린지 데이터 email 누락 시 invalidate + ERR_INVALID_AUTHORIZE")
+    void confirmSocialLink_blankEmail() {
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", "", "홍길동"
+        );
+        given(socialLinkChallengeRepository.peek("ch-blank")).willReturn(Optional.of(data));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-blank", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("잘못된 인증 정보입니다, 다시 로그인 하시기 바랍니다");
+
+        verify(socialLinkChallengeRepository).invalidate("ch-blank");
+        verify(memberRepository, never()).findByEmail(any());
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 탈퇴 회원이면 ERR_WRONG_LOGIN")
+    void confirmSocialLink_withdrawn() {
+        Member member = MemberFixture.defaultMember();
+        member.withdraw();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-w")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-w", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("아이디와 비밀번호를 확인하시기 바랍니다");
+    }
+
+    @Test
+    @DisplayName("소셜 연동 챌린지 확인 - 정지 회원이면 ERR_SUSPENDED")
+    void confirmSocialLink_suspended() {
+        Member member = MemberFixture.defaultMember();
+        member.suspend();
+        SocialLinkChallengeData data = new SocialLinkChallengeData(
+                SocialProvider.KAKAO, "kakao-1", member.getEmail(), "홍길동"
+        );
+
+        given(socialLinkChallengeRepository.peek("ch-s")).willReturn(Optional.of(data));
+        given(memberRepository.findByEmail(member.getEmail())).willReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authFacade.confirmSocialLink("ch-s", "any"))
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage("정지된 회원입니다, 관리자에게 문의 바랍니다");
     }
 }
