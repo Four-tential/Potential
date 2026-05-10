@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,7 +36,7 @@ public class PerformanceTestDataService {
     private final JwtRepository jwtRepository;
 
     // 삭제 대상 접두사 리스트 (V1, V2 통합)
-    private static final List<String> USER_PREFIXES = Arrays.asList("fixed_perf", "perf_v2", "v2_");
+    private static final List<String> USER_PREFIXES = Arrays.asList("fixed_perf", "perf_v2", "v2_", "p_");
     private static final List<String> COURSE_TITLE_PREFIXES = Arrays.asList("성능 테스트 코스", "V2 성능 테스트");
 
     /**
@@ -63,13 +65,28 @@ public class PerformanceTestDataService {
             return;
         }
 
-        // 2. Redis 캐시 및 상태 정리
-        for (String prefix : USER_PREFIXES) {
-            jwtRepository.deleteRefreshTokensByPrefix(prefix);
-        }
-        for (UUID courseId : courseIds) {
-            waitingListService.clearCourseRedisData(courseId);
-        }
+        // 2. 외부 상태(Redis/JWT) 정리 등록 (DB 트랜잭션 커밋 성공 후 실행)
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.info("DB 정리 성공. 외부 상태(Redis/JWT) 정리 시작");
+                for (String prefix : USER_PREFIXES) {
+                    try {
+                        jwtRepository.deleteRefreshTokensByPrefix(prefix);
+                    } catch (Exception e) {
+                        log.error("JWT 토큰 삭제 실패 (prefix: {}): {}", prefix, e.getMessage());
+                    }
+                }
+                for (UUID courseId : courseIds) {
+                    try {
+                        waitingListService.clearCourseRedisData(courseId);
+                    } catch (Exception e) {
+                        log.error("코스 Redis 데이터 정리 실패 (ID: {}): {}", courseId, e.getMessage());
+                    }
+                }
+                log.info("=== 외부 상태(Redis/JWT) 정리 완료 ===");
+            }
+        });
 
         // 3. DB 연관 데이터 삭제 (기존 메서드 활용)
         log.info("관련 데이터 일괄 삭제 시도 (회원: {}명, 코스: {}개)", memberIds.size(), courseIds.size());
@@ -93,6 +110,6 @@ public class PerformanceTestDataService {
             memberRepository.deleteByEmailStartingWith(userPrefix);
         }
 
-        log.info("=== 성능 테스트 데이터 클린업 완료 ===");
+        log.info("=== DB 데이터 클린업 완료 (외부 상태 정리는 커밋 후 진행됨) ===");
     }
 }

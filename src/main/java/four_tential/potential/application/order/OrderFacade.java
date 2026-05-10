@@ -8,12 +8,12 @@ import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.order.WaitingStatus;
 import four_tential.potential.presentation.order.dto.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
@@ -31,12 +31,12 @@ public class OrderFacade {
             OrderService orderService,
             WaitingListService waitingListService,
             RefundFacade refundFacade,
-            @Autowired(required = false) PerformanceTestDataService performanceTestDataService
+            Optional<PerformanceTestDataService> performanceTestDataService
     ) {
         this.orderService = orderService;
         this.waitingListService = waitingListService;
         this.refundFacade = refundFacade;
-        this.performanceTestDataService = performanceTestDataService;
+        this.performanceTestDataService = performanceTestDataService.orElse(null);
     }
 
     public OrderPlaceResult placeOrder(UUID memberId, OrderCreateRequest request) {
