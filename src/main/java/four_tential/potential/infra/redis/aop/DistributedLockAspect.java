@@ -132,7 +132,13 @@ public class DistributedLockAspect {
         try {
             // AopInTransaction을 통해 REQUIRES_NEW 트랜잭션 안에서 실제 메서드 실행
             // 메서드 로직 완료 + 트랜잭션 커밋이 끝난 뒤에야 finally의 락 해제가 실행됨
-            return aopInTransaction.proceed(joinPoint);
+            if (distributedLock.withTransaction()) {
+                // withTransaction = true이면 기존 방식 유지
+                return aopInTransaction.proceed(joinPoint);
+            } else {
+                // withTransaction = false이면 트랜잭션 없이 직접 실행
+                return joinPoint.proceed();
+            }
         } finally {
             // 락 해제 전 현재 스레드가 락을 보유 중인지 확인
             // leaseTime 초과로 락이 이미 자동 만료된 경우 unlock() 호출 시 IllegalMonitorStateException 발생하므로 방어

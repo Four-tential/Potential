@@ -489,7 +489,7 @@ public class RefundFacade {
     private Long refundSingleOrderForInstructor(Order order) {
         Payment payment = getPaymentByOrderId(order.getId());
 
-        return paymentLockExecutor.executeWithPgKeyLock(payment.getPgKey(), () -> {
+        return paymentLockExecutor.executeWithPgKeyLockNoTx(payment.getPgKey(), () -> {
 
             // 1. 검증 및 환불 계획 수립 (트랜잭션 + 비관적 락)
             InstructorRefundPlan plan = Objects.requireNonNull(
