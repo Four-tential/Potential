@@ -1,6 +1,7 @@
 package four_tential.potential.infra.batch.payment;
 
 import four_tential.potential.application.payment.RefundFacade;
+import four_tential.potential.common.exception.ServiceErrorCode;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
@@ -25,6 +26,9 @@ import org.springframework.context.annotation.Configuration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Configuration
@@ -43,6 +47,22 @@ public class RefundTaskJobConfig {
      * 지수 백오프: 1차 5분, 2차 10분, 3차 20분
      */
     private static final long INITIAL_RETRY_DELAY_MINUTES = 5L;
+    private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("\\[재시도 (\\d+)회차]");
+
+    private static final String NON_RETRYABLE_FAILURE_PREFIX = "[비재시도 실패]";
+    private static final String RETRY_REASON_FORMAT = "[재시도 %d회차] %d분 후 재시도 예정. 원인: %s";
+    private static final String FINAL_FAILURE_REASON_FORMAT = "[최종 실패 - %d회 재시도 후 포기] %s";
+
+    private static final Set<ServiceErrorCode> NON_RETRYABLE_ERROR_CODES = Set.of(
+            PaymentExceptionEnum.ERR_ALREADY_FULLY_REFUNDED,
+            PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID,
+            PaymentExceptionEnum.ERR_CANCEL_COUNT_INVALID,
+            PaymentExceptionEnum.ERR_CANCEL_COUNT_EXCEEDED,
+            PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT,
+            PaymentExceptionEnum.ERR_PAYMENT_COURSE_NOT_FOUND,
+            OrderExceptionEnum.ERR_NOT_FOUND_ORDER,
+            OrderExceptionEnum.ERR_INVALID_ORDER_STATUS
+    );
 
     @Bean
     public Job refundTaskJob() {
@@ -92,10 +112,13 @@ public class RefundTaskJobConfig {
                 refundFacade.processInstructorRefundTask(task.getOrderId());
                 task.markDone();
                 log.info("[JOB2] 환불 완료. taskId={} orderId={}", task.getId(), task.getOrderId());
-
             } catch (Exception e) {
+                String failureMessage = (e.getMessage() == null || e.getMessage().isBlank())
+                        ? e.getClass().getSimpleName()
+                        : e.getMessage();
+
                 if (isNonRetryableFailure(e)) {
-                    String reason = String.format("[비재시도 실패] %s", e.getMessage());
+                    String reason = NON_RETRYABLE_FAILURE_PREFIX + " " + failureMessage;
                     task.markFailed(reason);
 
                     log.error("[JOB2] 재시도 의미 없는 환불 실패. 즉시 FAILED 처리. taskId={} orderId={}",
@@ -112,16 +135,23 @@ public class RefundTaskJobConfig {
                     long delayMinutes = INITIAL_RETRY_DELAY_MINUTES * (long) Math.pow(2, retryCount);
                     LocalDateTime nextRetryAt = LocalDateTime.now().plusMinutes(delayMinutes);
 
-                    String reason = String.format("[재시도 %d회차] %s분 후 재시도 예정. 원인: %s",
-                            retryCount + 1, delayMinutes, e.getMessage());
+                    String reason = String.format(
+                            RETRY_REASON_FORMAT,
+                            retryCount + 1,
+                            delayMinutes,
+                            failureMessage
+                    );
                     task.markRetryPending(nextRetryAt, reason);
 
-                    log.warn("[JOB2] 환불 실패 — {}분 후 재시도. taskId={} orderId={} 재시도={}회차",
+                    log.warn("[JOB2] 환불 실패. {}분 후 재시도. taskId={} orderId={} 재시도={}회차",
                             delayMinutes, task.getId(), task.getOrderId(), retryCount + 1);
                 } else {
                     // MAX_RETRY_COUNT 초과 → 최종 실패
-                    String reason = String.format("[최종 실패 - %d회 재시도 후 포기] %s",
-                            MAX_RETRY_COUNT, e.getMessage());
+                    String reason = String.format(
+                            FINAL_FAILURE_REASON_FORMAT,
+                            MAX_RETRY_COUNT,
+                            failureMessage
+                    );
                     task.markFailed(reason);
 
                     log.error("[JOB2] 환불 최종 실패 - 운영자 확인 필요. taskId={} orderId={}",
@@ -149,33 +179,23 @@ public class RefundTaskJobConfig {
      * "[재시도 N회차]" 패턴으로 기록되어 있으면 N을 반환, 없으면 0.
      */
     private int parseRetryCount(String failReason) {
-        if (failReason == null) return 0;
-        try {
-            // "[재시도 N회차]" 에서 N 추출
-            int start = failReason.indexOf("[재시도 ") + 5;
-            int end = failReason.indexOf("회차]");
-            if (start > 4 && end > start) {
-                return Integer.parseInt(failReason.substring(start, end).trim());
-            }
-        } catch (NumberFormatException ignored) {}
+        if (failReason == null) {
+            return 0;
+        }
+
+        Matcher matcher = RETRY_COUNT_PATTERN.matcher(failReason);
+        if (matcher.find()) {
+            return Integer.parseInt(matcher.group(1));
+        }
+
         return 0;
     }
 
     /**
-     * 비즈니스 오류는 FAILED 처리
+     * 비즈니스 오류는 재시도하지 않고 FAILED 처리한다.
      */
     private boolean isNonRetryableFailure(Exception e) {
-        if (!(e instanceof ServiceErrorException se)) {
-            return false;
-        }
-
-        return se.getErrorCode() == PaymentExceptionEnum.ERR_ALREADY_FULLY_REFUNDED
-                || se.getErrorCode() == PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID
-                || se.getErrorCode() == PaymentExceptionEnum.ERR_CANCEL_COUNT_INVALID
-                || se.getErrorCode() == PaymentExceptionEnum.ERR_CANCEL_COUNT_EXCEEDED
-                || se.getErrorCode() == PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT
-                || se.getErrorCode() == PaymentExceptionEnum.ERR_PAYMENT_COURSE_NOT_FOUND
-                || se.getErrorCode() == OrderExceptionEnum.ERR_NOT_FOUND_ORDER
-                || se.getErrorCode() == OrderExceptionEnum.ERR_INVALID_ORDER_STATUS;
+        return e instanceof ServiceErrorException se
+                && NON_RETRYABLE_ERROR_CODES.contains(se.getErrorCode());
     }
 }

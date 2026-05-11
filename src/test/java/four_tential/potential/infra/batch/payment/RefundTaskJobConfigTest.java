@@ -186,4 +186,24 @@ class RefundTaskJobConfigTest {
         assertThat(result.getNextRetryAt()).isNull();
         assertThat(result.getFailReason()).contains("비재시도 실패");
     }
+
+    @Test
+    @DisplayName("processor는 재시도 문구를 해석할 수 없으면 1회차 재시도로 처리한다")
+    void refundTaskProcessor_uses_first_retry_when_fail_reason_is_unparseable() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        RefundTask task = RefundTask.pending(UUID.randomUUID(), orderId, UUID.randomUUID(), UUID.randomUUID());
+        task.markFailed("문구가 바뀌어서 재시도 횟수를 읽을 수 없음");
+
+        doThrow(new RuntimeException("refund fail"))
+                .when(refundFacade).processInstructorRefundTask(orderId);
+
+        LocalDateTime now = LocalDateTime.now();
+        var result = refundTaskJobConfig.refundTaskProcessor().process(task);
+
+        assertThat(result.getStatus()).isEqualTo(RefundTaskStatus.RETRY_PENDING);
+        assertThat(result.getNextRetryAt())
+                .isAfterOrEqualTo(now.plusMinutes(5).minusSeconds(10))
+                .isBeforeOrEqualTo(now.plusMinutes(5).plusSeconds(10));
+    }
+
 }
