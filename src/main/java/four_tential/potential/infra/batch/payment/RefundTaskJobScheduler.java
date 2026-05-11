@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 /**
  * Job2 Listener 방식 사용. Job1이 끝나는 순간 바로 Job2 즉시 실행
  * 스케줄러는 남아 있는 PENDING task가 있을 때만 보조 실행
@@ -41,9 +43,12 @@ public class RefundTaskJobScheduler {
                 return;
             }
 
+            LocalDateTime now = LocalDateTime.now();
+
             // 할 일이 없으면 불필요 실행 방지
             boolean hasPending = refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING);
-            if (!hasPending) {
+            boolean hasRetryReady = refundTaskRepository.existsByStatusAndNextRetryAtLessThanEqual(RefundTaskStatus.RETRY_PENDING, now);
+            if (!hasPending && !hasRetryReady) {
                 //log.info("[SCHEDULER] PENDING refund_task 없음 - 스킵");
                 return;
             }

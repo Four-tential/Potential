@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -19,7 +20,8 @@ import java.util.UUID;
         },
         indexes = {
                 @Index(name = "idx_refund_task_status", columnList = "status"),
-                @Index(name = "idx_refund_task_course_id", columnList = "course_id")
+                @Index(name = "idx_refund_task_course_id", columnList = "course_id"),
+                @Index(name = "idx_refund_task_next_retry_at", columnList = "next_retry_at")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -46,6 +48,9 @@ public class RefundTask extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private RefundTaskStatus status;
 
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
     @Column(name = "fail_reason", length = 500)
     private String failReason;
 
@@ -70,10 +75,21 @@ public class RefundTask extends BaseTimeEntity {
     public void markDone() {
         this.status = RefundTaskStatus.DONE;
         this.failReason = null;
+        this.nextRetryAt = null;
     }
 
+    // 최종 실패 - 재시도해도 안 되는 경우
     public void markFailed(String reason) {
         this.status = RefundTaskStatus.FAILED;
+        this.failReason = (reason != null && reason.length() > 500)
+                ? reason.substring(0, 500) : reason;
+        this.nextRetryAt = null;
+    }
+
+    // 일시적 실패 - 나중에 재시도할 대상
+    public void markRetryPending(LocalDateTime retryAt, String reason) {
+        this.status = RefundTaskStatus.RETRY_PENDING;
+        this.nextRetryAt = retryAt;
         this.failReason = (reason != null && reason.length() > 500)
                 ? reason.substring(0, 500) : reason;
     }
