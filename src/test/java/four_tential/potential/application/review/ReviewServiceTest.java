@@ -55,6 +55,7 @@ class ReviewServiceTest {
     @Mock private four_tential.potential.infra.ai.review.ReviewSummaryService reviewSummaryService;
     @Mock private RedissonClient redissonClient;
     @Mock private RLock rLock;
+    @Mock private ReviewLikeService reviewLikeService;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -653,107 +654,75 @@ class ReviewServiceTest {
         @DisplayName("좋아요가 없으면 등록하고 liked=true 를 반환한다")
         void toggleLike_register_success() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.findCountAndLikedStatus(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(new Object[]{1L, 1L});
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
             assertThat(result.getLikeCount()).isEqualTo(1L);
             assertThat(result.isLiked()).isTrue();
-            verify(reviewLikeRepository).save(any(ReviewLike.class));
+            verify(reviewLikeService).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
         @DisplayName("이미 좋아요가 있으면 해제하고 liked=false 를 반환한다")
         void toggleLike_cancel_success() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-            ReviewLike existing = ReviewLike.register(REVIEW_ID, OTHER_MEMBER_ID);
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.of(existing));
-            when(reviewLikeRepository.findCountAndLikedStatus(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(new Object[]{0L, 0L});
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 0L, false);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
             assertThat(result.getLikeCount()).isEqualTo(0L);
             assertThat(result.isLiked()).isFalse();
-            verify(reviewLikeRepository).delete(existing);
         }
 
         @Test
         @DisplayName("후기가 없으면 ERR_REVIEW_NOT_FOUND 를 던진다")
         void toggleLike_reviewNotFound_throwsException() throws InterruptedException {
             mockLock();
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.empty());
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
 
             assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_REVIEW_NOT_FOUND.getMessage());
-
-            verify(reviewLikeRepository, never()).save(any());
-            verify(reviewLikeRepository, never()).delete(any());
         }
 
         @Test
         @DisplayName("자기 자신의 후기에 좋아요 시 ERR_SELF_LIKE_FORBIDDEN 를 던진다")
         void toggleLike_selfLike_throwsException() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-            UUID selfMemberId = ReviewFixture.DEFAULT_MEMBER_ID;
+            when(reviewLikeService.toggle(ReviewFixture.DEFAULT_MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN));
 
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-
-            assertThatThrownBy(() -> reviewService.toggleLike(selfMemberId, REVIEW_ID))
+            assertThatThrownBy(() -> reviewService.toggleLike(ReviewFixture.DEFAULT_MEMBER_ID, REVIEW_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_SELF_LIKE_FORBIDDEN.getMessage());
-
-            verify(reviewLikeRepository, never()).save(any());
-            verify(reviewLikeRepository, never()).delete(any());
         }
 
         @Test
-        @DisplayName("좋아요 등록 시 save 가 1번만 호출된다")
-        void toggleLike_register_savesOnce() throws InterruptedException {
+        @DisplayName("토글 완료 후 ReviewLikeService에 위임한다")
+        void toggleLike_delegatesToReviewLikeService() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.findCountAndLikedStatus(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(new Object[]{1L, 1L});
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            verify(reviewLikeRepository, times(1)).save(any(ReviewLike.class));
-            verify(reviewLikeRepository, never()).delete(any());
+            verify(reviewLikeService, times(1)).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
-        @DisplayName("좋아요 해제 시 delete 가 1번만 호출된다")
-        void toggleLike_cancel_deletesOnce() throws InterruptedException {
+        @DisplayName("좋아요 해제 완료 후 ReviewLikeService에 위임한다")
+        void toggleLike_cancel_delegatesToReviewLikeService() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-            ReviewLike existing = ReviewLike.register(REVIEW_ID, OTHER_MEMBER_ID);
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.of(existing));
-            when(reviewLikeRepository.findCountAndLikedStatus(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(new Object[]{0L, 0L});
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 0L, false);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            verify(reviewLikeRepository, times(1)).delete(existing);
-            verify(reviewLikeRepository, never()).save(any());
+            verify(reviewLikeService, times(1)).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
@@ -790,13 +759,8 @@ class ReviewServiceTest {
         @DisplayName("반환된 ReviewLikeResponse 에 reviewId 가 포함된다")
         void toggleLike_responseContainsReviewId() throws InterruptedException {
             mockLock();
-            Review review = ReviewFixture.defaultReview();
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.findCountAndLikedStatus(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(new Object[]{1L, 1L});
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
