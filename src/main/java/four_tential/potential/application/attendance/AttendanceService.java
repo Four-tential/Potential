@@ -27,7 +27,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -45,24 +44,16 @@ public class AttendanceService {
     private final CourseRepository courseRepository;
     private final OrderRepository orderRepository;
 
-    private static final long SSE_TIMEOUT = 30 * 60 * 1000L; // 30분
-    private static final long QR_OPEN_MINUTES   = 10L;  // QR 생성 가능 시간
+    private static final long SSE_TIMEOUT    = 30 * 60 * 1000L;
+    private static final long QR_OPEN_MINUTES = 10L;
 
     // QR 생성(강사 전용)
     public byte[] createQr(UUID courseId, UUID memberId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        // memberId -> instructor_members.id 조회 후 코스 소유자 검증
-        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
-                .getId();
+        validateCourseOwner(course, memberId);
 
-        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
-        }
-
-        // 코스 상태가 OPEN인지 검증
         if (course.getStatus() != CourseStatus.OPEN) {
             throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
@@ -129,14 +120,7 @@ public class AttendanceService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        // memberId -> instructor_members.id 조회 후 코스 소유자 검증
-        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
-                .getId();
-
-        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
-        }
+        validateCourseOwner(course, memberId);
 
         return attendanceQueryService.getAttendanceSnapshot(courseId);
     }
@@ -150,19 +134,11 @@ public class AttendanceService {
 
     // SSE 스트림 연결 (강사 전용)
     public SseEmitter stream(UUID courseId, UUID memberId) {
-        // 강사 본인 코스인지 검증
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(CourseExceptionEnum.ERR_NOT_FOUND_COURSE));
 
-        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
-                .getId();
+        validateCourseOwner(course, memberId);
 
-        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
-            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
-        }
-
-        // 코스 상태가 OPEN인지 검증
         if (course.getStatus() != CourseStatus.OPEN) {
             throw new ServiceErrorException(CourseExceptionEnum.ERR_COURSE_NOT_OPEN);
         }
@@ -205,5 +181,18 @@ public class AttendanceService {
         }
 
         return emitter;
+    }
+
+    //  강사 코스 소유자 검증
+    //  memberId(members.id) → instructorMemberId(instructor_members.id) 조회 후 코스 소유자 비교
+    //  createQr / findAllByCourse / stream 세 메서드에서 공통으로 사용
+    private void validateCourseOwner(Course course, UUID memberId) {
+        UUID instructorMemberId = instructorMemberRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN))
+                .getId();
+
+        if (!course.getMemberInstructorId().equals(instructorMemberId)) {
+            throw new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN);
+        }
     }
 }
