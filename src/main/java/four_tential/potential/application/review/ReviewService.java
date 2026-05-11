@@ -21,12 +21,16 @@ import four_tential.potential.presentation.review.dto.response.ReviewLikeRespons
 import four_tential.potential.common.dto.PageResponse;
 import four_tential.potential.presentation.review.dto.response.ReviewResponse;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
-import org.springframework.dao.DataIntegrityViolationException;
+import java.util.concurrent.TimeUnit;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.List;
@@ -50,6 +54,8 @@ public class ReviewService {
     private final ReviewLikeRepository reviewLikeRepository;
     private final ReviewCacheService reviewCacheService;
     private final four_tential.potential.infra.ai.review.ReviewSummaryService reviewSummaryService;
+    private final RedissonClient redissonClient;
+    private final ReviewLikeService reviewLikeService;
 
     // 후기 작성
     @Transactional
@@ -67,6 +73,11 @@ public class ReviewService {
         // 주문-코스 정합성 검증
         if (!order.getCourseId().equals(courseId)) {
             throw new ServiceErrorException(ERR_NOT_FOUND_ORDER);
+        }
+
+        // 중복 후기 검증 (재시도 요청 시 이후 DB 조회 비용 절약)
+        if (reviewRepository.existsByOrderIdAndMemberId(orderId, memberId)) {
+            throw new ServiceErrorException(ERR_ALREADY_REVIEWED);
         }
 
         // 코스 조회 및 검증
@@ -89,11 +100,6 @@ public class ReviewService {
 
         if (attendance.getStatus() != AttendanceStatus.ATTEND) {
             throw new ServiceErrorException(ERR_NOT_ATTENDED);
-        }
-
-        // 중복 후기 검증
-        if (reviewRepository.existsByOrderIdAndMemberId(orderId, memberId)) {
-            throw new ServiceErrorException(ERR_ALREADY_REVIEWED);
         }
 
         // 후기 저장
@@ -170,36 +176,36 @@ public class ReviewService {
     }
 
     // 후기 좋아요 토글 (등록 / 해제)
-    @Transactional
+    // 락 획득 → @Transactional 진입 → 커밋 완료 후 afterCompletion()에서 락 해제
+    // tryLock waitTime만 설정하고 leaseTime 생략 → watchdog이 자동으로 락 갱신
     public ReviewLikeResponse toggleLike(UUID memberId, UUID reviewId) {
+        String lockKey = "lock:review-like:" + reviewId + ":" + memberId;
+        RLock lock = redissonClient.getLock(lockKey);
 
-        // 후기 존재 여부 확인
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
-
-        // 자기 자신 후기 좋아요 방지
-        if (review.getMemberId().equals(memberId)) {
-            throw new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN);
-        }
-
-        // 이미 좋아요 -> 해제 / 없으면 -> 등록
-        Optional<ReviewLike> existing = reviewLikeRepository.findByReviewIdAndMemberId(reviewId, memberId);
-        if (existing.isPresent()) {
-            reviewLikeRepository.delete(existing.get());
-        } else {
-            try {
-                // saveAndFlush: 즉시 DB 반영으로 UNIQUE 위반을 트랜잭션 내에서 바로 감지
-                reviewLikeRepository.saveAndFlush(ReviewLike.register(reviewId, memberId));
-            } catch (DataIntegrityViolationException e) {
-                // 동시 요청으로 중복 INSERT 발생 -> 이미 좋아요된 상태이므로 무시
+        try {
+            if (!lock.tryLock(3, TimeUnit.SECONDS)) { //NOSONAR java:S2222
+                throw new ServiceErrorException(ERR_LIKE_LOCK_FAILED);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceErrorException(ERR_LIKE_LOCK_FAILED);
         }
 
-        long likeCount = reviewLikeRepository.countByReviewId(reviewId);
-        boolean liked  = reviewLikeRepository.existsByReviewIdAndMemberId(reviewId, memberId);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (lock.isHeldByCurrentThread()) {
+                            lock.unlock();
+                        }
+                    }
+                }
+        );
 
-        return ReviewLikeResponse.of(reviewId, likeCount, liked);
+        return reviewLikeService.toggle(memberId, reviewId);
     }
+
+
 
     // 코스 후기 요약 조회
     @Transactional(readOnly = true)

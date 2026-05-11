@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -32,7 +35,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import static four_tential.potential.common.exception.domain.ReviewExceptionEnum.*;
 import static four_tential.potential.common.exception.domain.OrderExceptionEnum.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +53,9 @@ class ReviewServiceTest {
     @Mock private AttendanceRepository attendanceRepository;
     @Mock private ReviewCacheService reviewCacheService;
     @Mock private four_tential.potential.infra.ai.review.ReviewSummaryService reviewSummaryService;
+    @Mock private RedissonClient redissonClient;
+    @Mock private RLock rLock;
+    @Mock private ReviewLikeService reviewLikeService;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -389,14 +394,10 @@ class ReviewServiceTest {
         @Test
         @DisplayName("이미 후기를 작성했으면 ERR_ALREADY_REVIEWED 를 던진다")
         void create_alreadyReviewed_throwsException() {
+            // 중복 검증이 주문 검증 직후로 이동 → courseRepository, attendanceRepository mock 불필요
             Order order = confirmedOrder();
-            Course course = closedCourse(2);
-            Attendance attendance = attendedAttendance();
 
             when(orderRepository.findOrderDetailsById(ORDER_ID, MEMBER_ID)).thenReturn(Optional.of(order));
-            when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-            when(attendanceRepository.findByMemberIdAndCourseIdQuery(MEMBER_ID, COURSE_ID))
-                    .thenReturn(Optional.of(attendance));
             when(reviewRepository.existsByOrderIdAndMemberId(ORDER_ID, MEMBER_ID)).thenReturn(true);
 
             assertThatThrownBy(() -> reviewService.create(MEMBER_ID, COURSE_ID, ORDER_ID, 5, "내용", List.of()))
@@ -630,154 +631,136 @@ class ReviewServiceTest {
     @DisplayName("toggleLike() - 후기 좋아요 토글")
     class ToggleLikeTest {
 
+        @org.junit.jupiter.api.AfterEach
+        void tearDown() {
+            // 트랜잭션 컨텍스트 정리 (mockLock에서 initSynchronization 호출한 경우)
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
         private static final UUID OTHER_MEMBER_ID = UUID.randomUUID();
+
+        // Redisson 락 공통 mock 설정
+        // 단위 테스트 환경에서는 트랜잭션이 없으므로 직접 초기화
+        private void mockLock() throws InterruptedException {
+            when(redissonClient.getLock(anyString())).thenReturn(rLock);
+            when(rLock.tryLock(anyLong(), any())).thenReturn(true);
+            lenient().when(rLock.isHeldByCurrentThread()).thenReturn(true);
+            TransactionSynchronizationManager.initSynchronization();
+        }
 
         @Test
         @DisplayName("좋아요가 없으면 등록하고 liked=true 를 반환한다")
-        void toggleLike_register_success() {
-            // given
-            Review review = ReviewFixture.defaultReview(); // memberId = ReviewFixture.DEFAULT_MEMBER_ID
+        void toggleLike_register_success() throws InterruptedException {
+            mockLock();
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(1L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(true);
-
-            // when
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            // then
             assertThat(result.getLikeCount()).isEqualTo(1L);
             assertThat(result.isLiked()).isTrue();
-            verify(reviewLikeRepository).saveAndFlush(any(ReviewLike.class));
+            verify(reviewLikeService).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
         @DisplayName("이미 좋아요가 있으면 해제하고 liked=false 를 반환한다")
-        void toggleLike_cancel_success() {
-            // given
-            Review review = ReviewFixture.defaultReview();
-            ReviewLike existing = ReviewLike.register(REVIEW_ID, OTHER_MEMBER_ID);
+        void toggleLike_cancel_success() throws InterruptedException {
+            mockLock();
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 0L, false);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.of(existing));
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(0L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(false);
-
-            // when
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            // then
             assertThat(result.getLikeCount()).isEqualTo(0L);
             assertThat(result.isLiked()).isFalse();
-            verify(reviewLikeRepository).delete(existing);
         }
 
         @Test
         @DisplayName("후기가 없으면 ERR_REVIEW_NOT_FOUND 를 던진다")
-        void toggleLike_reviewNotFound_throwsException() {
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.empty());
+        void toggleLike_reviewNotFound_throwsException() throws InterruptedException {
+            mockLock();
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
 
             assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_REVIEW_NOT_FOUND.getMessage());
-
-            verify(reviewLikeRepository, never()).saveAndFlush(any());
-            verify(reviewLikeRepository, never()).delete(any());
         }
 
         @Test
         @DisplayName("자기 자신의 후기에 좋아요 시 ERR_SELF_LIKE_FORBIDDEN 를 던진다")
-        void toggleLike_selfLike_throwsException() {
-            // given - Review 의 memberId == 요청자 memberId
-            Review review = ReviewFixture.defaultReview(); // memberId = DEFAULT_MEMBER_ID
-            UUID selfMemberId = ReviewFixture.DEFAULT_MEMBER_ID;
+        void toggleLike_selfLike_throwsException() throws InterruptedException {
+            mockLock();
+            when(reviewLikeService.toggle(ReviewFixture.DEFAULT_MEMBER_ID, REVIEW_ID))
+                    .thenThrow(new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN));
 
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-
-            // when & then
-            assertThatThrownBy(() -> reviewService.toggleLike(selfMemberId, REVIEW_ID))
+            assertThatThrownBy(() -> reviewService.toggleLike(ReviewFixture.DEFAULT_MEMBER_ID, REVIEW_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_SELF_LIKE_FORBIDDEN.getMessage());
-
-            verify(reviewLikeRepository, never()).saveAndFlush(any());
-            verify(reviewLikeRepository, never()).delete(any());
         }
 
         @Test
-        @DisplayName("좋아요 등록 시 saveAndFlush 가 1번만 호출된다")
-        void toggleLike_register_savesOnce() {
-            Review review = ReviewFixture.defaultReview();
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(1L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(true);
+        @DisplayName("토글 완료 후 ReviewLikeService에 위임한다")
+        void toggleLike_delegatesToReviewLikeService() throws InterruptedException {
+            mockLock();
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            verify(reviewLikeRepository, times(1)).saveAndFlush(any(ReviewLike.class));
-            verify(reviewLikeRepository, never()).delete(any());
+            verify(reviewLikeService, times(1)).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
-        @DisplayName("좋아요 해제 시 delete 가 1번만 호출된다")
-        void toggleLike_cancel_deletesOnce() {
-            Review review = ReviewFixture.defaultReview();
-            ReviewLike existing = ReviewLike.register(REVIEW_ID, OTHER_MEMBER_ID);
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.of(existing));
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(0L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(false);
+        @DisplayName("좋아요 해제 완료 후 ReviewLikeService에 위임한다")
+        void toggleLike_cancel_delegatesToReviewLikeService() throws InterruptedException {
+            mockLock();
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 0L, false);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
-            verify(reviewLikeRepository, times(1)).delete(existing);
-            verify(reviewLikeRepository, never()).saveAndFlush(any());
+            verify(reviewLikeService, times(1)).toggle(OTHER_MEMBER_ID, REVIEW_ID);
         }
 
         @Test
-        @DisplayName("동시 요청으로 중복 INSERT 발생 시 예외를 무시하고 정상 응답한다")
-        void toggleLike_concurrentDuplicate_ignoresException() {
-            Review review = ReviewFixture.defaultReview();
+        @DisplayName("락 획득 실패 시 ERR_LIKE_LOCK_FAILED 를 던진다")
+        void toggleLike_lockFailed_throwsException() throws InterruptedException {
+            when(redissonClient.getLock(anyString())).thenReturn(rLock);
+            when(rLock.tryLock(anyLong(), any())).thenReturn(false);
 
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            // 동시 요청으로 UNIQUE 제약 위반 시뮬레이션
-            when(reviewLikeRepository.saveAndFlush(any()))
-                    .thenThrow(new DataIntegrityViolationException("uk_review_likes_review_member"));
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(1L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(true);
+            assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_LIKE_LOCK_FAILED.getMessage());
 
-            // 예외가 전파되지 않고 정상 응답해야 한다
-            ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
+            // 락을 획득하지 못했으므로 unlock 호출 없어야 함
+            verify(rLock, never()).unlock();
+        }
 
-            assertThat(result.isLiked()).isTrue();
-            assertThat(result.getLikeCount()).isEqualTo(1L);
+        @Test
+        @DisplayName("tryLock 중 InterruptedException 발생 시 ERR_LIKE_LOCK_FAILED 를 던진다")
+        void toggleLike_interrupted_throwsException() throws InterruptedException {
+            when(redissonClient.getLock(anyString())).thenReturn(rLock);
+            when(rLock.tryLock(anyLong(), any())).thenThrow(new InterruptedException());
+
+            assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_LIKE_LOCK_FAILED.getMessage());
+
+            // interrupt 상태가 복원되었는지 확인
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            // 인터럽트 상태 정리
+            Thread.interrupted();
         }
 
         @Test
         @DisplayName("반환된 ReviewLikeResponse 에 reviewId 가 포함된다")
-        void toggleLike_responseContainsReviewId() {
-            Review review = ReviewFixture.defaultReview();
-
-            when(reviewRepository.findById(REVIEW_ID)).thenReturn(Optional.of(review));
-            when(reviewLikeRepository.findByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(Optional.empty());
-            when(reviewLikeRepository.countByReviewId(REVIEW_ID)).thenReturn(1L);
-            when(reviewLikeRepository.existsByReviewIdAndMemberId(REVIEW_ID, OTHER_MEMBER_ID))
-                    .thenReturn(true);
+        void toggleLike_responseContainsReviewId() throws InterruptedException {
+            mockLock();
+            ReviewLikeResponse expected = ReviewLikeResponse.of(REVIEW_ID, 1L, true);
+            when(reviewLikeService.toggle(OTHER_MEMBER_ID, REVIEW_ID)).thenReturn(expected);
 
             ReviewLikeResponse result = reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID);
 
