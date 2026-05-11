@@ -115,9 +115,24 @@ class RefundTaskJobConfigTest {
 
         var processor = refundTaskJobConfig.refundTaskProcessor();
 
-        processor.process(task);
-        processor.process(task);
-        processor.process(task);
+        LocalDateTime t1 = LocalDateTime.now();
+        var firstRetry = processor.process(task);
+        assertThat(firstRetry.getStatus()).isEqualTo(RefundTaskStatus.RETRY_PENDING);
+        assertThat(firstRetry.getNextRetryAt())
+                .isAfterOrEqualTo(t1.plusMinutes(5).minusSeconds(10))
+                .isBeforeOrEqualTo(t1.plusMinutes(5).plusSeconds(10));
+        LocalDateTime t2 = LocalDateTime.now();
+        var secondRetry = processor.process(task);
+        assertThat(secondRetry.getStatus()).isEqualTo(RefundTaskStatus.RETRY_PENDING);
+        assertThat(secondRetry.getNextRetryAt())
+                .isAfterOrEqualTo(t2.plusMinutes(10).minusSeconds(10))
+                .isBeforeOrEqualTo(t2.plusMinutes(10).plusSeconds(10));
+        LocalDateTime t3 = LocalDateTime.now();
+        var thirdRetry = processor.process(task);
+        assertThat(thirdRetry.getStatus()).isEqualTo(RefundTaskStatus.RETRY_PENDING);
+        assertThat(thirdRetry.getNextRetryAt())
+                .isAfterOrEqualTo(t3.plusMinutes(20).minusSeconds(10))
+                .isBeforeOrEqualTo(t3.plusMinutes(20).plusSeconds(10));
         var result = processor.process(task);
 
         verify(refundFacade, times(4)).processInstructorRefundTask(orderId);
