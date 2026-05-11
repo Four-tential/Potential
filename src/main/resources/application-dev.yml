@@ -164,6 +164,27 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 2
         automatic-transition-from-open-to-half-open-enabled: true
 
+# prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health, info
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99 # P50, P95, P99 활성화
+      sla:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 3s # 특정 시간 내 처리 비율 확인
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 # Member
 member:
   default-profile-image-url: ${member.default-profile-image-url}
