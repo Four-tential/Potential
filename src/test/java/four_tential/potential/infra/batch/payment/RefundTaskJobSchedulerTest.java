@@ -13,6 +13,7 @@ import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.repository.JobRepository;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -54,17 +55,42 @@ class RefundTaskJobSchedulerTest {
     }
 
     @Test
-    @DisplayName("실행 중이 아니어도 PENDING task가 없으면 시작하지 않는다")
-    void runRefundTaskJob_skips_when_no_pending_task() throws Exception {
+    @DisplayName("실행 중이 아니고 PENDING도 없고 재시도 가능 task도 없으면 시작하지 않는다")
+    void runRefundTaskJob_skips_when_no_pending_and_no_retry_ready_task() throws Exception {
         given(refundTaskJob.getName()).willReturn("refundTaskJob");
         given(jobRepository.findRunningJobExecutions("refundTaskJob")).willReturn(Collections.emptySet());
         given(refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING)).willReturn(false);
+        given(refundTaskRepository.existsByStatusAndNextRetryAtLessThanEqual(
+                eq(RefundTaskStatus.RETRY_PENDING),
+                any(LocalDateTime.class)
+        )).willReturn(false);
 
         refundTaskJobScheduler.runRefundTaskJob();
 
         verify(refundTaskRepository).existsByStatus(RefundTaskStatus.PENDING);
+        verify(refundTaskRepository).existsByStatusAndNextRetryAtLessThanEqual(
+                eq(RefundTaskStatus.RETRY_PENDING),
+                any(LocalDateTime.class)
+        );
         verify(jobOperator, never()).start(any(Job.class), any(JobParameters.class));
     }
+
+    @Test
+    @DisplayName("PENDING task가 없어도 재시도 가능 RETRY_PENDING task가 있으면 시작한다")
+    void runRefundTaskJob_starts_when_retry_ready_task_exists() throws Exception {
+        given(refundTaskJob.getName()).willReturn("refundTaskJob");
+        given(jobRepository.findRunningJobExecutions("refundTaskJob")).willReturn(Collections.emptySet());
+        given(refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING)).willReturn(false);
+        given(refundTaskRepository.existsByStatusAndNextRetryAtLessThanEqual(
+                eq(RefundTaskStatus.RETRY_PENDING),
+                any(LocalDateTime.class)
+        )).willReturn(true);
+
+        refundTaskJobScheduler.runRefundTaskJob();
+
+        verify(jobOperator).start(eq(refundTaskJob), any(JobParameters.class));
+    }
+
 
     @Test
     @DisplayName("실행 중이 아니고 PENDING task가 있으면 refundTaskJob을 시작한다")
@@ -72,6 +98,10 @@ class RefundTaskJobSchedulerTest {
         given(refundTaskJob.getName()).willReturn("refundTaskJob");
         given(jobRepository.findRunningJobExecutions("refundTaskJob")).willReturn(Collections.emptySet());
         given(refundTaskRepository.existsByStatus(RefundTaskStatus.PENDING)).willReturn(true);
+        given(refundTaskRepository.existsByStatusAndNextRetryAtLessThanEqual(
+                eq(RefundTaskStatus.RETRY_PENDING),
+                any(LocalDateTime.class)
+        )).willReturn(false);
 
         refundTaskJobScheduler.runRefundTaskJob();
 

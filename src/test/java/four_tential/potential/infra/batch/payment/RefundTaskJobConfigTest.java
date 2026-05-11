@@ -15,13 +15,16 @@ import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.infrastructure.item.Chunk;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,12 +63,16 @@ class RefundTaskJobConfigTest {
     void refundTaskReader_reads_pending_tasks() throws Exception {
         RefundTask first = RefundTask.pending(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
         RefundTask second = RefundTask.pending(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        RefundTask retryPending = RefundTask.pending(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        retryPending.markRetryPending(LocalDateTime.now().minusMinutes(1), "retry later");
         given(refundTaskRepository.findByStatus(RefundTaskStatus.PENDING)).willReturn(List.of(first, second));
+        given(refundTaskRepository.findRetryPendingBefore(any(LocalDateTime.class))).willReturn(List.of(retryPending));
 
         var reader = refundTaskJobConfig.refundTaskReader();
 
         assertThat(reader.read()).isEqualTo(first);
         assertThat(reader.read()).isEqualTo(second);
+        assertThat(reader.read()).isEqualTo(retryPending);
         assertThat(reader.read()).isNull();
     }
 
@@ -93,7 +100,29 @@ class RefundTaskJobConfigTest {
         var result = refundTaskJobConfig.refundTaskProcessor().process(task);
 
         verify(refundFacade).processInstructorRefundTask(orderId);
+        assertThat(result.getStatus()).isEqualTo(RefundTaskStatus.RETRY_PENDING);
+        assertThat(result.getNextRetryAt()).isNotNull();
+        assertThat(result.getFailReason()).contains("refund fail");
+    }
+
+    @Test
+    @DisplayName("processor는 최대 재시도 후에 FAILED 처리한다")
+    void refundTaskProcessor_marks_failed_after_max_retries() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        RefundTask task = RefundTask.pending(UUID.randomUUID(), orderId, UUID.randomUUID(), UUID.randomUUID());
+        doThrow(new RuntimeException("refund fail"))
+                .when(refundFacade).processInstructorRefundTask(orderId);
+
+        var processor = refundTaskJobConfig.refundTaskProcessor();
+
+        processor.process(task);
+        processor.process(task);
+        processor.process(task);
+        var result = processor.process(task);
+
+        verify(refundFacade, times(4)).processInstructorRefundTask(orderId);
         assertThat(result.getStatus()).isEqualTo(RefundTaskStatus.FAILED);
+        assertThat(result.getNextRetryAt()).isNull();
         assertThat(result.getFailReason()).contains("refund fail");
     }
 
