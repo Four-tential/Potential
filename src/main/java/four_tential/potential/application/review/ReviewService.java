@@ -69,6 +69,11 @@ public class ReviewService {
             throw new ServiceErrorException(ERR_NOT_FOUND_ORDER);
         }
 
+        // 중복 후기 검증
+        if (reviewRepository.existsByOrderIdAndMemberId(orderId, memberId)) {
+            throw new ServiceErrorException(ERR_ALREADY_REVIEWED);
+        }
+
         // 코스 조회 및 검증
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
@@ -89,11 +94,6 @@ public class ReviewService {
 
         if (attendance.getStatus() != AttendanceStatus.ATTEND) {
             throw new ServiceErrorException(ERR_NOT_ATTENDED);
-        }
-
-        // 중복 후기 검증
-        if (reviewRepository.existsByOrderIdAndMemberId(orderId, memberId)) {
-            throw new ServiceErrorException(ERR_ALREADY_REVIEWED);
         }
 
         // 후기 저장
@@ -195,8 +195,10 @@ public class ReviewService {
             }
         }
 
-        long likeCount = reviewLikeRepository.countByReviewId(reviewId);
-        boolean liked  = reviewLikeRepository.existsByReviewIdAndMemberId(reviewId, memberId);
+        // 좋아요 수와 본인 여부를 단일 쿼리로 조회
+        Object[] result = reviewLikeRepository.findCountAndLikedStatus(reviewId, memberId);
+        long likeCount = result[0] == null ? 0L : ((Number) result[0]).longValue();
+        boolean liked  = result[1] != null && ((Number) result[1]).longValue() > 0;
 
         return ReviewLikeResponse.of(reviewId, likeCount, liked);
     }
