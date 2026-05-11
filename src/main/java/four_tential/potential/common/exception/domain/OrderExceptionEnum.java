@@ -9,6 +9,7 @@ public enum OrderExceptionEnum implements ServiceErrorCode {
 
     ERR_NOT_FOUND_ORDER(HttpStatus.NOT_FOUND, "주문 정보를 찾을 수 없습니다"),
     ERR_ALREADY_RESERVED(HttpStatus.CONFLICT, "동일한 시간대에 이미 예약된 코스가 있습니다"),
+    ERR_ALREADY_ORDERED_COURSE(HttpStatus.CONFLICT, "이미 해당 코스에 대한 주문이 존재합니다"),
     ERR_NO_AVAILABLE_SEATS(HttpStatus.BAD_REQUEST, "코스의 잔여석이 없습니다"),
     ERR_INVALID_ORDER_STATUS(HttpStatus.BAD_REQUEST, "변경할 수 없는 주문 상태입니다"),
     ERR_CANNOT_CANCEL_ORDER(HttpStatus.BAD_REQUEST, "만료 혹은 취소된 주문은 취소할 수 없습니다"),
@@ -22,6 +23,7 @@ public enum OrderExceptionEnum implements ServiceErrorCode {
     ERR_INVALID_ORDER_COUNT(HttpStatus.BAD_REQUEST, "주문 수량은 1개 이상이어야 합니다"),
     ERR_LOCK_INTERRUPTED(HttpStatus.INTERNAL_SERVER_ERROR, "락 획득 중 인터럽트가 발생했습니다"),
     ERR_LOCK_ACQUISITION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "락을 획득하지 못했습니다"),
+    ERR_NON_PROD_ONLY(HttpStatus.FORBIDDEN, "비운영 환경에서만 제공되는 기능입니다"),
     ERR_SYSTEM_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "시스템 내부 오류가 발생했습니다")
     ;
 
