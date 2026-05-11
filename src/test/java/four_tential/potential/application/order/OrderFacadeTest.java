@@ -7,10 +7,10 @@ import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.presentation.order.dto.*;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,12 +34,23 @@ class OrderFacadeTest {
     @Mock private OrderService orderService;
     @Mock private WaitingListService waitingListService;
     @Mock private RefundFacade refundFacade;
+    @Mock private PerformanceTestDataService performanceTestDataService;
 
-    @InjectMocks private OrderFacade orderFacade;
+    private OrderFacade orderFacade;
 
     private final UUID memberId = UUID.randomUUID();
     private final UUID courseId = UUID.randomUUID();
     private final OrderCreateRequest request = new OrderCreateRequest(courseId, 2);
+
+    @BeforeEach
+    void setUp() {
+        orderFacade = new OrderFacade(
+                orderService,
+                waitingListService,
+                refundFacade,
+                Optional.of(performanceTestDataService)
+        );
+    }
 
     @Test
     @DisplayName("잔여석 점유 성공 시 주문을 생성하고 성공 응답을 반환한다")
@@ -268,5 +280,34 @@ class OrderFacadeTest {
         verify(refundFacade).refundPaidOrderByStudent(memberId, orderId, 1);
         verify(orderService, never()).cancelOrder(orderId, memberId);
         verify(waitingListService, never()).recoverCapacity(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("성능 테스트 데이터 삭제를 성공적으로 호출한다")
+    void deletePerformanceTestData_success() {
+        // when
+        orderFacade.deletePerformanceTestData();
+
+        // then
+        verify(performanceTestDataService).deletePerformanceTestData();
+    }
+
+    @Test
+    @DisplayName("PerformanceTestDataService가 없는 경우(운영 환경 등) 예외를 발생시킨다")
+    void deletePerformanceTestData_fail_when_null() {
+        // given
+        OrderFacade prodOrderFacade = new OrderFacade(
+                orderService,
+                waitingListService,
+                refundFacade,
+                Optional.empty()
+        );
+
+        // when & then
+        assertThatThrownBy(prodOrderFacade::deletePerformanceTestData)
+                .isInstanceOf(ServiceErrorException.class)
+                .hasMessage(OrderExceptionEnum.ERR_NON_PROD_ONLY.getMessage());
+
+        verify(performanceTestDataService, never()).deletePerformanceTestData();
     }
 }

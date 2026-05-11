@@ -41,4 +41,17 @@ public class PaymentDistributedLockExecutor {
         }
         return action.get();
     }
+
+    // Batch 전용 pgKey 분산락
+    // withTransaction = false → 트랜잭션 없이 락만 적용
+    @DistributedLock(
+            key = "'" + RedisConstants.PAYMENT_PG_LOCK_PREFIX + "' + #pgKey",
+            withTransaction = false
+    )
+    public <T> T executeWithPgKeyLockNoTx(String pgKey, Supplier<T> action) {
+        if (pgKey == null || pgKey.isBlank()) {
+            throw new IllegalArgumentException("pgKey must not be blank");
+        }
+        return action.get();
+    }
 }

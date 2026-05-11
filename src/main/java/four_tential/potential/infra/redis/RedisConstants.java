@@ -21,6 +21,7 @@ public class RedisConstants {
     // Order
     public static final String COURSE_CAPACITY_PREFIX = "Course:Capacity:";
     public static final String WAITING_LIST_PREFIX = "WaitingList:";
+    public static final String WAITING_LIST_SEQUENCE_PREFIX = "WaitingList:Sequence:";
     public static final String USER_COURSE_OCCUPANCY_PREFIX = "User:Occupancy:";
     public static final String WAITING_ORDER_COUNT_PREFIX = "WaitingCount:";
 

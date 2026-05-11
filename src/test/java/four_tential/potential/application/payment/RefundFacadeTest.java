@@ -102,8 +102,13 @@ class RefundFacadeTest {
     void setUp() {
         lenient().when(paymentLockExecutor.executeWithPgKeyLock(any(String.class), any()))
                 .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
+
+        lenient().when(paymentLockExecutor.executeWithPgKeyLockNoTx(any(String.class), any()))
+                .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
+
         lenient().when(paymentLockExecutor.executeWithCourseLock(any(UUID.class), any()))
                 .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
+
         lenient().when(transactionTemplate.execute(any()))
                 .thenAnswer(invocation -> invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null));
     }

@@ -8,24 +8,36 @@ import four_tential.potential.domain.order.Order;
 import four_tential.potential.domain.order.OrderStatus;
 import four_tential.potential.domain.order.WaitingStatus;
 import four_tential.potential.presentation.order.dto.*;
-import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static four_tential.potential.infra.redis.RedisConstants.ORDER_DETAILS_CACHE;
 import static four_tential.potential.infra.redis.RedisConstants.ORDER_LIST_CACHE;
 
 @Component
-@RequiredArgsConstructor
 public class OrderFacade {
 
     private final OrderService orderService;
     private final WaitingListService waitingListService;
     private final RefundFacade refundFacade;
+    private final PerformanceTestDataService performanceTestDataService;
+
+    public OrderFacade(
+            OrderService orderService,
+            WaitingListService waitingListService,
+            RefundFacade refundFacade,
+            Optional<PerformanceTestDataService> performanceTestDataService
+    ) {
+        this.orderService = orderService;
+        this.waitingListService = waitingListService;
+        this.refundFacade = refundFacade;
+        this.performanceTestDataService = performanceTestDataService.orElse(null);
+    }
 
     public OrderPlaceResult placeOrder(UUID memberId, OrderCreateRequest request) {
         // 동일 시간대 중복 예약 체크 (대기열 진입 전 필수 체크)
@@ -124,5 +136,15 @@ public class OrderFacade {
         if (cancelCount != order.getOrderCount()) {
             throw new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_COUNT);
         }
+    }
+
+    /**
+     * 성능 테스트 데이터 일괄 삭제
+     */
+    public void deletePerformanceTestData() {
+        if (performanceTestDataService == null) {
+            throw new ServiceErrorException(OrderExceptionEnum.ERR_NON_PROD_ONLY);
+        }
+        performanceTestDataService.deletePerformanceTestData();
     }
 }

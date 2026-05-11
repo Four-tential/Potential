@@ -25,6 +25,12 @@ import four_tential.potential.presentation.auth.model.response.SignUpResponse;
 import four_tential.potential.presentation.auth.model.response.SocialLinkConfirmResponse;
 import four_tential.potential.presentation.auth.model.response.SocialLinkResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -41,6 +47,7 @@ import java.time.Duration;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_OAUTH_TICKET_INVALID;
 import static four_tential.potential.common.exception.domain.MemberExceptionEnum.ERR_TOKEN_NULL;
 
+@Tag(name = "Auth - 소셜 로그인", description = "OAuth2 소셜 로그인 / 계정 연동 API")
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
@@ -109,10 +116,19 @@ public class AuthController {
 
     @Operation(
             summary = "소셜 계정 수동 연동",
-            description = "현재 로그인한 회원의 비밀번호 검증 후, 프론트가 받아온 OAuth2 인가 코드를 교환해 소셜 계정을 연동합니다."
+            description = "로그인한 회원이 마이페이지에서 비밀번호 인증 후 OAuth2 인가 코드로 소셜 계정을 연동합니다. " +
+                    "Authorization Bearer accessToken 필요."
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "연동 성공"),
+            @ApiResponse(responseCode = "400", description = "ERR_WRONG_PASSWORD / ERR_NO_PASSWORD_SET / ERR_SOCIAL_PROVIDER_NOT_SUPPORTED / ERR_SOCIAL_PROFILE_INCOMPLETE",
+                    content = @Content(examples = @ExampleObject(value = "{\"success\":false,\"status\":\"BAD_REQUEST\",\"message\":\"비밀번호가 올바르지 않습니다\"}"))),
+            @ApiResponse(responseCode = "401", description = "ERR_INVALID_AUTHORIZE — 미인증/Authorization 헤더 누락"),
+            @ApiResponse(responseCode = "409", description = "ERR_SOCIAL_LINK_DUPLICATED / ERR_SOCIAL_ALREADY_LINKED")
+    })
     @PostMapping("/social-link/{provider}")
     public ResponseEntity<BaseResponse<SocialLinkResponse>> linkSocialAccount(
+            @Parameter(description = "소셜 제공자 (kakao | google, 대소문자 무관)", example = "kakao")
             @PathVariable("provider") SocialProvider provider,
             @AuthenticationPrincipal MemberPrincipal principal,
             @Valid @RequestBody SocialLinkRequest request
@@ -129,8 +145,17 @@ public class AuthController {
 
     @Operation(
             summary = "소셜 계정 연동 챌린지 확인 (이메일 충돌 흐름)",
-            description = "소셜 로그인 시 동일 이메일의 기존 계정과 충돌한 경우, 비밀번호 검증 후 자동 연동 + 로그인."
+            description = "소셜 로그인 시 동일 이메일의 기존 계정과 충돌하면 백엔드가 challengeToken 을 발급. " +
+                    "프론트가 link-ticket/exchange 로 challengeToken/email/provider 를 받은 뒤, 이 API 로 비밀번호 검증 + 자동 연동 + 로그인.\n\n" +
+                    "성공 시 Set-Cookie 로 refreshToken (HttpOnly, Secure, Path=/v1/auth) 발급."
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "연동 + 로그인 성공"),
+            @ApiResponse(responseCode = "400", description = "ERR_WRONG_PASSWORD / ERR_NO_PASSWORD_SET"),
+            @ApiResponse(responseCode = "401", description = "ERR_INVALID_AUTHORIZE — challengeToken 만료/위조/이메일 누락"),
+            @ApiResponse(responseCode = "403", description = "ERR_SUSPENDED — 정지된 회원"),
+            @ApiResponse(responseCode = "404", description = "ERR_WRONG_LOGIN — 탈퇴 회원 또는 이메일 불일치")
+    })
     @PostMapping("/social-link/confirm")
     public ResponseEntity<BaseResponse<SocialLinkConfirmResponse>> confirmSocialLink(
             @Valid @RequestBody SocialLinkConfirmRequest request,
@@ -154,8 +179,17 @@ public class AuthController {
 
     @Operation(
             summary = "소셜 로그인 1회용 티켓 교환",
-            description = "OAuth2 로그인 성공 후 받은 ticket 으로 accessToken/온보딩 정보를 교환합니다. URL 노출 방지용 1회용 토큰."
+            description = "OAuth2 로그인 성공 후 redirect URL 쿼리(`?ticket=...`)로 받은 1회용 티켓을 accessToken/온보딩 정보로 교환합니다.\n\n" +
+                    "- TTL: 60초 / Redis getAndDelete (1회만 유효)\n" +
+                    "- refreshToken 은 Set-Cookie 로 이미 내려간 상태이므로 응답에 포함되지 않음\n" +
+                    "- 이 엔드포인트는 인증 헤더 없이 호출 (permitAll)"
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "교환 성공",
+                    content = @Content(examples = @ExampleObject(value = "{\"success\":true,\"status\":\"OK\",\"message\":\"소셜 로그인 티켓 교환 성공\",\"data\":{\"accessToken\":\"eyJ...\",\"hasOnboarding\":true,\"requiresPhoneSetup\":false}}"))),
+            @ApiResponse(responseCode = "400", description = "ERR_OAUTH_TICKET_INVALID — 만료/이미 사용된 티켓",
+                    content = @Content(examples = @ExampleObject(value = "{\"success\":false,\"status\":\"BAD_REQUEST\",\"message\":\"유효하지 않거나 만료된 티켓입니다\"}")))
+    })
     @PostMapping("/oauth/ticket/exchange")
     public ResponseEntity<BaseResponse<OAuthLoginExchangeResponse>> exchangeLoginTicket(
             @Valid @RequestBody OAuthTicketExchangeRequest request
@@ -172,8 +206,15 @@ public class AuthController {
 
     @Operation(
             summary = "소셜 연동 챌린지 1회용 티켓 교환",
-            description = "이메일 충돌 흐름에서 받은 linkTicket 으로 challengeToken/이메일/provider 를 교환합니다."
+            description = "이메일 충돌 흐름에서 받은 linkTicket 을 challengeToken/email/provider 로 교환합니다.\n\n" +
+                    "- 교환 후 프론트는 사용자에게 비밀번호 입력 화면 노출 → `/v1/auth/social-link/confirm` 호출\n" +
+                    "- TTL 60초 / 1회용\n" +
+                    "- 인증 헤더 불필요"
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "교환 성공"),
+            @ApiResponse(responseCode = "400", description = "ERR_OAUTH_TICKET_INVALID — 만료/이미 사용된 티켓")
+    })
     @PostMapping("/oauth/link-ticket/exchange")
     public ResponseEntity<BaseResponse<OAuthLinkExchangeResponse>> exchangeLinkTicket(
             @Valid @RequestBody OAuthTicketExchangeRequest request
@@ -188,9 +229,15 @@ public class AuthController {
         ));
     }
 
-    @Operation(summary = "소셜 계정 연동 해제", description = "마이페이지에서 특정 provider 의 연동을 해제합니다.")
+    @Operation(summary = "소셜 계정 연동 해제", description = "마이페이지에서 특정 provider 의 연동을 해제합니다. Authorization Bearer accessToken 필요.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "해제 성공"),
+            @ApiResponse(responseCode = "401", description = "ERR_INVALID_AUTHORIZE — 미인증"),
+            @ApiResponse(responseCode = "404", description = "ERR_SOCIAL_LINK_NOT_FOUND — 해제할 연동 정보 없음")
+    })
     @DeleteMapping("/social-link/{provider}")
     public ResponseEntity<BaseResponse<Void>> unlinkSocialAccount(
+            @Parameter(description = "소셜 제공자 (kakao | google, 대소문자 무관)", example = "kakao")
             @PathVariable("provider") SocialProvider provider,
             @AuthenticationPrincipal MemberPrincipal principal
     ) {

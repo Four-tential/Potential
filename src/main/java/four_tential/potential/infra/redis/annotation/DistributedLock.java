@@ -29,4 +29,10 @@ public @interface DistributedLock {
     long leaseTime() default 10L;
 
     TimeUnit timeUnit() default TimeUnit.SECONDS;
+
+    /**
+     * true (기본값): AopInTransaction을 통해 트랜잭션 포함 실행 - 기존 방식 유지
+     * false: joinPoint.proceed() 직접 호출 - 트랜잭션 없이 락만 적용 (Batch 전용)
+     */
+    boolean withTransaction() default true;
 }
