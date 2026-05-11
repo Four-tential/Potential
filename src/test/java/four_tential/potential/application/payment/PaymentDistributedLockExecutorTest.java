@@ -53,9 +53,28 @@ class PaymentDistributedLockExecutorTest {
         String orderResult = executor.executeWithOrderLock(orderId, () -> "order");
         String courseResult = executor.executeWithCourseLock(courseId, () -> "course");
         String pgKeyResult = executor.executeWithPgKeyLock("pg-key-1", () -> "pg");
+        String pgKeyNoTxResult = executor.executeWithPgKeyLockNoTx("pg-key-2", () -> "pg-no-tx");
 
         assertThat(orderResult).isEqualTo("order");
         assertThat(courseResult).isEqualTo("course");
         assertThat(pgKeyResult).isEqualTo("pg");
+        assertThat(pgKeyNoTxResult).isEqualTo("pg-no-tx");
     }
+
+    @Test
+    @DisplayName("pgKey가 null이면 배치 전용 결제 락 실행을 거부한다")
+    void executeWithPgKeyLockNoTx_nullPgKey_throwsException() {
+        assertThatThrownBy(() -> executor.executeWithPgKeyLockNoTx(null, () -> "ignored"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("pgKey must not be blank");
+    }
+
+    @Test
+    @DisplayName("pgKey가 비어 있으면 배치 전용 결제 락 실행을 거부한다")
+    void executeWithPgKeyLockNoTx_blankPgKey_throwsException() {
+        assertThatThrownBy(() -> executor.executeWithPgKeyLockNoTx(" ", () -> "ignored"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("pgKey must not be blank");
+    }
+
 }
