@@ -1,6 +1,9 @@
 package four_tential.potential.infra.batch.payment;
 
 import four_tential.potential.application.payment.RefundFacade;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.RefundTask;
 import four_tential.potential.domain.payment.enums.RefundTaskStatus;
 import four_tential.potential.domain.payment.repository.RefundTaskRepository;
@@ -150,5 +153,37 @@ class RefundTaskJobConfigTest {
         refundTaskJobConfig.refundTaskWriter().write(new Chunk<>(List.of(first, second)));
 
         verify(refundTaskRepository).saveAll(eq(List.of(first, second)));
+    }
+
+    @Test
+    @DisplayName("processor는 이미 전액 환불된 task는 재시도하지 않고 FAILED 처리한다")
+    void refundTaskProcessor_marks_failed_immediately_when_already_fully_refunded() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        RefundTask task = RefundTask.pending(UUID.randomUUID(), orderId, UUID.randomUUID(), UUID.randomUUID());
+
+        doThrow(new ServiceErrorException(PaymentExceptionEnum.ERR_ALREADY_FULLY_REFUNDED))
+                .when(refundFacade).processInstructorRefundTask(orderId);
+
+        var result = refundTaskJobConfig.refundTaskProcessor().process(task);
+
+        assertThat(result.getStatus()).isEqualTo(RefundTaskStatus.FAILED);
+        assertThat(result.getNextRetryAt()).isNull();
+        assertThat(result.getFailReason()).contains("비재시도 실패");
+    }
+
+    @Test
+    @DisplayName("processor는 주문 상태 오류를 재시도하지 않고 FAILED 처리한다")
+    void refundTaskProcessor_marks_failed_immediately_when_order_status_invalid() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        RefundTask task = RefundTask.pending(UUID.randomUUID(), orderId, UUID.randomUUID(), UUID.randomUUID());
+
+        doThrow(new ServiceErrorException(OrderExceptionEnum.ERR_INVALID_ORDER_STATUS))
+                .when(refundFacade).processInstructorRefundTask(orderId);
+
+        var result = refundTaskJobConfig.refundTaskProcessor().process(task);
+
+        assertThat(result.getStatus()).isEqualTo(RefundTaskStatus.FAILED);
+        assertThat(result.getNextRetryAt()).isNull();
+        assertThat(result.getFailReason()).contains("비재시도 실패");
     }
 }

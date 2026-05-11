@@ -1,6 +1,9 @@
 package four_tential.potential.infra.batch.payment;
 
 import four_tential.potential.application.payment.RefundFacade;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.OrderExceptionEnum;
+import four_tential.potential.common.exception.domain.PaymentExceptionEnum;
 import four_tential.potential.domain.payment.entity.RefundTask;
 import four_tential.potential.domain.payment.enums.RefundTaskStatus;
 import four_tential.potential.domain.payment.repository.RefundTaskRepository;
@@ -91,6 +94,16 @@ public class RefundTaskJobConfig {
                 log.info("[JOB2] 환불 완료. taskId={} orderId={}", task.getId(), task.getOrderId());
 
             } catch (Exception e) {
+                if (isNonRetryableFailure(e)) {
+                    String reason = String.format("[비재시도 실패] %s", e.getMessage());
+                    task.markFailed(reason);
+
+                    log.error("[JOB2] 재시도 의미 없는 환불 실패. 즉시 FAILED 처리. taskId={} orderId={}",
+                            task.getId(), task.getOrderId(), e);
+
+                    return task;
+                }
+
                 // 현재까지 재시도 횟수 파악
                 int retryCount = parseRetryCount(task.getFailReason());
 
@@ -146,5 +159,23 @@ public class RefundTaskJobConfig {
             }
         } catch (NumberFormatException ignored) {}
         return 0;
+    }
+
+    /**
+     * 비즈니스 오류는 FAILED 처리
+     */
+    private boolean isNonRetryableFailure(Exception e) {
+        if (!(e instanceof ServiceErrorException se)) {
+            return false;
+        }
+
+        return se.getErrorCode() == PaymentExceptionEnum.ERR_ALREADY_FULLY_REFUNDED
+                || se.getErrorCode() == PaymentExceptionEnum.ERR_REFUND_PAYMENT_STATUS_INVALID
+                || se.getErrorCode() == PaymentExceptionEnum.ERR_CANCEL_COUNT_INVALID
+                || se.getErrorCode() == PaymentExceptionEnum.ERR_CANCEL_COUNT_EXCEEDED
+                || se.getErrorCode() == PaymentExceptionEnum.ERR_NOT_FOUND_PAYMENT
+                || se.getErrorCode() == PaymentExceptionEnum.ERR_PAYMENT_COURSE_NOT_FOUND
+                || se.getErrorCode() == OrderExceptionEnum.ERR_NOT_FOUND_ORDER
+                || se.getErrorCode() == OrderExceptionEnum.ERR_INVALID_ORDER_STATUS;
     }
 }
