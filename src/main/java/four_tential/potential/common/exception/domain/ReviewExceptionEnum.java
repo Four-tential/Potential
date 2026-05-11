@@ -19,6 +19,7 @@ public enum ReviewExceptionEnum implements ServiceErrorCode {
 
     // 좋아요 관련
     ERR_SELF_LIKE_FORBIDDEN(HttpStatus.FORBIDDEN, "자신의 후기에는 좋아요를 누를 수 없습니다"),
+    ERR_LIKE_LOCK_FAILED(HttpStatus.CONFLICT, "현재 좋아요 처리 중입니다. 잠시 후 다시 시도해주세요"),
 
     // 조회 관련
     ERR_REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "후기를 찾을 수 없습니다"),
