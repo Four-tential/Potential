@@ -26,6 +26,8 @@ import org.redisson.api.RedissonClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
@@ -173,49 +175,68 @@ public class ReviewService {
     }
 
     // 후기 좋아요 토글 (등록 / 해제)
-    @Transactional
+    // 락 획득 → @Transactional 진입 → 커밋 완료 후 afterCompletion()에서 락 해제
+    // tryLock waitTime만 설정하고 leaseTime 생략 → watchdog이 자동으로 락 갱신
     public ReviewLikeResponse toggleLike(UUID memberId, UUID reviewId) {
         // reviewId + memberId 단위 락: 동일 사용자의 동시 요청만 직렬화, 다른 사용자 영향 없음
         String lockKey = "lock:review-like:" + reviewId + ":" + memberId;
         RLock lock = redissonClient.getLock(lockKey);
 
+        boolean acquired = false;
         try {
-            if (!lock.tryLock(3, 3, TimeUnit.SECONDS)) {
-                throw new ServiceErrorException(ERR_LIKE_LOCK_FAILED);
-            }
-
-            // 후기 존재 여부 확인
-            Review review = reviewRepository.findById(reviewId)
-                    .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
-
-            // 자기 자신 후기 좋아요 방지
-            if (review.getMemberId().equals(memberId)) {
-                throw new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN);
-            }
-
-            // 이미 좋아요 -> 해제 / 없으면 -> 등록
-            Optional<ReviewLike> existing = reviewLikeRepository.findByReviewIdAndMemberId(reviewId, memberId);
-            if (existing.isPresent()) {
-                reviewLikeRepository.delete(existing.get());
-            } else {
-                reviewLikeRepository.save(ReviewLike.register(reviewId, memberId));
-            }
-
-            // 좋아요 수와 본인 여부를 단일 쿼리로 조회
-            Object[] result = reviewLikeRepository.findCountAndLikedStatus(reviewId, memberId);
-            long likeCount = result[0] == null ? 0L : ((Number) result[0]).longValue();
-            boolean liked  = result[1] != null && ((Number) result[1]).longValue() > 0;
-
-            return ReviewLikeResponse.of(reviewId, likeCount, liked);
-
+            // waitTime만 설정 → leaseTime 없음 → watchdog이 30초마다 자동 갱신
+            acquired = lock.tryLock(3, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ServiceErrorException(ERR_LIKE_LOCK_FAILED);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
         }
+
+        if (!acquired) {
+            throw new ServiceErrorException(ERR_LIKE_LOCK_FAILED);
+        }
+
+        // 락 해제를 트랜잭션 커밋 완료 후로 미룸
+        // afterCompletion: 커밋/롤백 관계없이 트랜잭션 종료 시점에 호출
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (lock.isHeldByCurrentThread()) {
+                            lock.unlock();
+                        }
+                    }
+                }
+        );
+
+        return doToggleLike(memberId, reviewId, lock);
+    }
+
+    // 실제 토글 로직 — @Transactional 경계 안에서만 실행
+    // 락 획득은 바깥(toggleLike)에서 완료된 상태
+    @Transactional
+    public ReviewLikeResponse doToggleLike(UUID memberId, UUID reviewId, RLock lock) {
+        // 후기 존재 여부 확인
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ServiceErrorException(ERR_REVIEW_NOT_FOUND));
+
+        // 자기 자신 후기 좋아요 방지
+        if (review.getMemberId().equals(memberId)) {
+            throw new ServiceErrorException(ERR_SELF_LIKE_FORBIDDEN);
+        }
+
+        // 이미 좋아요 -> 해제 / 없으면 -> 등록
+        Optional<ReviewLike> existing = reviewLikeRepository.findByReviewIdAndMemberId(reviewId, memberId);
+        if (existing.isPresent()) {
+            reviewLikeRepository.delete(existing.get());
+        } else {
+            reviewLikeRepository.save(ReviewLike.register(reviewId, memberId));
+        }
+
+        // 좋아요 수와 본인 여부를 단일 쿼리로 조회
+        Object[] result = reviewLikeRepository.findCountAndLikedStatus(reviewId, memberId);
+        long likeCount = result[0] == null ? 0L : ((Number) result[0]).longValue();
+        boolean liked  = result[1] != null && ((Number) result[1]).longValue() > 0;
+
+        return ReviewLikeResponse.of(reviewId, likeCount, liked);
     }
 
     // 코스 후기 요약 조회

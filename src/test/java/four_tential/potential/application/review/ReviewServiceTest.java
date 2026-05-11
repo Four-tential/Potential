@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -629,13 +630,23 @@ class ReviewServiceTest {
     @DisplayName("toggleLike() - 후기 좋아요 토글")
     class ToggleLikeTest {
 
+        @org.junit.jupiter.api.AfterEach
+        void tearDown() {
+            // 트랜잭션 컨텍스트 정리 (mockLock에서 initSynchronization 호출한 경우)
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
         private static final UUID OTHER_MEMBER_ID = UUID.randomUUID();
 
         // Redisson 락 공통 mock 설정
+        // 단위 테스트 환경에서는 트랜잭션이 없으므로 직접 초기화
         private void mockLock() throws InterruptedException {
             when(redissonClient.getLock(anyString())).thenReturn(rLock);
-            when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
-            when(rLock.isHeldByCurrentThread()).thenReturn(true);
+            when(rLock.tryLock(anyLong(), any())).thenReturn(true);
+            lenient().when(rLock.isHeldByCurrentThread()).thenReturn(true);
+            TransactionSynchronizationManager.initSynchronization();
         }
 
         @Test
@@ -749,11 +760,30 @@ class ReviewServiceTest {
         @DisplayName("락 획득 실패 시 ERR_LIKE_LOCK_FAILED 를 던진다")
         void toggleLike_lockFailed_throwsException() throws InterruptedException {
             when(redissonClient.getLock(anyString())).thenReturn(rLock);
-            when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(false);
+            when(rLock.tryLock(anyLong(), any())).thenReturn(false);
 
             assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
                     .isInstanceOf(ServiceErrorException.class)
                     .hasMessage(ERR_LIKE_LOCK_FAILED.getMessage());
+
+            // 락을 획득하지 못했으므로 unlock 호출 없어야 함
+            verify(rLock, never()).unlock();
+        }
+
+        @Test
+        @DisplayName("tryLock 중 InterruptedException 발생 시 ERR_LIKE_LOCK_FAILED 를 던진다")
+        void toggleLike_interrupted_throwsException() throws InterruptedException {
+            when(redissonClient.getLock(anyString())).thenReturn(rLock);
+            when(rLock.tryLock(anyLong(), any())).thenThrow(new InterruptedException());
+
+            assertThatThrownBy(() -> reviewService.toggleLike(OTHER_MEMBER_ID, REVIEW_ID))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(ERR_LIKE_LOCK_FAILED.getMessage());
+
+            // interrupt 상태가 복원되었는지 확인
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            // 인터럽트 상태 정리
+            Thread.interrupted();
         }
 
         @Test
