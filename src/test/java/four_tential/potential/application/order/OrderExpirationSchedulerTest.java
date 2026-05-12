@@ -12,6 +12,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -27,6 +28,86 @@ class OrderExpirationSchedulerTest {
     @Mock private RBlockingQueue<String> queue;
 
     @InjectMocks private OrderExpirationScheduler scheduler;
+
+    @Test
+    @DisplayName("워커 초기화 시 큐에 항목이 들어오면 만료 처리를 수행한다")
+    void initDelayedQueueWorker_process_when_item_taken() throws InterruptedException {
+        // given
+        UUID testOrderId = UUID.randomUUID();
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(queue);
+        
+        // 첫 번째 take()에서는 ID 반환, 두 번째에서는 InterruptedException 발생시켜 루프 종료
+        given(queue.take())
+                .willReturn(testOrderId.toString())
+                .willThrow(new InterruptedException());
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 워커 스레드가 실행될 시간을 충분히 줌
+        Thread.sleep(100);
+
+        // then
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId);
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
+    
+    @Test
+    @DisplayName("워커 초기화 시 큐가 null이면 워커 스레드를 종료한다")
+    void initDelayedQueueWorker_exit_when_queue_is_null() throws InterruptedException {
+        // given
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(null);
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 워커 스레드가 실행될 시간을 줌
+        Thread.sleep(100);
+
+        // then
+        // null 체크로 인해 queue.take()가 호출되지 않아야 함
+        verify(queue, never()).take();
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
+    
+    @Test
+    @DisplayName("워커 처리 중 예외가 발생하더라도 스레드가 죽지 않고 다시 큐를 대기한다")
+    void initDelayedQueueWorker_continue_when_exception_occurs() throws InterruptedException {
+        // given
+        UUID testOrderId1 = UUID.randomUUID();
+        UUID testOrderId2 = UUID.randomUUID();
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(queue);
+        
+        // 1: 정상 반환 (그러나 처리 중 예외 발생 가정), 2: 정상 반환, 3: 인터럽트(종료)
+        given(queue.take())
+                .willReturn(testOrderId1.toString())
+                .willReturn(testOrderId2.toString())
+                .willThrow(new InterruptedException());
+                
+        // 첫 번째 ID 처리 시 예외 발생시키기
+        given(orderService.expireOrderInNewTransaction(testOrderId1))
+                .willThrow(new RuntimeException("DB Error"));
+        // 두 번째 ID 처리는 성공
+        given(orderService.expireOrderInNewTransaction(testOrderId2))
+                .willReturn(true);
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 예외 발생 후 sleep(1000)이 있으므로 충분히 기다림
+        Thread.sleep(1200);
+
+        // then
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId1);
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId2);
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
 
     @Test
     @DisplayName("락 획득 성공 시 만료 주문 처리를 수행한다")
