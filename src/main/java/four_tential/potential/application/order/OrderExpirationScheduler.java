@@ -18,6 +18,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static four_tential.potential.application.order.OrderConstants.ORDER_EXPIRATION_QUEUE;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -30,17 +32,15 @@ public class OrderExpirationScheduler {
     private static final String LOCK_KEY = "lock:order:expiration";
     private static final int BATCH_SIZE = 100;
     private static final int MAX_TOTAL_PROCESS = 1000;
-    private static final String QUEUE_NAME = "queue:order:expiration";
 
     @PostConstruct
     public void initDelayedQueueWorker() {
-        RBlockingQueue<String> queue = redissonClient.getBlockingQueue(QUEUE_NAME);
+        RBlockingQueue<String> queue = redissonClient.getBlockingQueue(ORDER_EXPIRATION_QUEUE);
         
         // 워커 스레드 초기화
         executorService = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r);
             thread.setName("order-expiration-worker");
-            thread.setDaemon(true);
             return thread;
         });
 
@@ -79,7 +79,18 @@ public class OrderExpirationScheduler {
     @PreDestroy
     public void destroyWorker() {
         if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdownNow();
+            log.info("주문 만료 워커 스레드 종료 절차 시작 (Graceful Shutdown)");
+            executorService.shutdown();
+            try {
+                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("주문 만료 워커가 5초 내에 종료되지 않아 강제 종료를 시도합니다");
+                    executorService.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                log.error("주문 만료 워커 종료 대기 중 인터럽트 발생");
+                Thread.currentThread().interrupt();
+                executorService.shutdownNow();
+            }
         }
     }
 
@@ -130,4 +141,3 @@ public class OrderExpirationScheduler {
         }
     }
 }
-
