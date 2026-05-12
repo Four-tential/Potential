@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -90,8 +91,8 @@ class OrderConfirmationBatchConfigTest {
         UUID orderId1 = UUID.randomUUID();
         UUID orderId2 = UUID.randomUUID();
 
-        config.orderConfirmationWriter().write(new Chunk<>(List.of(orderId1, orderId2)));
-
-        // writer는 로그만 출력하므로 예외가 발생하지 않는지 검증
+        assertThatCode(() ->
+                config.orderConfirmationWriter().write(new Chunk<>(List.of(orderId1, orderId2)))
+        ).doesNotThrowAnyException();
     }
 }
