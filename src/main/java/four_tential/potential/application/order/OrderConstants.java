@@ -18,4 +18,7 @@ public class OrderConstants {
 
     // Redis 저장 값 관련
     public static final String TOKEN_PROMOTED = "PROMOTED";
+
+    // Redis Queue 관련
+    public static final String ORDER_EXPIRATION_QUEUE = "queue:order:expiration";
 }

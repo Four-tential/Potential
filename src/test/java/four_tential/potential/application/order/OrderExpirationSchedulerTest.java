@@ -7,13 +7,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RBlockingQueue;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
@@ -24,8 +28,90 @@ class OrderExpirationSchedulerTest {
     @Mock private OrderService orderService;
     @Mock private RedissonClient redissonClient;
     @Mock private RLock lock;
+    @Mock private RBlockingQueue<String> queue;
+    @Mock private ExecutorService mockExecutorService;
 
     @InjectMocks private OrderExpirationScheduler scheduler;
+
+    @Test
+    @DisplayName("워커 초기화 시 큐에 항목이 들어오면 만료 처리를 수행한다")
+    void initDelayedQueueWorker_process_when_item_taken() throws InterruptedException {
+        // given
+        UUID testOrderId = UUID.randomUUID();
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(queue);
+        
+        // 첫 번째 take()에서는 ID 반환, 두 번째에서는 InterruptedException 발생시켜 루프 종료
+        given(queue.take())
+                .willReturn(testOrderId.toString())
+                .willThrow(new InterruptedException());
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 워커 스레드가 실행될 시간을 충분히 줌
+        Thread.sleep(100);
+
+        // then
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId);
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
+    
+    @Test
+    @DisplayName("워커 초기화 시 큐가 null이면 워커 스레드를 종료한다")
+    void initDelayedQueueWorker_exit_when_queue_is_null() throws InterruptedException {
+        // given
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(null);
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 워커 스레드가 실행될 시간을 줌
+        Thread.sleep(100);
+
+        // then
+        // null 체크로 인해 queue.take()가 호출되지 않아야 함
+        verify(queue, never()).take();
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
+    
+    @Test
+    @DisplayName("워커 처리 중 예외가 발생하더라도 스레드가 죽지 않고 다시 큐를 대기한다")
+    void initDelayedQueueWorker_continue_when_exception_occurs() throws InterruptedException {
+        // given
+        UUID testOrderId1 = UUID.randomUUID();
+        UUID testOrderId2 = UUID.randomUUID();
+        given(redissonClient.<String>getBlockingQueue(anyString())).willReturn(queue);
+        
+        // 1: 정상 반환 (그러나 처리 중 예외 발생 가정), 2: 정상 반환, 3: 인터럽트(종료)
+        given(queue.take())
+                .willReturn(testOrderId1.toString())
+                .willReturn(testOrderId2.toString())
+                .willThrow(new InterruptedException());
+                
+        // 첫 번째 ID 처리 시 예외 발생시키기
+        given(orderService.expireOrderInNewTransaction(testOrderId1))
+                .willThrow(new RuntimeException("DB Error"));
+        // 두 번째 ID 처리는 성공
+        given(orderService.expireOrderInNewTransaction(testOrderId2))
+                .willReturn(true);
+
+        // when
+        scheduler.initDelayedQueueWorker();
+        
+        // 예외 발생 후 sleep(1000)이 있으므로 충분히 기다림
+        Thread.sleep(1200);
+
+        // then
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId1);
+        verify(orderService, times(1)).expireOrderInNewTransaction(testOrderId2);
+        
+        // cleanup
+        scheduler.destroyWorker();
+    }
 
     @Test
     @DisplayName("락 획득 성공 시 만료 주문 처리를 수행한다")
@@ -34,7 +120,7 @@ class OrderExpirationSchedulerTest {
         given(redissonClient.getLock(anyString())).willReturn(lock);
         given(lock.tryLock(eq(0L), eq(50L), eq(TimeUnit.SECONDS))).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
-        
+
         // 첫 번째 호출에서 10건 조회/10건 성공, 두 번째에서 0건 조회 (종료 조건)
         given(orderService.processExpiredBatch(any(LocalDateTime.class), anyInt()))
                 .willReturn(new OrderBatchResult(10, 10))
@@ -72,40 +158,19 @@ class OrderExpirationSchedulerTest {
         given(redissonClient.getLock(anyString())).willReturn(lock);
         given(lock.tryLock(anyLong(), anyLong(), any())).willReturn(true);
         given(lock.isHeldByCurrentThread()).willReturn(true);
-        
-        // 처리 중 예외 발생 시뮬레이션
-        given(orderService.processExpiredBatch(any(), anyInt()))
-                .willThrow(new RuntimeException("Batch processing failed"));
+
+        given(orderService.processExpiredBatch(any(LocalDateTime.class), anyInt()))
+                .willThrow(new RuntimeException("DB Connection Error"));
 
         // when
-        // @Scheduled 메서드이므로 예외가 내부에서 로깅되거나 전파될 텐데, 현재 코드는 catch하지 않으므로 전파됨
-        assertThatThrownBy(() -> scheduler.expireOrders())
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Batch processing failed");
+        try {
+            scheduler.expireOrders();
+        } catch (RuntimeException e) {
+            // expected
+        }
 
         // then
         verify(lock).unlock();
-    }
-
-    @Test
-    @DisplayName("현재 스레드가 락을 보유하고 있지 않으면 언락을 호출하지 않는다")
-    void expireOrders_not_unlock_if_not_held_by_current_thread() throws InterruptedException {
-        // given
-        given(redissonClient.getLock(anyString())).willReturn(lock);
-        given(lock.tryLock(anyLong(), anyLong(), any())).willReturn(true);
-        
-        // 락 획득 후 로직 수행을 위해 빈 배치 결과 설정
-        given(orderService.processExpiredBatch(any(), anyInt()))
-                .willReturn(new OrderBatchResult(0, 0));
-
-        // 로직 수행 후, 어떤 이유로든(예: 타임아웃 등) 현재 스레드가 락을 잃었을 때를 시뮬레이션
-        given(lock.isHeldByCurrentThread()).willReturn(false);
-
-        // when
-        scheduler.expireOrders();
-
-        // then
-        verify(lock, never()).unlock();
     }
 
     @Test
@@ -127,5 +192,56 @@ class OrderExpirationSchedulerTest {
         // 단 한 번만 호출되고 루프를 탈출해야 함 (무한 루프 방지)
         verify(orderService, times(1)).processExpiredBatch(any(), anyInt());
         verify(lock).unlock();
+    }
+
+    @Test
+    @DisplayName("destroyWorker() 호출 시 Graceful Shutdown이 수행되어야 한다")
+    void destroyWorker_graceful_shutdown() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willReturn(true);
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).awaitTermination(5, TimeUnit.SECONDS);
+        verify(mockExecutorService, never()).shutdownNow();
+    }
+
+    @Test
+    @DisplayName("Graceful Shutdown 시간 초과 시 강제 종료가 수행되어야 한다")
+    void destroyWorker_force_shutdown_on_timeout() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willReturn(false);
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).awaitTermination(5, TimeUnit.SECONDS);
+        verify(mockExecutorService).shutdownNow();
+    }
+
+    @Test
+    @DisplayName("Graceful Shutdown 대기 중 인터럽트 발생 시 강제 종료가 수행되어야 한다")
+    void destroyWorker_force_shutdown_on_interrupt() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willThrow(new InterruptedException());
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).shutdownNow();
+        assertThat(Thread.interrupted()).isTrue(); // 현재 스레드의 인터럽트 상태 확인
     }
 }

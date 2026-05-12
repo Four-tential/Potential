@@ -1,6 +1,7 @@
 package four_tential.potential.application.order;
 
 import four_tential.potential.application.course.CourseFacade;
+import four_tential.potential.application.order.event.OrderCreatedEvent;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
@@ -80,6 +81,7 @@ class OrderServiceTest {
         assertThat(result.getPriceSnap()).isEqualTo(course.getPrice());
 
         verify(orderRepository).save(any(Order.class));
+        verify(applicationContext).publishEvent(any(Object.class));
     }
 
     @Test
