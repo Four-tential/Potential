@@ -10,11 +10,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RBlockingQueue;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
@@ -26,6 +29,7 @@ class OrderExpirationSchedulerTest {
     @Mock private RedissonClient redissonClient;
     @Mock private RLock lock;
     @Mock private RBlockingQueue<String> queue;
+    @Mock private ExecutorService mockExecutorService;
 
     @InjectMocks private OrderExpirationScheduler scheduler;
 
@@ -188,5 +192,56 @@ class OrderExpirationSchedulerTest {
         // 단 한 번만 호출되고 루프를 탈출해야 함 (무한 루프 방지)
         verify(orderService, times(1)).processExpiredBatch(any(), anyInt());
         verify(lock).unlock();
+    }
+
+    @Test
+    @DisplayName("destroyWorker() 호출 시 Graceful Shutdown이 수행되어야 한다")
+    void destroyWorker_graceful_shutdown() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willReturn(true);
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).awaitTermination(5, TimeUnit.SECONDS);
+        verify(mockExecutorService, never()).shutdownNow();
+    }
+
+    @Test
+    @DisplayName("Graceful Shutdown 시간 초과 시 강제 종료가 수행되어야 한다")
+    void destroyWorker_force_shutdown_on_timeout() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willReturn(false);
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).awaitTermination(5, TimeUnit.SECONDS);
+        verify(mockExecutorService).shutdownNow();
+    }
+
+    @Test
+    @DisplayName("Graceful Shutdown 대기 중 인터럽트 발생 시 강제 종료가 수행되어야 한다")
+    void destroyWorker_force_shutdown_on_interrupt() throws InterruptedException {
+        // given
+        ReflectionTestUtils.setField(scheduler, "executorService", mockExecutorService);
+        given(mockExecutorService.isShutdown()).willReturn(false);
+        given(mockExecutorService.awaitTermination(anyLong(), any())).willThrow(new InterruptedException());
+
+        // when
+        scheduler.destroyWorker();
+
+        // then
+        verify(mockExecutorService).shutdown();
+        verify(mockExecutorService).shutdownNow();
+        assertThat(Thread.interrupted()).isTrue(); // 현재 스레드의 인터럽트 상태 확인
     }
 }
