@@ -1,6 +1,7 @@
 package four_tential.potential.application.order;
 
 import four_tential.potential.application.course.CourseFacade;
+import four_tential.potential.application.order.event.OrderCreatedEvent;
 import four_tential.potential.common.exception.ServiceErrorException;
 import four_tential.potential.common.exception.domain.OrderExceptionEnum;
 import four_tential.potential.domain.course.course.Course;
@@ -66,7 +67,12 @@ public class OrderService {
                 course.getPrice(),
                 course.getTitle()
         );
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        // 주문 생성 이벤트 발행 (트랜잭션 커밋 후 Delayed Queue 등록 등을 리스너에서 처리)
+        applicationContext.publishEvent(new OrderCreatedEvent(savedOrder.getId()));
+
+        return savedOrder;
     }
 
     /**
