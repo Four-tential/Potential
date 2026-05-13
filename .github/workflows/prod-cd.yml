@@ -107,15 +107,18 @@ jobs:
           echo "[INFO] Registered: ${REV_ARN}"
 
       # 12. ECS 서비스 업데이트 (강제 재배포)
+      # health-check-grace-period 300초: Spring Boot 콜드 스타트(~80s) + Fargate task placement(~90s)
+      # 합산 약 3분 ~ 3분 30초 소요되므로 grace 180초는 빠듯. 300초로 여유 확보 (검증된 값)
       - name: ECS 서비스 업데이트
         run: |
           aws ecs update-service \
             --cluster "${ECS_CLUSTER}" \
             --service "${ECS_SERVICE}" \
             --task-definition "${{ steps.register.outputs.TASK_DEF_ARN }}" \
+            --health-check-grace-period-seconds 300 \
             --force-new-deployment \
             --region "${AWS_REGION}" \
-            --query 'service.{Service:serviceName,TaskDef:taskDefinition,Desired:desiredCount}' \
+            --query 'service.{Service:serviceName,TaskDef:taskDefinition,Desired:desiredCount,Grace:healthCheckGracePeriodSeconds}' \
             --output table
 
       # 13. 배포 안정화 대기 (헬스체크 통과까지)
