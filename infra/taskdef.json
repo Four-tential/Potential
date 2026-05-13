@@ -67,6 +67,31 @@
         "secretOptions": []
       },
       "systemControls": []
+    },
+    {
+      "name": "adot-collector",
+      "image": "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+      "cpu": 0,
+      "essential": false,
+      "command": ["--config=env:AOT_CONFIG_CONTENT"],
+      "secrets": [
+        {
+          "name": "AOT_CONFIG_CONTENT",
+          "valueFrom": "arn:aws:ssm:ap-northeast-2:<ACCOUNT_ID>:parameter/config/potential-prod/adot/collector-config"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/potential-prod-ecs-task-definition",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "adot"
+        }
+      },
+      "dependsOn": [
+        { "containerName": "potential-prod-container", "condition": "START" }
+      ]
     }
   ],
   "family": "potential-prod-ecs-task-definition",
