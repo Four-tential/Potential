@@ -385,23 +385,14 @@
                     </article>
                 `).join("");
 
-                if (data.totalPages > 1) {
-                    const buttons = [];
-                    buttons.push(`<button type="button" data-rp="${data.currentPage - 1}" ${data.currentPage === 0 ? "disabled" : ""}>‹</button>`);
-                    for (let i = 0; i < data.totalPages; i++) {
-                        buttons.push(`<button type="button" data-rp="${i}" class="${i === data.currentPage ? "active" : ""}">${i + 1}</button>`);
-                    }
-                    buttons.push(`<button type="button" data-rp="${data.currentPage + 1}" ${data.currentPage >= data.totalPages - 1 ? "disabled" : ""}>›</button>`);
-                    pageEl.innerHTML = buttons.join("");
-                    pageEl.querySelectorAll("button[data-rp]").forEach(btn => {
-                        btn.addEventListener("click", () => {
-                            if (btn.disabled) return;
-                            loadReviews(Number(btn.getAttribute("data-rp")));
-                        });
+                // 공용 슬라이딩 윈도우 페이지네이션 사용 (리뷰가 많아도 버튼 7개로 제한)
+                pageEl.innerHTML = P.buildPagination(data.currentPage, data.totalPages, { dataAttr: "rp" });
+                pageEl.querySelectorAll("button[data-rp]").forEach(btn => {
+                    btn.addEventListener("click", () => {
+                        if (btn.disabled) return;
+                        loadReviews(Number(btn.getAttribute("data-rp")));
                     });
-                } else {
-                    pageEl.innerHTML = "";
-                }
+                });
             } catch (err) {
                 listEl.innerHTML = `<div class="empty">리뷰를 불러오지 못했어요.</div>`;
                 pageEl.innerHTML = "";

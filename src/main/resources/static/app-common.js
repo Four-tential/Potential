@@ -222,6 +222,40 @@
         `;
     }
 
+    /**
+     * 슬라이딩 윈도우 페이지네이션 HTML 렌더링 (공용 utility)
+     * - data-attr 로 클릭 이벤트 위임용 속성명 지정 (예: "page", "rp")
+     * - max 개수만큼만 페이지 버튼 노출 (모바일 가로 오버플로 방지)
+     *
+     * @param {number} currentPage  현재 페이지 (0-based)
+     * @param {number} totalPages   총 페이지 수
+     * @param {Object} options      { max?: number, dataAttr?: string }
+     * @returns {string} HTML 문자열 (페이지 1개 이하면 빈 문자열)
+     */
+    function buildPagination(currentPage, totalPages, options) {
+        const opts = options || {};
+        const max = opts.max || 7;
+        const dataAttr = opts.dataAttr || "page";
+
+        if (totalPages <= 1) return "";
+
+        const buttons = [];
+        let start = Math.max(0, currentPage - Math.floor(max / 2));
+        let end = Math.min(totalPages, start + max);
+        start = Math.max(0, end - max);
+
+        const prevDisabled = currentPage === 0 ? "disabled" : "";
+        const nextDisabled = currentPage >= totalPages - 1 ? "disabled" : "";
+
+        buttons.push(`<button type="button" data-${dataAttr}="${currentPage - 1}" ${prevDisabled}>‹</button>`);
+        for (let i = start; i < end; i++) {
+            const cls = i === currentPage ? "active" : "";
+            buttons.push(`<button type="button" data-${dataAttr}="${i}" class="${cls}">${i + 1}</button>`);
+        }
+        buttons.push(`<button type="button" data-${dataAttr}="${currentPage + 1}" ${nextDisabled}>›</button>`);
+        return buttons.join("");
+    }
+
     function bindNav() {
         const btn = document.getElementById("navLogoutBtn");
         if (btn) {
@@ -248,6 +282,7 @@
         qs,
         requireLogin,
         renderNav,
-        bindNav
+        bindNav,
+        buildPagination
     };
 })(window);
