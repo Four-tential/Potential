@@ -191,6 +191,9 @@
                 window.location.href = "/login.html?next=" + encodeURIComponent(currentUrl);
                 return;
             }
+            // 빠른 연속 클릭으로 인한 중복 요청 / 상태 불일치 방지 (course.html과 동일 패턴)
+            if (btn.disabled) return;
+            btn.disabled = true;
             const isOn = btn.classList.contains("on");
             try {
                 if (isOn) {
@@ -206,6 +209,8 @@
                 }
             } catch (err) {
                 showToast(err.message || "처리 실패", "danger");
+            } finally {
+                btn.disabled = false;
             }
         }
 

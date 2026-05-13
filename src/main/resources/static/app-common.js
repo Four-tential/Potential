@@ -71,6 +71,9 @@
             const refreshed = await refreshAccessToken();
             if (refreshed) {
                 res = await rawFetch(path, options);
+            } else {
+                // refresh 실패 → stale token 정리 (isLoggedIn() 거짓 양성 방지)
+                setToken(null);
             }
         }
         const text = await res.text();
