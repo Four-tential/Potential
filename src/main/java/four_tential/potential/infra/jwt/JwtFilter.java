@@ -1,7 +1,6 @@
 package four_tential.potential.infra.jwt;
 
 import four_tential.potential.common.dto.BaseResponse;
-import four_tential.potential.infra.redis.RedisTokenRepository;
 import four_tential.potential.infra.security.principal.MemberPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -31,25 +30,81 @@ import java.util.UUID;
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
-    private final RedisTokenRepository redisTokenRepository;
+    private final JwtRepository jwtRepository;
 
     private static final PathPatternParser patternParser = new PathPatternParser();
 
-    // 통과 API 패턴 기록 (Path Pattern 사용)
-    private static final List<PathPattern> EXCLUDE_PATTERNS = List.of(
-            patternParser.parse("/v1/api/members/signup"),
-            patternParser.parse("/v1/api/members/signin")
+    private record ExcludeRule(String method, PathPattern pattern) {
+        boolean matches(String reqMethod, PathContainer reqPath) {
+            return (method == null || method.equalsIgnoreCase(reqMethod)) && pattern.matches(reqPath);
+        }
+    }
+
+    private static ExcludeRule any(String path) {
+        return new ExcludeRule(null, patternParser.parse(path));
+    }
+
+    private static ExcludeRule get(String path) {
+        return new ExcludeRule("GET", patternParser.parse(path));
+    }
+
+    private static ExcludeRule post(String path) {
+        return new ExcludeRule("POST", patternParser.parse(path));
+    }
+
+    private static final List<ExcludeRule> EXCLUDE_RULES = List.of(
+            // Swagger, Actuator
+            any("/swagger-ui/**"),
+            any("/swagger-ui.html"),
+            any("/v3/api-docs/**"),
+            any("/actuator/**"),
+            //any("/ai/test/**"),
+
+            // Auth
+            post("/v1/auth/signup"),
+            post("/v1/auth/login"),
+            post("/v1/auth/refresh"),
+            post("/v1/auth/social-link/confirm"),
+            post("/v1/auth/oauth/ticket/exchange"),
+            post("/v1/auth/oauth/link-ticket/exchange"),
+
+            // OAuth2 (Spring Security 자체 처리 경로)
+            any("/oauth2/**"),
+            any("/login/oauth2/**"),
+
+            // Course
+            get("/v1/courses"),
+            get("/v1/courses/{courseId}"),
+            get("/v1/courses/{courseId}/reviews"),
+
+            // Review
+            get("/v1/reviews/{reviewId}"),
+
+            // Instructor profile
+            get("/v1/instructors/{instructorId}"),
+
+            // Payment
+            post("/v1/webhooks/portone"),
+            get("/v1/payments/portone-config"),
+
+            // 결제 테스트 페이지
+            any("/payment-test.html"),
+
+            // OAuth2 간이 검증 페이지
+            any("/oauth-success.html"),
+            any("/oauth-failure.html"),
+            any("/oauth-phone-setup.html"),
+            any("/oauth-link-confirm.html")
     );
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {
         log.info("JwtAuthFilter IN");
-        String Authorization = request.getHeader("Authorization");
+        String authorization = request.getHeader("Authorization");
         String token;
 
-        // Header 의 Authorization 확인
-        if (Authorization != null && Authorization.startsWith("Bearer ")) {
-            token = Authorization.substring("Bearer ".length());
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            token = authorization.substring("Bearer ".length());
         } else {
             BaseResponse<Void> baseResponse = BaseResponse.fail(HttpStatus.UNAUTHORIZED.name(), "인증 정보가 없습니다");
 
@@ -59,7 +114,7 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (jwtUtil.validateToken(token) && !redisTokenRepository.isBlacklist(token)) {
+        if (jwtUtil.validateToken(token) && !jwtRepository.isBlacklist(token)) {
             String email = jwtUtil.extractSubject(token);
             String role = jwtUtil.extractRoleByToken(token);
             UUID memberId = UUID.fromString(jwtUtil.extractMemberIdByToken(token));
@@ -88,7 +143,11 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        String method = request.getMethod();
         PathContainer path = PathContainer.parsePath(request.getRequestURI());
-        return EXCLUDE_PATTERNS.stream().anyMatch(pattern -> pattern.matches(path));
+        return EXCLUDE_RULES.stream().anyMatch(rule -> rule.matches(method, path));
     }
 }

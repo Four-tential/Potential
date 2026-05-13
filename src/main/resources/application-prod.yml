@@ -1,0 +1,202 @@
+spring:
+  config:
+    import:
+      - "aws-parameterstore:/config/potential-prod/"
+
+  # DB — Secrets Manager - ECS env 주입
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-test-query: SELECT 1
+      keepalive-time: 60000
+
+  # Redis (ElastiCache prod) — Parameter Store
+  data:
+    redis:
+      host: ${redis.host}
+      port: ${redis.port}
+
+  # Flyway — DB와 같은 자격증명
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  # JPA — 운영은 show-sql off
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # Spring Batch
+  batch:
+    jdbc:
+      initialize-schema: never
+    job:
+      enabled: false
+
+  # Spring Security OAuth2 Client (Kakao + Google)
+  # 운영용 OAuth 앱은 dev와 분리하여 발급 권장
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: ${kakao.client-id}
+            client-secret: ${kakao.client-secret}
+            client-authentication-method: client_secret_post
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - profile_nickname
+              - account_email
+            client-name: Kakao
+          google:
+            client-id: ${google.client-id}
+            client-secret: ${google.client-secret}
+            scope:
+              - profile
+              - email
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+  # Spring AI
+  ai:
+    chat:
+      client:
+        enabled: false
+
+    openai:
+      api-key: ${openai.api-key}
+      chat:
+        options:
+          model: gpt-4.1-mini
+          temperature: 0.7
+          max-tokens: 2000
+      embedding:
+        options:
+          model: text-embedding-3-small
+
+    # Ollama 블록은 운영에서 안 쓰면 생략 가능
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: hnsw
+        distance-type: cosine_distance
+        dimensions: 1536
+
+# PGVector DataSource — Secrets Manager → ECS env 주입
+pgvector:
+  datasource:
+    url: jdbc:postgresql://${PGVECTOR_HOST}:${PGVECTOR_PORT:5432}/${PGVECTOR_DB}
+    username: ${PGVECTOR_USERNAME}
+    password: ${PGVECTOR_PASSWORD}
+
+# AWS S3 — prod 버킷
+aws:
+  s3:
+    bucket: ${aws.s3.bucket}
+    region: ${aws.s3.region:ap-northeast-2}
+    cloudfront-domain: ${aws.cloudfront-domain}
+
+# JWT
+jwt:
+  secret:
+    key: ${jwt.key}
+    accessExpire: 1800000
+    refreshExpire: 604800000
+
+# OAuth2 커스텀 리다이렉트 (운영 도메인)
+oauth2:
+  success-redirect-uri: ${oauth2.success-redirect-uri}
+  failure-redirect-uri: ${oauth2.failure-redirect-uri}
+  link-confirm-redirect-uri: ${oauth2.link-confirm-redirect-uri}
+
+# PortOne
+portone:
+  api-secret: ${portone.api-secret}
+  webhook-secret: ${portone.webhook-secret}
+  store-id: ${portone.store-id}
+  channel-key: ${portone.channel-key}
+  api-base: https://api.portone.io
+  sdk-timeout: 10s
+
+# CircuitBreaker
+resilience4j:
+  circuitbreaker:
+    instances:
+      portoneGetPayment:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      portoneCancelPayment:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+
+# Prometheus / Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health, info
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: prod
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+      sla:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 3s
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+# Member
+member:
+  default-profile-image-url: ${member.default-profile-image-url}
+
+# Swagger — 운영은 비활성화
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# CORS — 운영 도메인 (루트 + www 모두 허용)
+cors:
+  allowed-origins: https://potential-fourtential.shop, https://www.potential-fourtential.shop
+
+logging:
+  level:
+    root: info
+
+server:
+  port: 8080

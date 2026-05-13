@@ -1,0 +1,88 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "potential-prod-container",
+      "image": "<IMAGE_URI>",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "name": "potential-prod-container-8080-tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "SPRING_PROFILES_ACTIVE",
+          "value": "prod"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "DB_HOST",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:db.host::"
+        },
+        {
+          "name": "DB_NAME",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:db.name::"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:db.password::"
+        },
+        {
+          "name": "DB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:db.username::"
+        },
+        {
+          "name": "PGVECTOR_HOST",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:pgvector.host::"
+        },
+        {
+          "name": "PGVECTOR_DB",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:pgvector.name::"
+        },
+        {
+          "name": "PGVECTOR_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:pgvector.password::"
+        },
+        {
+          "name": "PGVECTOR_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:<ACCOUNT_ID>:secret:prod/rds/credentials-RL8BSv:pgvector.username::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/potential-prod-ecs-task-definition",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        },
+        "secretOptions": []
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "potential-prod-ecs-task-definition",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ECS-role-task-S3",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "3072",
+  "enableFaultInjection": false
+}

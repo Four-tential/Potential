@@ -1,0 +1,342 @@
+package four_tential.potential.presentation.attendance;
+
+import four_tential.potential.application.attendance.AttendanceService;
+import four_tential.potential.common.exception.ServiceErrorException;
+import four_tential.potential.common.exception.domain.AttendanceExceptionEnum;
+import four_tential.potential.domain.attendance.Attendance;
+import four_tential.potential.presentation.attendance.dto.AttendanceListResponse;
+import four_tential.potential.presentation.attendance.dto.AttendanceScanRequest;
+import four_tential.potential.infra.security.principal.MemberPrincipal;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class AttendanceControllerTest {
+
+    @Mock
+    private AttendanceService attendanceService;
+
+    @InjectMocks
+    private AttendanceController attendanceController;
+
+    private static final UUID COURSE_ID  = UUID.randomUUID();
+    private static final UUID MEMBER_ID  = UUID.randomUUID();
+    private static final UUID ORDER_ID   = UUID.randomUUID();
+    private static final String QR_TOKEN = "test-qr-token";
+    private static final byte[] QR_IMAGE = new byte[]{1, 2, 3};
+
+    private MemberPrincipal instructorPrincipal;
+    private MemberPrincipal studentPrincipal;
+
+    @BeforeEach
+    void setUp() {
+        instructorPrincipal = new MemberPrincipal(MEMBER_ID, "instructor@test.com", "ROLE_INSTRUCTOR");
+        studentPrincipal    = new MemberPrincipal(MEMBER_ID, "student@test.com", "ROLE_STUDENT");
+    }
+
+    @Nested
+    @DisplayName("createQr() - QR 생성")
+    class CreateQrTest {
+
+        @Test
+        @DisplayName("QR 생성 성공 시 200과 PNG 바이트를 반환한다")
+        void createQr_success() {
+            // given
+            when(attendanceService.createQr(COURSE_ID, MEMBER_ID)).thenReturn(QR_IMAGE);
+
+            // when
+            ResponseEntity<byte[]> response = attendanceController.createQr(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).isEqualTo(QR_IMAGE);
+        }
+
+        @Test
+        @DisplayName("수강생이 QR 생성 시도하면 ERR_QR_FORBIDDEN 예외가 발생한다")
+        void createQr_student_throwsForbidden() {
+            // when & then
+            assertThatThrownBy(() -> attendanceController.createQr(COURSE_ID, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_QR_FORBIDDEN.getMessage());
+
+            verify(attendanceService, never()).createQr(any(), any());
+        }
+
+        @Test
+        @DisplayName("활성 QR 이 존재하면 예외가 전파된다")
+        void createQr_alreadyActive_propagatesException() {
+            // given
+            when(attendanceService.createQr(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE));
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.createQr(COURSE_ID, instructorPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_QR_ALREADY_ACTIVE.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("scan() - QR 스캔 출석")
+    class ScanTest {
+
+        @Test
+        @DisplayName("스캔 성공 시 200과 성공 메시지를 반환한다")
+        void scan_success() {
+            // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
+            doNothing().when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
+
+            // when
+            ResponseEntity<?> response = attendanceController.scan(request, studentPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            verify(attendanceService).scan(QR_TOKEN, MEMBER_ID);
+        }
+
+        @Test
+        @DisplayName("수강생이 아니면 ERR_SCAN_ONLY_STUDENT 예외가 발생한다")
+        void scan_notStudent_throwsException() {
+            // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.scan(request, instructorPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_SCAN_ONLY_STUDENT.getMessage());
+
+            verify(attendanceService, never()).scan(any(), any());
+        }
+
+        @Test
+        @DisplayName("QR 토큰이 없으면 예외가 전파된다")
+        void scan_tokenNotFound_propagatesException() {
+            // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
+            doThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_NOT_FOUND))
+                    .when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.scan(request, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_QR_NOT_FOUND.getMessage());
+        }
+
+        @Test
+        @DisplayName("이미 출석 처리된 경우 예외가 전파된다")
+        void scan_alreadyChecked_propagatesException() {
+            // given
+            AttendanceScanRequest request = new AttendanceScanRequest(QR_TOKEN);
+            doThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_ALREADY_CHECKED))
+                    .when(attendanceService).scan(QR_TOKEN, MEMBER_ID);
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.scan(request, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_ALREADY_CHECKED.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("getAttendances() - 출석 현황 조회")
+    class GetAttendancesTest {
+
+        @Test
+        @DisplayName("강사 조회 시 전체 출석 현황을 반환한다")
+        void getAttendances_instructor_returnsAll() {
+            // given
+            Attendance a1 = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            Attendance a2 = Attendance.register(ORDER_ID, UUID.randomUUID(), COURSE_ID);
+            a1.attend("token");
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of(a1, a2)));
+
+            // when
+            ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            verify(attendanceService).findAllByCourse(COURSE_ID, MEMBER_ID);
+            verify(attendanceService, never()).findMyAttendance(any(), any());
+        }
+
+        @Test
+        @DisplayName("수강생 조회 시 본인 출석 정보만 반환한다")
+        void getAttendances_student_returnsMine() {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            when(attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID)).thenReturn(attendance);
+
+            // when
+            ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, studentPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            verify(attendanceService).findMyAttendance(MEMBER_ID, COURSE_ID);
+            verify(attendanceService, never()).findAllByCourse(any(), any());
+        }
+
+        @Test
+        @DisplayName("강사 조회 시 수강생 없으면 빈 목록을 반환한다")
+        void getAttendances_instructor_emptyList() {
+            // given
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of()));
+
+            // when
+            ResponseEntity<?> response = attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        @Test
+        @DisplayName("수강생 출석 정보가 없으면 예외가 전파된다")
+        void getAttendances_student_notFound_propagatesException() {
+            // given
+            when(attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE));
+
+            // when & then
+            assertThatThrownBy(() -> attendanceController.getAttendances(COURSE_ID, studentPrincipal))
+                    .isInstanceOf(ServiceErrorException.class)
+                    .hasMessage(AttendanceExceptionEnum.ERR_NOT_FOUND_ATTENDANCE.getMessage());
+        }
+
+        @Test
+        @DisplayName("강사와 수강생 role 분기가 올바르게 동작한다")
+        void getAttendances_roleBranching() {
+            // given
+            Attendance attendance = Attendance.register(ORDER_ID, MEMBER_ID, COURSE_ID);
+            when(attendanceService.findAllByCourse(COURSE_ID, MEMBER_ID))
+                    .thenReturn(AttendanceListResponse.ofInstructor(List.of(attendance)));
+            when(attendanceService.findMyAttendance(MEMBER_ID, COURSE_ID)).thenReturn(attendance);
+
+            // when
+            attendanceController.getAttendances(COURSE_ID, instructorPrincipal);
+            attendanceController.getAttendances(COURSE_ID, studentPrincipal);
+
+            // then
+            verify(attendanceService, times(1)).findAllByCourse(COURSE_ID, MEMBER_ID);
+            verify(attendanceService, times(1)).findMyAttendance(MEMBER_ID, COURSE_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("stream() - SSE 스트림 연결")
+    class StreamTest {
+
+        @Test
+        @DisplayName("강사 연결 성공 시 200과 SseEmitter 를 반환한다")
+        void stream_instructor_success() {
+            // given
+            SseEmitter emitter = new SseEmitter();
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID)).thenReturn(emitter);
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).isEqualTo(emitter);
+            verify(attendanceService).stream(COURSE_ID, MEMBER_ID);
+        }
+
+        @Test
+        @DisplayName("principal 이 null 이면 401 을 반환한다")
+        void stream_nullPrincipal_returns401() {
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, null);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            verify(attendanceService, never()).stream(any(), any());
+        }
+
+        @Test
+        @DisplayName("수강생이 연결 시도하면 403 을 반환한다")
+        void stream_student_returns403() {
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, studentPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            verify(attendanceService, never()).stream(any(), any());
+        }
+
+        @Test
+        @DisplayName("서비스에서 본인 코스 아님 예외 발생 시 403 을 반환한다")
+        void stream_notOwnCourse_returns403() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_QR_FORBIDDEN));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        @DisplayName("서비스 예외 발생 시 해당 상태코드를 반환한다")
+        void stream_serviceException_returnsErrorStatus() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new ServiceErrorException(AttendanceExceptionEnum.ERR_ATTENDANCE_FORBIDDEN));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode())
+                    .isEqualTo(AttendanceExceptionEnum.ERR_ATTENDANCE_FORBIDDEN.getHttpStatus());
+        }
+
+        @Test
+        @DisplayName("알 수 없는 예외 발생 시 500 을 반환한다")
+        void stream_unknownException_returns500() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new RuntimeException("알 수 없는 에러"));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        @Test
+        @DisplayName("스냅샷 조회 실패 시 500 을 반환한다")
+        void stream_snapshotFailed_returns500() {
+            // given
+            when(attendanceService.stream(COURSE_ID, MEMBER_ID))
+                    .thenThrow(new RuntimeException("스냅샷 조회 실패"));
+
+            // when
+            ResponseEntity<?> response = attendanceController.stream(COURSE_ID, instructorPrincipal);
+
+            // then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+}

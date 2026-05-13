@@ -164,17 +164,20 @@ gradle-app.setting
 # Java heap dump
 *.hprof
 
-### Profile ###
-application-*.yml
-
 ### env ###
 .env
 .env.*
 
 ### docker-compose local volumes ###
 db-data/
+redis-data/
+prometheus-data/
+grafana-data/
 
 ### claude ###
 .claude
+
+### pgvector-data ###
+pgvector-data
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,intellij,java,gradle

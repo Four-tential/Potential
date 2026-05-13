@@ -7,7 +7,7 @@ services:
     volumes:
       - ./db-data:/var/lib/mysql
     ports:
-      - "${DB_PORT}:3306"
+      - "127.0.0.1:${DB_PORT}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -19,10 +19,162 @@ services:
   redis:
     image: redis:8.6.1
     container_name: redis-potential
+    command: redis-server --appendonly yes
     ports:
-      - "${REDIS_PORT}:6379"
+      - "127.0.0.1:${REDIS_PORT}:6379"
+    volumes:
+      - ./redis-data:/data
+    networks:
+      network-potential:
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.74.0
+    container_name: redis-exporter-potential
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "127.0.0.1:9121:9121"
+    depends_on:
+      - redis
+    networks:
+      network-potential:
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    container_name: mysql-exporter-potential
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=${MYSQL_EXPORTER_USER}
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}
+    ports:
+      - "127.0.0.1:9104:9104"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      network-potential:
+
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: loki-potential
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      network-potential:
+
+  promtail:
+    image: grafana/promtail:3.3.0
+    container_name: promtail-potential
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - promtail-data:/var/lib/promtail
+      - ./logs:/var/log/potential:ro
+    depends_on:
+      - loki
+    networks:
+      network-potential:
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus-potential
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-remote-write-receiver'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      network-potential:
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana-potential
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GRAFANA_AI_ALERT_SLACK_WEBHOOK=${GRAFANA_AI_ALERT_SLACK_WEBHOOK}
+    volumes:
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      network-potential:
+
+  k6:
+    image: grafana/k6:0.55.0
+    container_name: k6-potential
+    profiles: ["k6"]
+    environment:
+      BASE_URL: ${BASE_URL:-http://host.docker.internal:8080}
+      STAGE: ${STAGE:-load}
+      PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET}
+      PORTONE_STORE_ID: ${PORTONE_STORE_ID}
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),min,avg
+    volumes:
+      - ./monitoring:/scripts:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    entrypoint: ["k6"]
+    command: ["run", "-o", "experimental-prometheus-rw", "/scripts/${K6_SCRIPT:-k6-test.js}"]
+    networks:
+      network-potential:
+
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector-potential
+    environment:
+      POSTGRES_DB: ${PGVECTOR_DB}
+      POSTGRES_USER: postgres # superuser
+      POSTGRES_PASSWORD: ${PGVECTOR_POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${PGVECTOR_PORT}:5432"
+    volumes:
+      - ./pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${PGVECTOR_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 7
+    networks:
+      network-potential:
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-potential
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "127.0.0.1:5050:80"
+    depends_on:
+      pgvector:
+        condition: service_healthy
     networks:
       network-potential:
 
 networks:
   network-potential:
+
+volumes:
+  grafana-data:
+  loki-data:
+  promtail-data:

@@ -6,7 +6,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -15,6 +15,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(ServiceErrorException.class)
     public ResponseEntity<BaseResponse<Void>> handleServiceErrorException(ServiceErrorException e) {
         log.error(e.getMessage(), e);
@@ -24,7 +25,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = IllegalArgumentException.class)
     public ResponseEntity<BaseResponse<Void>> IllegalArgumentExceptionHandler(IllegalArgumentException e) {
         log.error("요청 값 유효성 에러 발생 : ", e);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(BaseResponse.fail(HttpStatus.BAD_REQUEST.name(), "요청 값이 유효하지 않습니다"));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(BaseResponse.fail(HttpStatus.BAD_REQUEST.name(), "잘못된 요청입니다"));
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
@@ -42,13 +43,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = DataIntegrityViolationException.class)
     public ResponseEntity<BaseResponse<Void>> DataIntegrityViolationExceptionHandler(DataIntegrityViolationException e) {
         log.error("데이터 저장 실패 발생 : ", e);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(BaseResponse.fail(HttpStatus.BAD_REQUEST.name(), "데이터 저장에 실패하였습니다"));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(BaseResponse.fail(HttpStatus.CONFLICT.name(), "데이터 저장에 실패하였습니다"));
     }
 
     @ExceptionHandler(value = NoResourceFoundException.class)
     public ResponseEntity<BaseResponse<Void>> NoResourceFoundExceptionHandler(NoResourceFoundException e) {
         log.error("리소스 찾기 실패 : ", e);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(BaseResponse.fail(HttpStatus.NOT_FOUND.name(), "주소를 다시 한번 확인해주세요"));
+    }
+
+    @ExceptionHandler(value = AuthorizationDeniedException.class)
+    public ResponseEntity<BaseResponse<Void>> AuthorizationDeniedExceptionHandler(AuthorizationDeniedException e) {
+        log.error("인가에 따른 접근 거부 : ", e);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(BaseResponse.fail(HttpStatus.FORBIDDEN.name(), "접근 거부 되었습니다"));
     }
 
     @ExceptionHandler(Exception.class)

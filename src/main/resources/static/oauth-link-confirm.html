@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>소셜 계정 연동 확인</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 560px; margin: 40px auto; padding: 24px; color: #1f2937; }
+        h1 { color: #d97706; margin-bottom: 8px; }
+        .subtitle { color: #6b7280; margin-bottom: 24px; }
+        .info { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #78350f; }
+        .info strong { color: #b45309; }
+        .field { margin-bottom: 16px; }
+        .label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .input { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+        .input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .submit-btn { width: 100%; padding: 12px; background: #d97706; color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+        .submit-btn:hover:not(:disabled) { background: #b45309; }
+        .submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .alert { margin-top: 16px; padding: 12px 16px; border-radius: 6px; font-size: 14px; display: none; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .meta { font-size: 12px; color: #6b7280; word-break: break-all; }
+        code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>기존 계정 발견</h1>
+    <p class="subtitle">소셜 로그인을 시도하셨는데, <strong id="emailLabel">-</strong> 으로 가입된 자사 계정이 이미 있습니다.</p>
+
+    <div class="info">
+        <strong>본인 확인이 필요합니다.</strong><br>
+        기존 자사 계정의 비밀번호를 입력하시면, <strong id="providerLabel">-</strong> 계정이 자동으로 연동되고 즉시 로그인됩니다.<br>
+        이후엔 자사 로그인과 소셜 로그인 둘 다 사용 가능합니다.
+    </div>
+
+    <form id="confirmForm">
+        <div class="field">
+            <label class="label" for="password">비밀번호</label>
+            <input type="password" id="password" class="input" required autofocus>
+        </div>
+        <button type="submit" class="submit-btn" id="submitBtn">연동하고 로그인</button>
+    </form>
+
+    <div id="alertError" class="alert alert-error">
+        <span id="errorMessage">오류가 발생했습니다.</span>
+    </div>
+
+    <p class="meta" style="margin-top: 24px;">
+        만료 시간: 5분 — 만료되면 소셜 로그인을 다시 시도해주세요.
+    </p>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const linkTicket = params.get("linkTicket");
+
+        const form = document.getElementById("confirmForm");
+        const submitBtn = document.getElementById("submitBtn");
+        const alertError = document.getElementById("alertError");
+        const errorMessage = document.getElementById("errorMessage");
+
+        let challengeToken = null;
+
+        async function bootstrap() {
+            if (!linkTicket) {
+                submitBtn.disabled = true;
+                errorMessage.textContent = "linkTicket 이 없습니다. 소셜 로그인을 다시 시도해주세요.";
+                alertError.style.display = "block";
+                return;
+            }
+            try {
+                const res = await fetch("/v1/auth/oauth/link-ticket/exchange", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ticket: linkTicket })
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok || body.success === false) {
+                    submitBtn.disabled = true;
+                    errorMessage.textContent = body.message || ("티켓 교환 실패: HTTP " + res.status);
+                    alertError.style.display = "block";
+                    return;
+                }
+                const data = body.data || {};
+                challengeToken = data.challengeToken;
+                document.getElementById("emailLabel").textContent = data.email || "(없음)";
+                document.getElementById("providerLabel").textContent = data.provider || "(없음)";
+            } catch (err) {
+                submitBtn.disabled = true;
+                errorMessage.textContent = "네트워크 오류: " + err.message;
+                alertError.style.display = "block";
+            }
+        }
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            alertError.style.display = "none";
+
+            if (!challengeToken) {
+                errorMessage.textContent = "챌린지 토큰이 없습니다. 페이지를 새로고침해주세요.";
+                alertError.style.display = "block";
+                return;
+            }
+
+            const password = document.getElementById("password").value;
+            if (!password) return;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = "연동 중...";
+
+            try {
+                const res = await fetch("/v1/auth/social-link/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ challengeToken, password })
+                });
+                const body = await res.json().catch(() => ({}));
+
+                if (res.ok && body.success !== false) {
+                    const data = body.data || {};
+                    sessionStorage.setItem("accessToken", data.accessToken || "");
+                    sessionStorage.setItem("hasOnboarding", String(data.hasOnboarding ?? ""));
+                    sessionStorage.setItem("requiresPhoneSetup", String(data.requiresPhoneSetup ?? ""));
+                    window.location.replace("/oauth-success.html?source=link");
+                } else {
+                    errorMessage.textContent = body.message || ("HTTP " + res.status);
+                    alertError.style.display = "block";
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = "연동하고 로그인";
+                }
+            } catch (err) {
+                errorMessage.textContent = "네트워크 오류: " + err.message;
+                alertError.style.display = "block";
+                submitBtn.disabled = false;
+                submitBtn.textContent = "연동하고 로그인";
+            }
+        });
+
+        bootstrap();
+    </script>
+</body>
+</html>

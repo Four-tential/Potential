@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 · Potential</title>
+    <link rel="stylesheet" href="/app-common.css">
+    <style>
+        .auth-wrap {
+            width: min(420px, calc(100% - 32px));
+            margin: 56px auto;
+        }
+        .auth-card {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 32px 28px;
+            background: #fff;
+        }
+        .auth-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--line);
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 10px 12px;
+            background: none;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .auth-tab.active {
+            color: var(--ink);
+            border-bottom-color: var(--accent);
+        }
+        .alert {
+            display: none;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 14px;
+        }
+        .alert.danger { background: var(--danger-soft); color: var(--danger); display: block; }
+        .alert.ok { background: var(--ok-soft); color: var(--ok); display: block; }
+        .social {
+            display: grid;
+            gap: 8px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed var(--line);
+        }
+        .social a {
+            display: block;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid var(--line-strong);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .social a:hover { background: var(--panel); }
+        .auth-brand {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .auth-brand .logo {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+        }
+        .auth-brand .tag {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-wrap">
+        <div class="auth-brand">
+            <div class="logo">Potential</div>
+            <div class="tag">잠재력을 깨우는 오프라인 클래스 플랫폼</div>
+        </div>
+
+        <div class="auth-card">
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab active" data-mode="login">로그인</button>
+                <button type="button" class="auth-tab" data-mode="signup">회원가입</button>
+            </div>
+
+            <div class="alert" id="alertBox"></div>
+
+            <!-- 로그인 폼 -->
+            <form id="loginForm">
+                <div class="field">
+                    <label for="loginEmail">이메일</label>
+                    <input id="loginEmail" name="email" type="email" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="loginPassword">비밀번호</label>
+                    <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn primary block" id="loginSubmit">로그인</button>
+            </form>
+
+            <!-- 회원가입 폼 -->
+            <form id="signupForm" style="display: none;">
+                <div class="field">
+                    <label for="signupEmail">이메일</label>
+                    <input id="signupEmail" name="email" type="email" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="signupName">이름</label>
+                    <input id="signupName" name="name" type="text" maxlength="60" required>
+                </div>
+                <div class="field">
+                    <label for="signupPhone">휴대전화</label>
+                    <input id="signupPhone" name="phone" type="tel" placeholder="010-1234-5678" required>
+                    <div class="hint">하이픈(-) 포함, 010/011/016/017/018/019 형식</div>
+                </div>
+                <div class="field">
+                    <label for="signupPassword">비밀번호</label>
+                    <input id="signupPassword" name="password" type="password" autocomplete="new-password" required>
+                    <div class="hint">12자 이상, 영문 대/소문자·숫자·특수문자 각 1개 이상</div>
+                </div>
+                <button type="submit" class="btn primary block" id="signupSubmit">회원가입</button>
+            </form>
+
+            <div class="social">
+                <a href="/oauth2/authorization/kakao">카카오로 시작하기</a>
+                <a href="/oauth2/authorization/google">Google 로 시작하기</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app-common.js"></script>
+    <script>
+        const P = window.Potential;
+        const alertBox = document.getElementById("alertBox");
+        const loginForm = document.getElementById("loginForm");
+        const signupForm = document.getElementById("signupForm");
+
+        function showAlert(message, kind) {
+            alertBox.className = "alert " + (kind || "danger");
+            alertBox.textContent = message;
+        }
+
+        function clearAlert() {
+            alertBox.className = "alert";
+            alertBox.textContent = "";
+        }
+
+        document.querySelectorAll(".auth-tab").forEach(tab => {
+            tab.addEventListener("click", () => {
+                const mode = tab.getAttribute("data-mode");
+                document.querySelectorAll(".auth-tab").forEach(t => t.classList.toggle("active", t === tab));
+                loginForm.style.display = mode === "login" ? "" : "none";
+                signupForm.style.display = mode === "signup" ? "" : "none";
+                clearAlert();
+            });
+        });
+
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            clearAlert();
+            const email = document.getElementById("loginEmail").value.trim();
+            const password = document.getElementById("loginPassword").value;
+            const submitBtn = document.getElementById("loginSubmit");
+            submitBtn.disabled = true;
+            submitBtn.textContent = "로그인 중...";
+            try {
+                await P.login(email, password);
+                const next = P.qs("next") || "/app.html";
+                window.location.href = next;
+            } catch (err) {
+                showAlert(err.message || "로그인에 실패했어요");
+                submitBtn.disabled = false;
+                submitBtn.textContent = "로그인";
+            }
+        });
+
+        signupForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            clearAlert();
+            const submitBtn = document.getElementById("signupSubmit");
+            const payload = {
+                email: document.getElementById("signupEmail").value.trim(),
+                name: document.getElementById("signupName").value.trim(),
+                phone: document.getElementById("signupPhone").value.trim(),
+                password: document.getElementById("signupPassword").value
+            };
+            submitBtn.disabled = true;
+            submitBtn.textContent = "처리 중...";
+            try {
+                await P.api("/v1/auth/signup", { method: "POST", body: payload });
+                showAlert("가입이 완료되었습니다. 자동 로그인 진행 중...", "ok");
+                await P.login(payload.email, payload.password);
+                const next = P.qs("next") || "/app.html";
+                window.location.href = next;
+            } catch (err) {
+                showAlert(err.message || "가입에 실패했어요");
+                submitBtn.disabled = false;
+                submitBtn.textContent = "회원가입";
+            }
+        });
+
+        // 이미 로그인되어 있으면 메인으로
+        if (P.isLoggedIn()) {
+            const next = P.qs("next") || "/app.html";
+            window.location.replace(next);
+        }
+    </script>
+</body>
+</html>

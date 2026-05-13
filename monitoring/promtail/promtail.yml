@@ -1,0 +1,21 @@
+# Promtail이 하는 일
+# logs 폴더 안의 *.log 파일을 읽어서 Loki로 보냄
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: potential-app-file
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: potential-app
+          service: potential-app
+          __path__: /var/log/potential/*.log

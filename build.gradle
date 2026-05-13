@@ -16,8 +16,19 @@ java {
     }
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << '-parameters'
+}
+
+// Spring AI 버전
+ext {
+    set('springAiVersion', '2.0.0-M4')
+}
+
 repositories {
     mavenCentral()
+    // Spring AI Milestone 버전은 milestone 레포에서만 제공
+    maven { url 'https://repo.spring.io/milestone' }
 }
 
 dependencies {
@@ -37,11 +48,17 @@ dependencies {
     // Security
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // OAuth2 Client (소셜 로그인)
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // Web MVC
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+    // Swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
 
     // Database Driver
     runtimeOnly 'com.mysql:mysql-connector-j'
@@ -62,7 +79,14 @@ dependencies {
 
     // Actuator
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+
+    // AWS
+    implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:4.0.0')
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-parameter-store'
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3'
+
 
     // Test - JPA
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
@@ -91,7 +115,53 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // Testcontainers
-    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers:2.0.3'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
+
+    // PortOne
+    implementation 'io.portone:server-sdk:0.23.0'
+
+    // QR code
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.google.zxing:javase:3.5.3'
+
+    // Spring Batch
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+
+    // Spring AI
+    // OpenAI (dev/prod: @Profile("!ollama") 환경에서 활성화)
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
+    // Ollama (local: @Profile("ollama") 환경에서 활성화)
+    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+
+    // Chat Memory - Redis 기반 대화 기억 (챗봇 Agent용)
+    //implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-redis'
+
+    // PGVector — 임베딩 벡터 저장소 (PostgreSQL + pgvector)
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+
+    // RAG Advisor — QuestionAnswerAdvisor (벡터 검색 → 컨텍스트 주입)
+    implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
+
+    // PostgreSQL Driver — PGVector 전용 (메인 DB는 MySQL 유지)
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // ShedLock — 분산 스케줄러 락
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:7.7.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:7.7.0'
+
+    // 서킷 브레이커 - resilience4j
+    implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.4.0'
+}
+
+// Spring AI BOM — 스터디 방식과 동일하게 dependencyManagement 사용
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
 }
 
 tasks.named('test') {
@@ -129,6 +199,36 @@ sonar {
         if (sonarOrganization) {
             property 'sonar.organization', sonarOrganization
         }
+
+        property 'sonar.coverage.exclusions', [
+            // Enum
+            '**/domain/**/enums/**',
+            '**/*Status.java',
+            '**/*Role.java',
+            '**/*Reason.java',
+            '**/*PayWay.java',
+            // Exception Enum & 공통 예외
+            '**/exception/domain/**',
+            '**/exception/ServiceErrorCode.java',
+            '**/exception/ServiceErrorException.java',
+            // 설정 클래스
+            '**/*Config.java',
+            // 어노테이션
+            '**/annotation/**',
+            // DTO / Record
+            '**/dto/**',
+            '**/model/request/**',
+            '**/model/response/**',
+            '**/port/PaymentGatewayRequest.java',
+            '**/port/PaymentGatewayResponse.java',
+            '**/principal/**',
+            // Repository 인터페이스
+            '**/*Repository.java',
+            // 상수 / 베이스 엔티티 / 진입점
+            '**/*Constants.java',
+            '**/entity/BaseTime*.java',
+            '**/PotentialApplication.java',
+        ].join(',')
     }
 }
 
