@@ -45,6 +45,10 @@ CMDS=(
   #    --restart=always : EC2 재시작 시 컨테이너 자동 재실행
   #    -e SPRING_PROFILES_ACTIVE : dev 프로파일 주입 (Parameter Store에서 설정 로드)
   "docker run -d --name ${CONTAINER_NAME} --restart=always -p ${APP_PORT}:${APP_PORT} -e SPRING_PROFILES_ACTIVE=${SPRING_PROFILE} ${FULL_URI}"
+  # 6. 사용 안 하는 이미지 정리 (EC2 디스크 누적 방지)
+  #    until=24h : 24시간 이상 안 쓴 이미지만 삭제 → 직전 배포 이미지는 롤백용으로 남김
+  #    -af : 모든 unused 이미지 강제 삭제 (실행 중인 컨테이너가 쓰는 이미지는 보호됨)
+  "docker image prune -af --filter \"until=24h\" || true"
 )
 
 # ===== Bash 배열을 SSM이 이해하는 JSON 배열로 변환 =====
