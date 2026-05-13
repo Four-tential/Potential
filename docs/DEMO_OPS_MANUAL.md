@@ -71,11 +71,11 @@ aws ssm start-session \
 
 이후 브라우저에서 `http://localhost:3000`:
 
-| 항목 | 값 |
-| --- | --- |
-| Username | `admin` |
-| Password | `PotentialAdmin2026` |
-| Datasource | `AMP-Potential` (기본값) |
+| 항목 | 값                                               |
+| --- |-------------------------------------------------|
+| Username | `admin`                                         |
+| Password | `슬랙에 기재`                                         |
+| Datasource | `AMP-Potential` (기본값)                           |
 | Dashboard | "Potential Prod Overview" (`/d/potential-prod`) |
 
 > **운영 운영자만 사용하는 비밀번호**입니다. 데모가 끝난 뒤 EC2와 함께 폐기하거나 변경하세요.
