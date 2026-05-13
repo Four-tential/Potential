@@ -53,8 +53,9 @@ flowchart LR
       end
 
       subgraph DEV[개발 환경]
-        DEV_EC2[EC2<br/>Spring Boot + Redis + Monitoring]
-        DEV_RDS[(dev RDS)]
+        DEV_EC2[EC2<br/>Spring Boot + Monitoring 스택]
+        DEV_RDS[(dev RDS<br/>MySQL + pgvector)]
+        DEV_VALKEY[(dev ElastiCache<br/>Valkey 노드)]
       end
     end
 
@@ -209,15 +210,15 @@ flowchart TB
         BASTION[Bastion EC2<br/>SSM Session Manager]
       end
 
-      subgraph DEV_APP[App EC2 - Graviton t4g.micro]
+      subgraph DEV_APP[App EC2 - Graviton t4g.small]
         SPRING_DEV[Spring Boot Docker<br/>ARM64]
-        REDIS_DEV[Redis Docker]
-        MON[Prometheus + Grafana<br/>+ Loki + K6]
+        MON[Prometheus + Grafana<br/>+ Loki + K6 + Exporters]
       end
 
-      subgraph DEV_PRIV[Private Subnet]
-        DEV_RDS_M[(dev MySQL RDS)]
-        DEV_RDS_P[(dev pgvector RDS)]
+      subgraph DEV_PRIV[Private Subnet — Data]
+        DEV_RDS_M[(dev MySQL RDS<br/>db.t3.micro)]
+        DEV_RDS_P[(dev pgvector RDS<br/>db.t3.micro)]
+        DEV_CACHE[(dev ElastiCache<br/>Valkey 노드<br/>cache.t3.micro)]
       end
     end
 
@@ -233,7 +234,7 @@ flowchart TB
 
     SPRING_DEV --> DEV_RDS_M
     SPRING_DEV --> DEV_RDS_P
-    SPRING_DEV --> REDIS_DEV
+    SPRING_DEV --> DEV_CACHE
     SPRING_DEV -.->|이미지 pull| DEV_ECR
     SPRING_DEV -.->|설정 import| DEV_PS
     SPRING_DEV -.-> DEV_S3
@@ -242,16 +243,16 @@ flowchart TB
 
 ### Dev vs Prod 핵심 차이
 
-| 항목 | Dev | Prod |
-|---|---|---|
-| 컴퓨트 | EC2 + Docker | ECS Fargate |
-| 아키텍처 | ARM64 (Graviton) | X86_64 |
+| 항목 | Dev                                    | Prod |
+|---|----------------------------------------|---|
+| 컴퓨트 | EC2 + Docker                           | ECS Fargate |
+| 아키텍처 | ARM64 (Graviton)                       | X86_64 |
 | 배포 방식 | SSM Run Command (`docker pull && run`) | ECS Service Rolling |
-| Redis | EC2 위 Docker | ElastiCache (단일 노드) |
-| 모니터링 | docker-compose (Prom/Grafana/Loki/K6) | CloudWatch만 (Container Insights 미활성) |
-| 시크릿 | Parameter Store | Secrets Manager + Parameter Store 하이브리드 |
-| ALB | 없음 (Bastion 직접) | ALB + ACM HTTPS |
-| 비용 | 매우 낮음 | 일 ~$8 추정 |
+| Redis | ElastiCache Valkey                     | ElastiCache Redis (단일 노드, cache.t4g.micro) |
+| 모니터링 | docker-compose (Prom/Grafana/Loki/K6)  | CloudWatch만 (Container Insights 미활성) |
+| 시크릿 | Parameter Store                        | Secrets Manager + Parameter Store 하이브리드 |
+| ALB | 없음 (Bastion 직접)                        | ALB + ACM HTTPS |
+| 비용 | 매우 낮음                                  | 일 ~$8 추정 |
 
 ---
 
@@ -594,10 +595,10 @@ aws ssm start-session \
 
 브라우저: <http://localhost:3000>
 
-| 항목 | 값 |
-|---|---|
-| ID | `admin` |
-| 비밀번호 | `PotentialAdmin2026` |
+| 항목 | 값                                               |
+|---|-------------------------------------------------|
+| ID | `admin`                                         |
+| 비밀번호 | `슬랙에 기술`                                        |
 | 기본 대시보드 | "Potential Prod Overview" (`/d/potential-prod`) |
 
 ### 9-4. 대시보드 패널 (8종)
@@ -671,6 +672,7 @@ AMP/Grafana와 별개로 CloudWatch 기반 모니터링도 계속 운영됩니�
 ## 10. 관련 문서
 
 - [docs/DEMO_OPS_MANUAL.md](./DEMO_OPS_MANUAL.md) — **데모/발표 운영 매뉴얼** (접속·명령어·정리 가이드)
+- [docs/CI_CD_DECISIONS.md](./CI_CD_DECISIONS.md) — **CI/CD 의사결정 + 트러블슈팅 기록**
 - [docs/images/potential-prod-request.png](./images/potential-prod-request.png) — 운영 요청 처리 흐름
 - [docs/images/potential-prod-monitoring.png](./images/potential-prod-monitoring.png) — 운영 모니터링 흐름
 - [docs/images/potential-dev.png](./images/potential-dev.png) — 개발 환경
