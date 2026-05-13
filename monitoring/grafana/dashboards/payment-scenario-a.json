@@ -532,7 +532,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(\r\n  0.95,\r\n  sum by (le, result) (\r\n    increase(payment_prepare_duration_seconds_bucket[$__range])\r\n  )\r\n)",
+          "expr": "histogram_quantile(0.95, sum by (le, result) (rate(payment_prepare_duration_seconds_bucket[$__rate_interval])))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
