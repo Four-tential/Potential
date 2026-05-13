@@ -70,8 +70,9 @@
     },
     {
       "name": "adot-collector",
-      "image": "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+      "image": "public.ecr.aws/aws-observability/aws-otel-collector:v0.47.0",
       "cpu": 0,
+      "memoryReservation": 128,
       "essential": false,
       "command": ["--config=env:AOT_CONFIG_CONTENT"],
       "secrets": [
