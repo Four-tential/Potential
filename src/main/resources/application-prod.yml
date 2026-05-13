@@ -95,7 +95,9 @@ spring:
     # Ollama 블록은 운영에서 안 쓰면 생략 가능
     vectorstore:
       pgvector:
-        initialize-schema: true
+        # 첫 운영 부트스트랩 완료 — vector_store 테이블 이미 생성됨
+        # 운영 자동 DDL 차단 (사고 방지). 스키마 변경은 별도 SQL 마이그레이션으로 관리
+        initialize-schema: false
         index-type: hnsw
         distance-type: cosine_distance
         dimensions: 1536

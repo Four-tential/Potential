@@ -185,6 +185,8 @@
             pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
             try {
                 const data = await P.api("/v1/orders/me?page=0&size=20");
+                // 응답 도착 시점에 사용자가 이미 다른 탭으로 전환했으면 렌더 스킵 (race condition 방지)
+                if (pane.style.display === "none") return;
                 const items = (data && data.content) || [];
                 loadedOrders = true;
                 if (items.length === 0) {
@@ -244,6 +246,7 @@
             pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
             try {
                 const data = await P.api("/v1/members/me/wishlist-courses?page=0&size=20");
+                if (pane.style.display === "none") return;
                 const items = (data && data.content) || [];
                 loadedWishlist = true;
                 if (items.length === 0) {
@@ -295,6 +298,7 @@
             pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
             try {
                 const data = await P.api("/v1/members/me/follows?page=0&size=20");
+                if (pane.style.display === "none") return;
                 const items = (data && data.content) || [];
                 loadedFollows = true;
                 if (items.length === 0) {
