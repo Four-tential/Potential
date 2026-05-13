@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>코스 둘러보기 · Potential</title>
+    <link rel="stylesheet" href="/app-common.css">
+    <style>
+        .hero {
+            padding: 28px 28px 24px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+            color: #fff;
+            margin-bottom: 22px;
+        }
+        .hero h1 { color: #fff; font-size: 24px; margin-bottom: 6px; }
+        .hero p { color: rgba(255,255,255,0.85); font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="nav"></div>
+    <main>
+        <section class="hero">
+            <h1>지금 모집 중인 오프라인 클래스</h1>
+            <p>요가, 필라테스, 클라이밍, 도예 — 한 번뿐인 경험을 가까운 곳에서.</p>
+        </section>
+
+        <section class="filters">
+            <div class="field">
+                <label for="filterKeyword">검색어</label>
+                <input id="filterKeyword" type="text" placeholder="제목/카테고리/강사명">
+            </div>
+            <div class="field">
+                <label for="filterCategory">카테고리 코드</label>
+                <input id="filterCategory" type="text" placeholder="예: YOGA">
+            </div>
+            <div class="field">
+                <label for="filterLevel">난이도</label>
+                <select id="filterLevel">
+                    <option value="">전체</option>
+                    <option value="BEGINNER">입문</option>
+                    <option value="INTERMEDIATE">중급</option>
+                    <option value="ADVANCED">심화</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="filterStatus">상태</label>
+                <select id="filterStatus">
+                    <option value="">전체</option>
+                    <option value="OPEN" selected>모집중</option>
+                    <option value="PREPARATION">준비중</option>
+                    <option value="CLOSED">마감</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="filterSort">정렬</label>
+                <select id="filterSort">
+                    <option value="LATEST">최신순</option>
+                    <option value="POPULAR">인기순</option>
+                    <option value="PRICE_ASC">가격 낮은순</option>
+                    <option value="PRICE_DESC">가격 높은순</option>
+                </select>
+            </div>
+            <div class="field" style="flex: 0 0 auto;">
+                <label>&nbsp;</label>
+                <button type="button" class="btn primary" id="applyBtn">검색</button>
+            </div>
+        </section>
+
+        <div id="listMessage" class="muted" style="font-size: 13px; margin-bottom: 12px;"></div>
+        <div class="course-grid" id="courseGrid"></div>
+        <div class="pagination" id="pagination"></div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/app-common.js"></script>
+    <script>
+        const P = window.Potential;
+        const grid = document.getElementById("courseGrid");
+        const pageEl = document.getElementById("pagination");
+        const listMessage = document.getElementById("listMessage");
+        const toast = document.getElementById("toast");
+
+        let currentPage = 0;
+        const PAGE_SIZE = 12;
+
+        function showToast(message, kind) {
+            toast.className = "toast " + (kind || "");
+            toast.textContent = message;
+            requestAnimationFrame(() => toast.classList.add("show"));
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
+        }
+
+        function buildQuery(page) {
+            const params = new URLSearchParams();
+            params.set("page", String(page));
+            params.set("size", String(PAGE_SIZE));
+            const keyword = document.getElementById("filterKeyword").value.trim();
+            const category = document.getElementById("filterCategory").value.trim();
+            const level = document.getElementById("filterLevel").value;
+            const status = document.getElementById("filterStatus").value;
+            const sort = document.getElementById("filterSort").value;
+            if (keyword) params.set("keyword", keyword);
+            if (category) params.set("categoryCode", category.toUpperCase());
+            if (level) params.set("level", level);
+            if (status) params.set("status", status);
+            if (sort) params.set("sort", sort);
+            return params.toString();
+        }
+
+        function renderCard(item) {
+            const wishOn = item.isWishlisted ? "on" : "";
+            const wishIcon = item.isWishlisted ? "♥" : "♡";
+            const thumbStyle = item.thumbnailUrl
+                ? `background-image: url('${P.escapeHtml(item.thumbnailUrl)}');`
+                : "";
+            const instructor = item.instructor || {};
+            const statusKind = item.status === "OPEN" ? "ok"
+                : item.status === "CLOSED" ? "warn"
+                : item.status === "CANCELLED" ? "danger" : "";
+            return `
+                <article class="course-card" data-id="${item.courseId}">
+                    <a class="course-thumb" href="/course.html?id=${item.courseId}" style="${thumbStyle}">
+                        <button type="button" class="thumb-wish ${wishOn}" data-wish="${item.courseId}" aria-label="찜">${wishIcon}</button>
+                    </a>
+                    <div class="course-body">
+                        <div class="course-meta">
+                            <span class="badge accent">${P.escapeHtml(item.categoryName || item.categoryCode || "-")}</span>
+                            <span class="badge ${statusKind}">${P.statusLabel(item.status)}</span>
+                            <span class="badge">${P.levelLabel(item.level)}</span>
+                        </div>
+                        <a class="course-title" href="/course.html?id=${item.courseId}">${P.escapeHtml(item.title)}</a>
+                        <div class="course-instructor">${P.escapeHtml(instructor.name || "-")}</div>
+                        <div class="course-foot">
+                            <div class="course-price">${P.formatPrice(item.price)}</div>
+                            <div class="muted" style="font-size: 12px;">${item.confirmCount}/${item.capacity}명</div>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }
+
+        function renderPagination(currentPage, totalPages) {
+            if (totalPages <= 1) {
+                pageEl.innerHTML = "";
+                return;
+            }
+            const buttons = [];
+            const max = 7;
+            let start = Math.max(0, currentPage - Math.floor(max / 2));
+            let end = Math.min(totalPages, start + max);
+            start = Math.max(0, end - max);
+
+            buttons.push(`<button type="button" data-page="${currentPage - 1}" ${currentPage === 0 ? "disabled" : ""}>‹</button>`);
+            for (let i = start; i < end; i++) {
+                buttons.push(`<button type="button" data-page="${i}" class="${i === currentPage ? "active" : ""}">${i + 1}</button>`);
+            }
+            buttons.push(`<button type="button" data-page="${currentPage + 1}" ${currentPage >= totalPages - 1 ? "disabled" : ""}>›</button>`);
+            pageEl.innerHTML = buttons.join("");
+        }
+
+        async function loadCourses(page) {
+            currentPage = page;
+            listMessage.textContent = "불러오는 중...";
+            grid.innerHTML = "";
+            pageEl.innerHTML = "";
+            try {
+                const data = await P.api("/v1/courses?" + buildQuery(page));
+                const items = (data && data.content) || [];
+                if (items.length === 0) {
+                    grid.innerHTML = `<div class="empty" style="grid-column: 1 / -1;">조건에 맞는 코스가 없어요.</div>`;
+                    listMessage.textContent = "총 0개";
+                    return;
+                }
+                grid.innerHTML = items.map(renderCard).join("");
+                renderPagination(data.currentPage, data.totalPages);
+                listMessage.textContent = `총 ${data.totalElements.toLocaleString()}개 · ${data.currentPage + 1}/${data.totalPages}페이지`;
+            } catch (err) {
+                grid.innerHTML = `<div class="empty" style="grid-column: 1 / -1;">목록을 불러오지 못했어요: ${P.escapeHtml(err.message)}</div>`;
+                listMessage.textContent = "";
+            }
+        }
+
+        async function toggleWishlist(courseId, btn) {
+            if (!P.isLoggedIn()) {
+                showToast("로그인이 필요해요", "danger");
+                window.location.href = "/login.html?next=" + encodeURIComponent("/app.html");
+                return;
+            }
+            const isOn = btn.classList.contains("on");
+            try {
+                if (isOn) {
+                    await P.api(`/v1/courses/${courseId}/wishlist-courses`, { method: "DELETE" });
+                    btn.classList.remove("on");
+                    btn.textContent = "♡";
+                    showToast("위시리스트에서 제거됨");
+                } else {
+                    await P.api(`/v1/courses/${courseId}/wishlist-courses`, { method: "POST" });
+                    btn.classList.add("on");
+                    btn.textContent = "♥";
+                    showToast("위시리스트에 추가됨", "ok");
+                }
+            } catch (err) {
+                showToast(err.message || "처리 실패", "danger");
+            }
+        }
+
+        document.getElementById("applyBtn").addEventListener("click", () => loadCourses(0));
+        document.getElementById("filterKeyword").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") loadCourses(0);
+        });
+
+        pageEl.addEventListener("click", (e) => {
+            const btn = e.target.closest("button[data-page]");
+            if (!btn || btn.disabled) return;
+            const page = Number(btn.getAttribute("data-page"));
+            loadCourses(page);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        grid.addEventListener("click", (e) => {
+            const wishBtn = e.target.closest("button[data-wish]");
+            if (wishBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleWishlist(wishBtn.getAttribute("data-wish"), wishBtn);
+            }
+        });
+
+        document.getElementById("nav").innerHTML = P.renderNav("home");
+        P.bindNav();
+        loadCourses(0);
+    </script>
+</body>
+</html>

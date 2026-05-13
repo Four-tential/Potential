@@ -102,6 +102,11 @@ public class SecurityConfig {
                 // 결제 테스트 페이지
                 .requestMatchers(HttpMethod.GET, "/payment-test.html").permitAll()
 
+                // 데모 프론트 페이지 (정적 리소스)
+                .requestMatchers(HttpMethod.GET,
+                        "/", "/index.html", "/app.html", "/login.html", "/course.html", "/mypage.html",
+                        "/app-common.js", "/app-common.css").permitAll()
+
                 // Course
                 .requestMatchers(HttpMethod.GET, "/v1/courses", "/v1/courses/*").permitAll()
 
