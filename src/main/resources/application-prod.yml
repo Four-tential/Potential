@@ -185,12 +185,14 @@ management:
 member:
   default-profile-image-url: ${member.default-profile-image-url}
 
-# Swagger — 운영은 비활성화
+# Swagger — 발표/데모 기간 한시적 활성화. 발표 종료 후 enabled: false 로 복귀할 것
 springdoc:
   api-docs:
-    enabled: false
+    enabled: true
+    path: /v3/api-docs
   swagger-ui:
-    enabled: false
+    enabled: true
+    path: /swagger-ui.html
 
 # CORS — 운영 도메인 (루트 + www 모두 허용)
 cors:
