@@ -190,9 +190,9 @@ springdoc:
   swagger-ui:
     enabled: false
 
-# CORS — 운영 도메인만
+# CORS — 운영 도메인 (루트 + www 모두 허용)
 cors:
-  allowed-origins: https://www.potential-fourtential.shop
+  allowed-origins: https://potential-fourtential.shop, https://www.potential-fourtential.shop
 
 logging:
   level:

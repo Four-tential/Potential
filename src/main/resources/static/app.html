@@ -186,7 +186,9 @@
         async function toggleWishlist(courseId, btn) {
             if (!P.isLoggedIn()) {
                 showToast("로그인이 필요해요", "danger");
-                window.location.href = "/login.html?next=" + encodeURIComponent("/app.html");
+                // 검색 필터/페이지 상태 보존을 위해 현재 URL을 next 로 전달
+                const currentUrl = window.location.pathname + window.location.search;
+                window.location.href = "/login.html?next=" + encodeURIComponent(currentUrl);
                 return;
             }
             const isOn = btn.classList.contains("on");

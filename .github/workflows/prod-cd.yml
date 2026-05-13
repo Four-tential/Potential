@@ -113,13 +113,16 @@ jobs:
             --output table
 
       # 13. 배포 안정화 대기 (헬스체크 통과까지)
+      # 첫 배포는 이미지 pull + Spring Boot 콜드 스타트로 길어질 수 있어 25분 여유
+      # ALB grace period(120s)와 task health check 통과까지 합쳐서 평균 5~8분 소요 예상
+      # 타임아웃이 잦으면 grace period 조정 / 이미지 슬림화 / capacity provider 검토
       - name: 배포 안정화 대기
         run: |
           aws ecs wait services-stable \
             --cluster "${ECS_CLUSTER}" \
             --services "${ECS_SERVICE}" \
             --region "${AWS_REGION}"
-        timeout-minutes: 15
+        timeout-minutes: 25
 
       # 14. 최종 서비스 이벤트 출력 (성공/실패 흔적 확인용)
       - name: 서비스 이벤트 출력

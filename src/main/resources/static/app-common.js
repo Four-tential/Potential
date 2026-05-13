@@ -22,17 +22,28 @@
         return Boolean(getToken());
     }
 
+    // 동시 다발 401 시 refresh 중복 호출 방지 (single-flight)
+    let refreshPromise = null;
+
     async function refreshAccessToken() {
-        const res = await fetch("/v1/auth/refresh", {
-            method: "POST",
-            credentials: "include"
-        });
-        if (!res.ok) return null;
-        const body = await res.json().catch(() => null);
-        if (!body || body.success === false) return null;
-        const token = body.data && body.data.accessToken;
-        if (token) setToken(token);
-        return token;
+        if (refreshPromise) return refreshPromise;
+        refreshPromise = (async () => {
+            try {
+                const res = await fetch("/v1/auth/refresh", {
+                    method: "POST",
+                    credentials: "include"
+                });
+                if (!res.ok) return null;
+                const body = await res.json().catch(() => null);
+                if (!body || body.success === false) return null;
+                const token = body.data && body.data.accessToken;
+                if (token) setToken(token);
+                return token;
+            } finally {
+                refreshPromise = null;
+            }
+        })();
+        return refreshPromise;
     }
 
     function buildHeaders(extra) {
@@ -102,8 +113,12 @@
     async function logout() {
         try {
             await api("/v1/auth/logout", { method: "POST" });
-        } catch (_) {
-            // 토큰이 이미 만료된 경우 무시
+        } catch (err) {
+            // 401/403: 이미 만료된 세션 — 정상 흐름
+            // 그 외(네트워크/5xx): 클라이언트 토큰만 지우되 콘솔에 경고를 남겨 추적 가능하게
+            if (err.status !== 401 && err.status !== 403) {
+                console.warn("logout 요청 실패, 로컬 토큰만 삭제합니다", err);
+            }
         }
         setToken(null);
     }
