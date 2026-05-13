@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마이페이지 · Potential</title>
+    <link rel="stylesheet" href="/app-common.css">
+    <style>
+        .profile-card {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 22px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            margin-bottom: 22px;
+            background: linear-gradient(180deg, #fff, var(--panel-soft));
+        }
+        .avatar {
+            width: 72px; height: 72px; border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--accent-strong);
+            font-size: 28px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            flex: 0 0 auto;
+            background-size: cover;
+            background-position: center;
+        }
+        .profile-info .name { font-size: 18px; font-weight: 700; }
+        .profile-info .email { font-size: 13px; color: var(--muted); }
+        .profile-info .role { margin-top: 6px; }
+
+        .order-row, .wish-row, .follow-row {
+            display: flex;
+            gap: 14px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .order-row .thumb, .wish-row .thumb, .follow-row .thumb {
+            width: 88px; height: 64px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+            background-size: cover;
+            background-position: center;
+            flex: 0 0 auto;
+        }
+        .order-row .body, .wish-row .body, .follow-row .body { flex: 1; min-width: 0; }
+        .order-row .body .title, .wish-row .body .title, .follow-row .body .title {
+            font-size: 14px; font-weight: 700;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .order-row .body .meta, .wish-row .body .meta, .follow-row .body .meta {
+            font-size: 12px; color: var(--muted); margin-top: 4px;
+            display: flex; gap: 8px; flex-wrap: wrap;
+        }
+        .order-row .actions, .wish-row .actions, .follow-row .actions {
+            display: flex; gap: 6px; flex: 0 0 auto;
+        }
+
+        .profile-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            max-width: 640px;
+        }
+        @media (max-width: 720px) {
+            .profile-form { grid-template-columns: 1fr; }
+            .profile-card { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div id="nav"></div>
+    <main>
+        <h1>마이페이지</h1>
+        <p class="muted" style="font-size: 14px;">내 프로필, 주문 내역, 위시리스트, 팔로우 강사를 관리할 수 있어요.</p>
+        <div class="spacer"></div>
+
+        <div id="profileSection"></div>
+
+        <div class="tabs" id="tabs">
+            <button type="button" class="tab active" data-tab="orders">내 주문</button>
+            <button type="button" class="tab" data-tab="wishlist">위시리스트</button>
+            <button type="button" class="tab" data-tab="follows">팔로우 강사</button>
+            <button type="button" class="tab" data-tab="profile">프로필 수정</button>
+        </div>
+
+        <div id="paneOrders" class="pane"></div>
+        <div id="paneWishlist" class="pane" style="display: none;"></div>
+        <div id="paneFollows" class="pane" style="display: none;"></div>
+        <div id="paneProfile" class="pane" style="display: none;"></div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/app-common.js"></script>
+    <script>
+        const P = window.Potential;
+        const toast = document.getElementById("toast");
+
+        if (!P.requireLogin("/mypage.html")) {
+            // 리다이렉트 됨
+        } else {
+            init();
+        }
+
+        function showToast(message, kind) {
+            toast.className = "toast " + (kind || "");
+            toast.textContent = message;
+            requestAnimationFrame(() => toast.classList.add("show"));
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
+        }
+
+        function setTab(name) {
+            document.querySelectorAll("#tabs .tab").forEach(t => {
+                t.classList.toggle("active", t.getAttribute("data-tab") === name);
+            });
+            document.querySelectorAll(".pane").forEach(p => p.style.display = "none");
+            const tabMap = {
+                orders: "paneOrders",
+                wishlist: "paneWishlist",
+                follows: "paneFollows",
+                profile: "paneProfile"
+            };
+            document.getElementById(tabMap[name]).style.display = "";
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", name);
+            history.replaceState(null, "", "?" + params.toString());
+
+            if (name === "orders" && !loadedOrders) loadOrders();
+            if (name === "wishlist" && !loadedWishlist) loadWishlist();
+            if (name === "follows" && !loadedFollows) loadFollows();
+            if (name === "profile") renderProfileForm();
+        }
+
+        document.querySelectorAll("#tabs .tab").forEach(tab => {
+            tab.addEventListener("click", () => setTab(tab.getAttribute("data-tab")));
+        });
+
+        let profile = null;
+        let loadedOrders = false;
+        let loadedWishlist = false;
+        let loadedFollows = false;
+
+        async function init() {
+            document.getElementById("nav").innerHTML = P.renderNav("mypage");
+            P.bindNav();
+            try {
+                profile = await P.api("/v1/members/me");
+                renderProfile();
+                const initialTab = P.qs("tab") || "orders";
+                setTab(initialTab);
+            } catch (err) {
+                document.getElementById("profileSection").innerHTML =
+                    `<div class="empty">프로필을 불러오지 못했어요: ${P.escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function renderProfile() {
+            const avatarBg = profile.profileImageUrl
+                ? `style="background-image: url('${P.escapeHtml(profile.profileImageUrl)}'); color: transparent;"`
+                : "";
+            const initial = (profile.name || "?").slice(0, 1);
+            document.getElementById("profileSection").innerHTML = `
+                <div class="profile-card">
+                    <div class="avatar" ${avatarBg}>${P.escapeHtml(initial)}</div>
+                    <div class="profile-info">
+                        <div class="name">${P.escapeHtml(profile.name)}</div>
+                        <div class="email">${P.escapeHtml(profile.email)}</div>
+                        <div class="role">
+                            <span class="badge accent">${P.escapeHtml(profile.role || "")}</span>
+                            <span class="badge ${profile.status === 'ACTIVE' ? 'ok' : 'warn'}">${P.escapeHtml(profile.status || "")}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadOrders() {
+            const pane = document.getElementById("paneOrders");
+            pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
+            try {
+                const data = await P.api("/v1/orders/me?page=0&size=20");
+                const items = (data && data.content) || [];
+                loadedOrders = true;
+                if (items.length === 0) {
+                    pane.innerHTML = `<div class="empty">아직 주문 내역이 없어요.</div>`;
+                    return;
+                }
+                pane.innerHTML = items.map(o => {
+                    const statusKind = o.status === "CONFIRMED" || o.status === "PAID" ? "ok"
+                        : o.status === "CANCELLED" || o.status === "EXPIRED" || o.status === "REFUNDED" ? "danger"
+                        : "warn";
+                    const cancellable = o.status === "PENDING" || o.status === "PAID";
+                    return `
+                        <div class="order-row" data-order="${o.orderId}">
+                            <a class="thumb" href="/course.html?id=${o.courseId}"></a>
+                            <div class="body">
+                                <a class="title" href="/course.html?id=${o.courseId}">${P.escapeHtml(o.titleSnap || "-")}</a>
+                                <div class="meta">
+                                    <span class="badge ${statusKind}">${P.orderStatusLabel(o.status)}</span>
+                                    <span>${P.formatPrice(o.totalPriceSnap)}</span>
+                                    <span>주문일: ${P.formatDateTime(o.createdAt)}</span>
+                                </div>
+                            </div>
+                            <div class="actions">
+                                ${cancellable ? `<button type="button" class="btn danger" data-cancel="${o.orderId}">취소</button>` : ""}
+                                <a class="btn" href="/course.html?id=${o.courseId}">코스 보기</a>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+                pane.querySelectorAll("button[data-cancel]").forEach(btn => {
+                    btn.addEventListener("click", () => cancelOrder(btn.getAttribute("data-cancel")));
+                });
+            } catch (err) {
+                pane.innerHTML = `<div class="empty">주문 목록을 불러오지 못했어요: ${P.escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        async function cancelOrder(orderId) {
+            const reason = window.prompt("취소 사유를 입력하세요", "단순 변심");
+            if (!reason) return;
+            try {
+                await P.api(`/v1/orders/${orderId}/cancel`, {
+                    method: "PATCH",
+                    body: { reason }
+                });
+                showToast("주문이 취소되었어요", "ok");
+                loadedOrders = false;
+                loadOrders();
+            } catch (err) {
+                showToast(err.message || "취소 실패", "danger");
+            }
+        }
+
+        async function loadWishlist() {
+            const pane = document.getElementById("paneWishlist");
+            pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
+            try {
+                const data = await P.api("/v1/members/me/wishlist-courses?page=0&size=20");
+                const items = (data && data.content) || [];
+                loadedWishlist = true;
+                if (items.length === 0) {
+                    pane.innerHTML = `<div class="empty">위시리스트가 비어있어요.</div>`;
+                    return;
+                }
+                pane.innerHTML = items.map(w => {
+                    const cid = w.courseId || w.id;
+                    const title = w.title || w.courseTitle || "-";
+                    const price = w.price !== undefined ? w.price : w.coursePrice;
+                    const thumbStyle = w.thumbnailUrl
+                        ? `style="background-image: url('${P.escapeHtml(w.thumbnailUrl)}');"`
+                        : "";
+                    return `
+                        <div class="wish-row">
+                            <a class="thumb" href="/course.html?id=${cid}" ${thumbStyle}></a>
+                            <div class="body">
+                                <a class="title" href="/course.html?id=${cid}">${P.escapeHtml(title)}</a>
+                                <div class="meta">
+                                    <span>${P.formatPrice(price)}</span>
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button type="button" class="btn danger" data-unwish="${cid}">찜 해제</button>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+                pane.querySelectorAll("button[data-unwish]").forEach(btn => {
+                    btn.addEventListener("click", async () => {
+                        const id = btn.getAttribute("data-unwish");
+                        try {
+                            await P.api(`/v1/courses/${id}/wishlist-courses`, { method: "DELETE" });
+                            showToast("위시리스트에서 제거됨");
+                            loadedWishlist = false;
+                            loadWishlist();
+                        } catch (err) {
+                            showToast(err.message || "처리 실패", "danger");
+                        }
+                    });
+                });
+            } catch (err) {
+                pane.innerHTML = `<div class="empty">위시리스트를 불러오지 못했어요: ${P.escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        async function loadFollows() {
+            const pane = document.getElementById("paneFollows");
+            pane.innerHTML = `<div class="muted">불러오는 중...</div>`;
+            try {
+                const data = await P.api("/v1/members/me/follows?page=0&size=20");
+                const items = (data && data.content) || [];
+                loadedFollows = true;
+                if (items.length === 0) {
+                    pane.innerHTML = `<div class="empty">팔로우한 강사가 없어요.</div>`;
+                    return;
+                }
+                pane.innerHTML = items.map(f => {
+                    const id = f.instructorId || f.memberId || f.id;
+                    const name = f.name || f.instructorName || "-";
+                    const thumbStyle = f.profileImageUrl
+                        ? `style="background-image: url('${P.escapeHtml(f.profileImageUrl)}'); border-radius: 999px; width: 64px; height: 64px;"`
+                        : `style="border-radius: 999px; width: 64px; height: 64px;"`;
+                    return `
+                        <div class="follow-row">
+                            <div class="thumb" ${thumbStyle}></div>
+                            <div class="body">
+                                <div class="title">${P.escapeHtml(name)}</div>
+                                <div class="meta">
+                                    ${f.bio ? `<span>${P.escapeHtml(f.bio)}</span>` : ""}
+                                    ${f.courseCount !== undefined ? `<span>코스 ${f.courseCount}개</span>` : ""}
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button type="button" class="btn danger" data-unfollow="${id}">언팔로우</button>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+                pane.querySelectorAll("button[data-unfollow]").forEach(btn => {
+                    btn.addEventListener("click", async () => {
+                        const id = btn.getAttribute("data-unfollow");
+                        try {
+                            await P.api(`/v1/instructors/${id}/follows`, { method: "DELETE" });
+                            showToast("언팔로우 했어요");
+                            loadedFollows = false;
+                            loadFollows();
+                        } catch (err) {
+                            showToast(err.message || "처리 실패", "danger");
+                        }
+                    });
+                });
+            } catch (err) {
+                pane.innerHTML = `<div class="empty">팔로우 목록을 불러오지 못했어요: ${P.escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function renderProfileForm() {
+            const pane = document.getElementById("paneProfile");
+            pane.innerHTML = `
+                <div class="panel" style="max-width: 640px;">
+                    <h2>기본 정보 수정</h2>
+                    <div class="spacer-sm"></div>
+                    <div class="field">
+                        <label>이름</label>
+                        <input value="${P.escapeHtml(profile.name)}" disabled>
+                        <div class="hint">이름은 변경할 수 없어요.</div>
+                    </div>
+                    <div class="field">
+                        <label>이메일</label>
+                        <input value="${P.escapeHtml(profile.email)}" disabled>
+                    </div>
+                    <div class="field">
+                        <label for="phoneInput">휴대전화</label>
+                        <input id="phoneInput" value="${P.escapeHtml(profile.phone || "")}" placeholder="010-1234-5678">
+                    </div>
+                    <div class="field">
+                        <label for="imgInput">프로필 이미지 URL</label>
+                        <input id="imgInput" value="${P.escapeHtml(profile.profileImageUrl || "")}" placeholder="https://...">
+                    </div>
+                    <button type="button" class="btn primary" id="saveProfileBtn">저장</button>
+                </div>
+
+                <div class="spacer-lg"></div>
+
+                <div class="panel" style="max-width: 640px;">
+                    <h2>비밀번호 변경</h2>
+                    <div class="spacer-sm"></div>
+                    <div class="field">
+                        <label for="curPw">현재 비밀번호</label>
+                        <input id="curPw" type="password" autocomplete="current-password">
+                    </div>
+                    <div class="field">
+                        <label for="newPw">새 비밀번호</label>
+                        <input id="newPw" type="password" autocomplete="new-password">
+                        <div class="hint">12자 이상, 영문 대/소문자·숫자·특수문자 각 1개 이상</div>
+                    </div>
+                    <button type="button" class="btn primary" id="changePwBtn">변경</button>
+                </div>
+            `;
+
+            document.getElementById("saveProfileBtn").addEventListener("click", saveProfile);
+            document.getElementById("changePwBtn").addEventListener("click", changePassword);
+        }
+
+        async function saveProfile() {
+            const phone = document.getElementById("phoneInput").value.trim();
+            const imageUrl = document.getElementById("imgInput").value.trim();
+            try {
+                await P.api("/v1/members/me", {
+                    method: "PATCH",
+                    body: { phone, profileImageUrl: imageUrl }
+                });
+                profile.phone = phone;
+                profile.profileImageUrl = imageUrl;
+                renderProfile();
+                showToast("프로필이 저장되었어요", "ok");
+            } catch (err) {
+                showToast(err.message || "저장 실패", "danger");
+            }
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById("curPw").value;
+            const newPassword = document.getElementById("newPw").value;
+            if (!currentPassword || !newPassword) {
+                showToast("현재/새 비밀번호를 입력해 주세요", "danger");
+                return;
+            }
+            try {
+                await P.api("/v1/members/me/password", {
+                    method: "PATCH",
+                    body: { currentPassword, newPassword }
+                });
+                document.getElementById("curPw").value = "";
+                document.getElementById("newPw").value = "";
+                showToast("비밀번호가 변경되었어요", "ok");
+            } catch (err) {
+                showToast(err.message || "변경 실패", "danger");
+            }
+        }
+    </script>
+</body>
+</html>

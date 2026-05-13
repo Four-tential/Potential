@@ -1,14 +1,14 @@
 spring:
   config:
     import:
-      - "aws-parameterstore:/config/potential-dev/"
+      - "aws-parameterstore:/config/potential-prod/"
 
-  # DB
+  # DB — Secrets Manager - ECS env 주입
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${db.host}:${db.port:3306}/${db.name}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
-    username: ${db.username}
-    password: ${db.password}
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
       connection-timeout: 30000
       maximum-pool-size: 50
@@ -16,26 +16,25 @@ spring:
       connection-test-query: SELECT 1
       keepalive-time: 60000
 
-  # Redis
+  # Redis (ElastiCache prod) — Parameter Store
   data:
     redis:
       host: ${redis.host}
       port: ${redis.port}
 
-  # Flyway
-  # url 명시 필수 — pgvector DataSource 공존 시 Flyway가 잘못된 DataSource를 바라보는 문제 방지
+  # Flyway — DB와 같은 자격증명
   flyway:
     enabled: true
     baseline-on-migrate: true
-    url: jdbc:mysql://${db.host}:${db.port:3306}/${db.name}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
-    user: ${db.username}
-    password: ${db.password}
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
-  # JPA
+  # JPA — 운영은 show-sql off
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
@@ -43,12 +42,12 @@ spring:
   # Spring Batch
   batch:
     jdbc:
-      initialize-schema: never   # Flyway 로 직접 관리
+      initialize-schema: never
     job:
-      enabled: false             # 서버 시작 시 자동 실행 방지
+      enabled: false
 
   # Spring Security OAuth2 Client (Kakao + Google)
-  # client-id / client-secret 은 AWS Parameter Store: /config/potential-dev/
+  # 운영용 OAuth 앱은 dev와 분리하여 발급 권장
   security:
     oauth2:
       client:
@@ -77,27 +76,23 @@ spring:
             user-name-attribute: id
 
   # Spring AI
-  ai: # ChatClient 자동 구성 비활성화 (AiConfig에서 수동 생성)
+  ai:
     chat:
       client:
         enabled: false
 
     openai:
-      api-key: ${openai.api-key}   # AWS Parameter Store: /config/potential-dev/openai.api-key
+      api-key: ${openai.api-key}
       chat:
         options:
-          model: gpt-4.1-mini      # 비용 절감 이슈로 mini버전 — agent는 코드에서 override 가능(4.1 버전 등으로 품질 상향)
+          model: gpt-4.1-mini
           temperature: 0.7
           max-tokens: 2000
       embedding:
         options:
-          model: text-embedding-3-small  # 1536차원
+          model: text-embedding-3-small
 
-    ollama:
-      chat:
-        options:
-          model: llama3.2          # dev에서는 @Profile("!ollama")이므로 실제로 사용 안 됨
-
+    # Ollama 블록은 운영에서 안 쓰면 생략 가능
     vectorstore:
       pgvector:
         initialize-schema: true
@@ -105,20 +100,19 @@ spring:
         distance-type: cosine_distance
         dimensions: 1536
 
-# PGVector DataSource — AWS Parameter Store에서 주입
-# Parameter Store 키: /config/potential-dev/pgvector.*
+# PGVector DataSource — Secrets Manager → ECS env 주입
 pgvector:
   datasource:
-    url: jdbc:postgresql://${pgvector.host}:${pgvector.port:5432}/${pgvector.db}
-    username: ${pgvector.username}
-    password: ${pgvector.password}
+    url: jdbc:postgresql://${PGVECTOR_HOST}:${PGVECTOR_PORT:5432}/${PGVECTOR_DB}
+    username: ${PGVECTOR_USERNAME}
+    password: ${PGVECTOR_PASSWORD}
 
-# AWS S3
+# AWS S3 — prod 버킷
 aws:
   s3:
-    bucket: potential-dev-images
-    region: ap-northeast-2
-    cloudfront-domain: d1273c5t8zsdng.cloudfront.net
+    bucket: ${aws.s3.bucket}
+    region: ${aws.s3.region:ap-northeast-2}
+    cloudfront-domain: ${aws.cloudfront-domain}
 
 # JWT
 jwt:
@@ -127,7 +121,7 @@ jwt:
     accessExpire: 1800000
     refreshExpire: 604800000
 
-# OAuth2 (Kakao + Google) — 운영 도메인 가리키도록 환경변수 override 권장
+# OAuth2 커스텀 리다이렉트 (운영 도메인)
 oauth2:
   success-redirect-uri: ${oauth2.success-redirect-uri}
   failure-redirect-uri: ${oauth2.failure-redirect-uri}
@@ -142,7 +136,7 @@ portone:
   api-base: https://api.portone.io
   sdk-timeout: 10s
 
-# CircuitBreaker 설정
+# CircuitBreaker
 resilience4j:
   circuitbreaker:
     instances:
@@ -154,7 +148,6 @@ resilience4j:
         wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
-
       portoneCancelPayment:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 10
@@ -164,7 +157,7 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 2
         automatic-transition-from-open-to-half-open-enabled: true
 
-# prometheus
+# Prometheus / Actuator
 management:
   endpoints:
     web:
@@ -173,14 +166,14 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-      env: dev
+      env: prod
     distribution:
       percentiles-histogram:
         http.server.requests: true
       percentiles:
-        http.server.requests: 0.5, 0.95, 0.99 # P50, P95, P99 활성화
+        http.server.requests: 0.5, 0.95, 0.99
       sla:
-        http.server.requests: 100ms, 200ms, 500ms, 1s, 3s # 특정 시간 내 처리 비율 확인
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 3s
   prometheus:
     metrics:
       export:
@@ -190,14 +183,20 @@ management:
 member:
   default-profile-image-url: ${member.default-profile-image-url}
 
-# SpringDocs With Swagger
+# Swagger — 운영은 비활성화
 springdoc:
-  api-docs.enabled: true
+  api-docs:
+    enabled: false
   swagger-ui:
-    enabled: true
-    display-request-duration: true
-    tryItOutEnabled: true
+    enabled: false
 
-# CORS
+# CORS — 운영 도메인 (루트 + www 모두 허용)
 cors:
-  allowed-origins: http://localhost:3000, https://frontend.url.com # 프론트엔드 CORS 연결
+  allowed-origins: https://potential-fourtential.shop, https://www.potential-fourtential.shop
+
+logging:
+  level:
+    root: info
+
+server:
+  port: 8080
