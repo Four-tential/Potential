@@ -94,7 +94,20 @@ public class JwtFilter extends OncePerRequestFilter {
             any("/oauth-success.html"),
             any("/oauth-failure.html"),
             any("/oauth-phone-setup.html"),
-            any("/oauth-link-confirm.html")
+            any("/oauth-link-confirm.html"),
+
+            // 데모 프론트 페이지 (SecurityConfig 와 동기)
+            get("/"),
+            get("/index.html"),
+            get("/app.html"),
+            get("/login.html"),
+            get("/course.html"),
+            get("/mypage.html"),
+            get("/app-common.js"),
+            get("/app-common.css"),
+
+            // 프로필 이미지 업로드 시연 페이지
+            get("/profile-image-test.html")
     );
 
     @Override
