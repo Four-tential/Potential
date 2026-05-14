@@ -244,12 +244,20 @@ src/main/java/four_tential/potential
 ## 🔥 기술적 도전
 
 ### 선착순 예약 동시성 제어
-> 작성 예정
+대규모 트래픽 상황에서도 재고(수강 정원)의 정합성을 보장하고 초과 예약을 방지하기 위해 다음과 같은 기술적 장치를 도입했습니다.
+
+- **Redis Lua 스크립트를 통한 원자적 재고 관리**: `GET-DECR` 로직을 하나의 Lua 스크립트로 묶어 Redis 내부에서 원자적으로 실행되도록 구현했습니다. 이를 통해 애플리케이션 레벨의 별도 락 없이도 Race Condition을 방지하고 초과 예약(Over-selling)을 원천 차단했습니다.
+- **Redis 기반의 실시간 재고 관리**: DB의 부하를 줄이기 위해 Redis를 Primary Inventory Source로 활용합니다. DB 반영 전 Redis에서 먼저 좌석을 점유하도록 설계하여 응답 속도를 극대화했습니다.
+- **Redisson 분산 락 (@DistributedLock)**: 재고 복구(Rollback)나 데이터 정합성 보정이 필요한 핵심 비즈니스 로직에는 Redisson을 이용한 분산 락을 적용하여 다중 인스턴스 환경에서도 데이터 일관성을 유지합니다.
 
 ---
 
 ### 대기열 시스템 (Waiting Room)
-> 작성 예정
+한정된 좌석에 대해 수천 명 이상의 동시 접속자가 몰릴 경우, 서버 부하를 제어하고 사용자에게 공정한 기회를 제공하기 위해 대기열 시스템을 구축했습니다.
+
+- **Redis Sorted Set (ZSET) 활용**: 대기열 진입 순서에 따라 Redis ZSET에 사용자 ID와 시퀀스 번호를 저장합니다. 이를 통해 수만 명의 대기자 중에서도 자신의 순번을 `O(log N)`의 속도로 빠르게 조회할 수 있습니다.
+- **SSE (Server-Sent Events) 기반 실시간 알림**: 사용자가 반복적으로 API를 호출(Polling)하는 대신, 서버에서 대기 순번과 입장 가능 상태를 실시간으로 푸시합니다. 이는 클라이언트와 서버 양측의 네트워크 부하를 획기적으로 줄여줍니다.
+- **원자적 승격 로직**: 좌석이 확보되었을 때 대기열 1순위 사용자를 자동으로 주문 단계로 승격시키는 프로세스 또한 Lua 스크립트로 구현하여, 찰나의 순간에 발생할 수 있는 '과승격' 문제를 해결했습니다.
 
 ---
 
@@ -311,6 +319,62 @@ OpenAI API 호출은 수 초가 소요되어 후기 작성 API 응답이 느려�
 ---
 
 ## 🐛 트러블 슈팅
+
+<details>
+<summary><b>주문 생성 결과 처리 - Sealed Interface 도입</b></summary>
+
+### 문제 상황
+
+주문 생성 과정에서 재고 점유 결과에 따라 201(Created)과 202(Accepted/Queued)라는 서로 다른 HTTP 상태를 반환해야 합니다. 기존 방식(하나의 Response DTO 사용)으로는 성공 시 필요한 `orderId`와 대기 시 필요한 `queueId`를 모두 포함해야 하므로, 특정 상황에서 필드들이 `null`이 되어 데이터 구조가 모호해지는 문제가 발생했습니다.
+
+### 해결 방법: Sealed Interface 도입
+
+**Sealed Interface**와 **Record**를 사용하여 각 상태에 최적화된 데이터 구조를 정의하고, 컴파일 타임의 타입 안전성을 확보했습니다.
+
+**장점:**
+- **제한된 확장성:** `permits` 키워드로 허용된 클래스 외 상속을 금지하여 도메인 결과의 범위를 명확히 규정합니다.
+- **컴파일 타임 체크:** `switch` 문에서 모든 하위 클래스를 다뤘는지 컴파일러가 검사하여 `default` 문 없이 안전하게 처리 가능합니다.
+- **데이터 분리:** 각 결과 상태에 필요한 데이터만 보유하므로 `null` 필드 없이 명확한 API 응답을 생성합니다.
+
+### 코드 예시
+
+```java
+// Sealed Interface 정의 (Java 17+)
+public sealed interface OrderResult 
+    permits OrderResult.Created, OrderResult.Queued, OrderResult.Failed {
+
+    // Record 정의
+    record Created(String orderId, LocalDateTime reservedAt) implements OrderResult {}
+    record Queued(String queueId, long estimatedWaitTime) implements OrderResult {}
+    record Failed(String reason) implements OrderResult {}
+}
+
+@PostMapping("/orders")
+public ResponseEntity<?> createOrder(@RequestBody OrderRequest request) {
+    OrderResult result = orderService.createOrder(request);
+
+    // Java 17 패턴 매칭 switch 사용
+    return switch (result) {
+        case OrderResult.Created created -> ResponseEntity.status(HttpStatus.CREATED).body(created);
+        case OrderResult.Queued queued -> ResponseEntity.status(HttpStatus.ACCEPTED).body(queued);
+        case OrderResult.Failed failed -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(failed.reason());
+    };
+}
+```
+
+### 다른 대안과의 비교
+
+| 구분 | **Sealed Interface** | 일반 Interface | Enum + 필드 | Result 래퍼 |
+| :--- | :--- | :--- | :--- | :--- |
+| **타입 안정성** | **매우 높음** | 보통 | 낮음 | 높음 |
+| **데이터 구조** | 상태별 최적화 | 상태별 최적화 | 통합 (Null 발생) | 공통 구조 |
+| **확장성** | 폐쇄적 (의도적) | 완전 개방 | 폐쇄적 | 보통 |
+| **추천 상황** | **도메인 결과가 명확할 때** | 프레임워크/라이브러리 | 간단한 상태 구분 | 공통 유틸리티 |
+
+</details>
+
+---
+
 <details>
 
 <summary><b>@Async 타이밍 이슈 - 별점 평균 오류</b></summary>
@@ -468,6 +532,30 @@ public class ReviewSummaryBatchJobScheduler {
 ---
 
 
+<details>
+<summary><b>Redis 캐싱 시 List 역직렬화 이슈</b></summary>
+
+### 문제 상황
+
+`RedisCacheConfig`에서 `RedisSerializer.json()`을 사용하여 캐싱을 처리할 때, `List<MyDto>`와 같은 제네릭 컬렉션을 역직렬화하면 에러가 발생하거나 `List<LinkedHashMap>`으로 복원되어 `ClassCastException`이 발생하는 문제가 있었습니다.
+
+### 원인 분석
+
+1. **타입 소거 (Type Erasure)**: 자바 제네릭은 런타임에 타입 정보가 제거됩니다. `List<ReviewResponse>`는 런타임에 단순히 `List`로 보여, 역직렬화 시점에 Jackson이 내부 원소가 무엇인지 판단하지 못하고 기본값인 `LinkedHashMap`으로 변환합니다.
+2. **POJO vs Collection**: `PageResponse<MyDto>`와 같은 명확한 POJO 클래스는 필드 구조가 명시되어 있어 복원이 쉽지만, `List`와 같은 루트 레벨의 제네릭 컬렉션은 역직렬화 대상 타입이 불분명합니다.
+
+### 해결 방법 및 권장 사항
+
+1. **래퍼(Wrapper) DTO 사용 권장**: 단독 `List<MyDto>`를 캐싱하기보다, 명확한 구조를 가진 래퍼 클래스나 `PageResponse<MyDto>` 형식을 캐싱하는 것이 안전합니다.
+2. **역직렬화 타입 명시**: 꼭 `List`를 단독으로 사용해야 한다면, 역직렬화 시점에 `TypeReference` 등을 통해 타입을 명시하거나 `ObjectMapper` 설정에서 클래스 정보를 JSON에 포함(`activateDefaultTyping`)시켜야 합니다.
+3. **결론**: 프로젝트 전반에서는 정합성과 안정성을 위해 **래퍼 DTO 캐싱**을 기본 원칙으로 채택했습니다.
+
+</details>
+
+
+---
+
+
 ## 📊 성능 테스트
 <details>
 <summary><b>후기 목록 조회 성능 개선 : 캐싱 + 페이지네이션 + 인덱스</b></summary>
@@ -616,6 +704,78 @@ p99 기준 **53.58ms → 34.41ms로 약 1.6배 개선**됐다. 캐싱 없이 인
 
 **Stage 4 — 인덱스 + 캐싱**
 p95 기준 **33.71ms → 9.53ms로 약 3.5배 개선**됐다. Stage 2(캐싱만)와 유사한 수준이며, 인덱스의 효과는 **캐시 미스 상황에서 극대화**된다. 캐시가 만료되거나 처음 요청이 들어올 때 DB 조회 비용을 줄여 캐시 웜업(warm-up) 시간을 단축하는 역할을 한다.
+</details>
+
+---
+<details>
+<summary><b>주문하기 API 성능 테스트 결과 (k6-order-complete)</b></summary>
+
+주문하기 API의 성능 병목 현상을 해결하기 위해 Redis Lua Script를 도입하였으며, k6를 활용해 개선 전후의 성능을 측정 및 비교했습니다.
+
+### 테스트 환경
+- **테스트 도구**: k6
+- **테스트 대상**: 주문하기(Order) API
+- **주요 변경 사항**: 재고 확인 및 차감 로직을 다중 Redis 명령에서 단일 Lua 스크립트로 전환
+
+### 성능 비교 결과 요약
+
+| 지표 (Metric) | 개선 전 (Before) | 개선 후 (After) | 개선 결과 |
+| :--- | :--- | :--- | :--- |
+| **평균 응답 시간 (Avg)** | 5,720 ms | 484.3 ms | 약 91.5% 단축 |
+| **95% 응답 시간 (P95)** | 29,990 ms | 1,470 ms | 약 95.1% 단축 |
+| **HTTP 요청 실패율** | 65.59% | 5.07% | 60.52%p 감소 |
+| **주문 성공 횟수** | 0 건 | 20 건 | 기능 정상화 |
+| **주문 에러 횟수** | 1,328 건 | 6 건 | 99.5% 감소 |
+| **큐 가득 참 (Full)** | 3,242 건 | 177 건 | 자원 효율성 증가 |
+
+### 주요 개선 사항 분석
+
+- **서비스 정상화 및 안정성 확보**
+  - **개선 전**: 65% 이상의 높은 실패율과 함께 주문 성공 건수가 0건으로, 정상적인 서비스 이용이 불가능했습니다.
+  - **개선 후**: 실패율이 5% 대로 급감하였으며, 주문 로직이 정상적으로 작동하여 성공 케이스가 안정적으로 발생함을 확인했습니다.
+
+- **응답 속도의 획기적인 개선 (Latency)**
+  - 평균 응답 시간을 **12배 이상 (5.7s → 0.48s)** 단축했습니다.
+  - 특히 극단적인 지표인 P95(상위 5% 응답 시간)가 30초에서 1.4초로 줄어들어, 부하 상황에서도 사용자가 체감하는 지연 시간이 대폭 개선되었습니다.
+
+- **원자성(Atomicity) 보장을 통한 데이터 정합성 해결**
+  - 기존에는 '재고 조회'와 '재고 차감' 사이의 간극에서 레이스 컨디션(Race Condition)이 발생했으나, Lua Script를 통해 이를 하나의 원자적 연산으로 처리함으로써 데이터 정합성 문제를 해결했습니다.
+
+- **네트워크 오버헤드 최적화**
+  - 애플리케이션과 Redis 서버 간의 다중 왕복 통신(Round Trip)을 단일 통신으로 결합하여 불필요한 네트워크 비용을 제거했습니다.
+
+### 결론
+Redis Lua Script 도입을 통해 주문 시스템의 처리량(Throughput)을 높이고 응답 지연(Latency)을 대폭 개선했습니다. 특히 대규모 트래픽 상황에서 발생하던 시스템 마비 현상을 해결하고 안정적인 주문 환경을 구축했습니다.
+
+</details>
+
+---
+
+<details>
+<summary><b>주문 조회 API 성능 테스트 결과 (k6-order-read)</b></summary>
+
+주문 도메인의 읽기 성능(내 주문 목록 조회 및 상세 조회)을 검증하기 위해 k6를 활용한 부하 테스트를 수행했습니다.
+
+### 테스트 환경
+- **테스트 도구**: k6
+- **테스트 대상**: 
+  - 내 주문 목록 조회 (`GET /v1/orders/me`)
+  - 주문 상세 조회 (`GET /v1/orders/{orderId}`)
+- **부하 프로필**: 30 ~ 45 RPS (Ramping Arrival Rate)
+
+### 성능 목표 (SLO)
+
+| 구분 | API | 목표 (p95) |
+| :--- | :--- | :--- |
+| **목록 조회** | `GET /v1/orders/me` | < 500 ms |
+| **상세 조회** | `GET /v1/orders/{orderId}` | < 200 ms |
+| **공통** | 에러율 | < 1.0% |
+
+### 주요 검증 포인트
+- **인덱스 최적화**: `member_id`와 `created_at` 복합 인덱스가 페이징 조회 시 적절히 활용되는지 검증합니다.
+- **조인 성능**: 주문 상세 조회 시 연관된 엔티티(코스 등)를 조회할 때 불필요한 추가 쿼리 없이 효율적으로 데이터를 가져오는지 확인합니다.
+- **부하 안정성**: 목표 RPS(최대 45) 도달 시에도 시스템이 안정적으로 응답을 유지하는지 측정합니다.
+
 </details>
 
 ---
@@ -821,7 +981,7 @@ public class AsyncConfig {
 ---
 
 ## 🗂 ERD
-> ![Portential v12.png](image/Portential%20v12.png)
+> ![Portential v14.png](docs/images/Portential%20v14.png)
 ---
 
 ## 🚀 실행 방법
