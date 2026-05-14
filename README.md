@@ -117,47 +117,209 @@
 ---
 
 ## 🏗 아키텍처
+- dev
+<img width="5924" height="4444" alt="image" src="https://github.com/user-attachments/assets/34cc6b47-2e87-409e-bece-5a3b36ac11c7" />
 
-> 아키텍처 다이어그램 추가 예정
+- prod (main)
+<img width="1828" height="1405" alt="image" src="https://github.com/user-attachments/assets/68f9112d-e89f-4a9d-a302-6bd33f39f397" />
 
 ---
 
 ## ☁️ 인프라 구성
 
+### 환경 분리 개요
+
+본 프로젝트는 **두 환경**으로 분리되어 운영됩니다.
+
+| 구분 | Dev (개발) | Prod (운영) |
+| --- | --- | --- |
+| **컴퓨트** | EC2 (`t4g.small`) + Docker 컴포즈 | **ECS Fargate** (1 vCPU / 3 GB) |
+| **아키텍처** | `linux/arm64` (Graviton) | `linux/amd64` (X86_64) |
+| **DB** | RDS MySQL + RDS PostgreSQL (pgvector) | 동일 (`db.t4g.micro` × 2) |
+| **Cache** | ElastiCache **Valkey 3노드** | ElastiCache **Redis 단일 노드** |
+| **외부 노출** | 없음 (SSM 세션 전용) | **ALB HTTPS:443** (ACM TLS 1.3) |
+| **모니터링** | Prometheus + Grafana + Loki (self-host) | **AMP + ADOT 사이드카** + Grafana (Private EC2) |
+| **트리거 브랜치** | `dev` push | `main` push |
+| **OIDC Role** | `Potential-github-oidc-role` | `Potential-Prod-github-oidc-role` |
+
+---
+
 ### CI/CD 파이프라인
+
+#### Dev — `dev` 브랜치 push 시 자동
 
 ```text
 GitHub Push (dev 브랜치)
     │
     ▼
-GitHub Actions
-    ├── Gradle 빌드 & 테스트
-    ├── SonarCloud 정적 분석 (JaCoCo 커버리지)
-    ├── Docker 이미지 빌드 (linux/arm64 · Graviton)
-    ├── AWS ECR Push (커밋 SHA 태그)
-    └── AWS SSM으로 EC2 무중단 배포
-            └── docker pull → docker stop → docker run
+GitHub Actions (.github/workflows/dev-cd.yml)
+    ├── Gradle 빌드 (bootJar, 테스트 별도)
+    ├── QEMU + Buildx — linux/arm64 크로스 빌드
+    ├── AWS OIDC 인증 (정적 자격증명 0개)
+    ├── ECR Push (potential/dev:<commit-sha>)
+    └── AWS SSM Run Command → EC2:
+            ├── docker pull
+            ├── docker stop / rm 옛 컨테이너
+            ├── docker run --restart=always
+            └── docker image prune -af --filter "until=24h"   ⭐ 자동 청소
 ```
 
-### 서버 구성 (AWS EC2 · Amazon Linux 2023 · ARM/aarch64)
+> 💡 마지막 `prune` 단계는 [PR #139](https://github.com/Four-tential/Potential/pull/139) 에서 추가. 디스크 누적으로 인한 배포 실패 재발 방지.
 
-| 컴포넌트 | 설명 |
-|----------|------|
-| **Application** | Spring Boot (port 8080) · eclipse-temurin:21-jre-alpine |
-| **MySQL 8.4** | 주 데이터베이스 (Flyway 마이그레이션) |
-| **Redis 8.6** | 캐싱 / 분산 락 / 대기열 |
-| **PostgreSQL 17 + pgvector** | 벡터 임베딩 저장 (AI 후기 요약) |
-| **Prometheus** | 메트릭 수집 (P50 / P95 / P99) |
-| **Grafana** | 모니터링 대시보드 · Slack 알림 |
-| **Loki + Promtail** | 로그 수집 및 집계 |
-| **redis-exporter / mysql-exporter** | DB 메트릭 → Prometheus 연동 |
+#### Prod — `main` 브랜치 push 시 자동
+
+```text
+GitHub Push (main 브랜치)
+    │
+    ▼
+GitHub Actions (.github/workflows/prod-cd.yml)
+    ├── Gradle 빌드 + 캐시 (bootJar)
+    ├── Docker 빌드 — linux/amd64
+    ├── AWS OIDC 인증 (브랜치 sub 잠금)
+    ├── ECR Push (potential/prod:<commit-sha>)
+    ├── infra/taskdef.json 템플릿 sed 치환
+    ├── ECS register-task-definition (새 리비전)
+    ├── ECS update-service
+    │     --health-check-grace-period-seconds 300   ⭐ 콜드 스타트 흡수
+    │     --force-new-deployment
+    ├── aws ecs wait services-stable (최대 25분)
+    └── 서비스 이벤트 출력
+```
+
+> 🛡 **Rolling + Circuit Breaker + Auto Rollback** 3중 안전장치로 무중단 배포.
+
+---
+
+### Dev 서버 구성
+
+**EC2** (`t4g.small` · Amazon Linux 2023 · ARM/aarch64)
+
+| 컴포넌트 | 컨테이너 이미지 | 설명 |
+| --- | --- | --- |
+| **Application** | `eclipse-temurin:21-jre-alpine` | Spring Boot (port 8080) |
+| **Prometheus** | `prom/prometheus` | 메트릭 수집 (P50 / P95 / P99) |
+| **Grafana** | `grafana/grafana` | 대시보드 + Slack 알림 |
+| **Loki + Promtail** | `grafana/loki`, `grafana/promtail` | 로그 수집·집계 |
+| **Exporters** | `oliver006/redis_exporter`, `prom/mysqld-exporter`, `prom/node-exporter` | DB·시스템 메트릭 → Prometheus 연동 |
+
+**관리형 데이터 레이어** (EC2 외부)
+
+- RDS MySQL 8.4 — `dev-potential-rds-mysql` (`db.t3.micro`)
+- RDS PostgreSQL 17 + pgvector — `dev-potential-rds-postgre` (`db.t3.micro`)
+- ElastiCache Valkey 7.x **3노드 클러스터** — `dev-potential-elasticache-001/002/003` (`cache.t3.micro`)
+
+---
+
+### Prod 서버 구성
+
+**ECS Fargate Task** (Serverless · 1 vCPU / 3 GB · X86_64)
+
+| 컨테이너 | 이미지 | 역할 |
+| --- | --- | --- |
+| `potential-prod-container` | `<ecr>/potential/prod:<sha>` (Spring Boot) | 메인 앱 (`essential: true`) |
+| `adot-collector` | `aws-otel-collector:v0.47.0` | **모니터링 사이드카** (`essential: false`) |
+
+**관리형 서비스** (ECS Task 외부)
+
+| 서비스 | 리소스 / 설정 |
+| --- | --- |
+| **ALB** | `potential-prod-alb` — Multi-AZ, HTTPS:443, ACM TLS 1.3 + 양자내성 |
+| **RDS MySQL** | `prod-potential-rds-mysql-1` (`db.t4g.micro`) |
+| **RDS PostgreSQL + pgvector** | `prod-potential-rds-postgre-1` (`db.t4g.micro`) |
+| **ElastiCache Redis 7.1** | `potential-prod-redis-001` (`cache.t4g.micro`) |
+| **S3 + CloudFront** | `potential-prod-images` — Presigned PUT 업로드, CDN 캐싱 |
+| **AMP (Managed Prometheus)** | `ws-0e10d9e2-...` — ADOT remote_write 수신 |
+| **Grafana on EC2** | `i-00fbb5ea475c7600b` — Private 서브넷, SSM Port Forward 전용 접근 |
+
+**네트워킹** (`prod-vpc` — `10.0.0.0/16`)
+
+- Public Subnet (AZ a/c) · Private 4계층 격리 (ECS / RDS / Redis / Monitoring)
+- **VPC Endpoints**: Interface 9개 (ECS / ECR / Logs / SSM / Secrets) + Gateway 1개 (S3)
+  → AWS 서비스 호출 100% VPC 내부 트래픽 → NAT 비용 절감 + 인터넷 노출 0
+- **NAT Gateway 1개** — 외부 API (Kakao / Google / PortOne / OpenAI) 만 경유
+
+---
 
 ### 보안 / 설정 관리
 
-- 민감한 환경 변수 (DB, JWT, OAuth, PortOne) 는 **AWS Parameter Store** 에서 주입
-- EC2 접속은 IAM 권한 기반 **AWS Session Manager(SSM)** 사용 (SSH 키 불필요)
-- Docker 컨테이너는 **비권한 유저(appuser)** 로 실행
-- `HEALTHCHECK` : 30초 간격으로 `/actuator/health` 확인, 3회 실패 시 unhealthy
+#### 자격증명 0개 원칙
+
+| 항목 | 적용 |
+| --- | --- |
+| GitHub Actions 자격증명 | **OIDC 페더레이션** (정적 Access Key 0개) — 1시간 단기 STS 토큰 |
+| EC2 접속 | **AWS SSM Session Manager** (SSH 키 0개) |
+| DB 자격증명 | **AWS Secrets Manager** → ECS 환경변수 자동 주입 |
+| 일반 설정 (JWT / OAuth / PortOne / Redis 등) | **AWS Parameter Store SecureString** (KMS 자동 복호화) |
+
+#### IAM Role 5종 (최소권한 분리)
+
+| Role | 환경 | 권한 스코프 |
+| --- | --- | --- |
+| `Potential-github-oidc-role` | Dev CI/CD | ECR(`potential/dev`) + SSM Send |
+| `Potential-Prod-github-oidc-role` | Prod CI/CD | ECR(`potential/prod`) + ECS register/update |
+| `ecsTaskExecutionRole` | ECS | 이미지 pull + Secrets / Parameter Store 읽기 |
+| `ECS-role-task-S3` | 앱 런타임 | S3 R/W + AMP RemoteWrite |
+| `Potential-Monitoring-EC2-Role` | Grafana EC2 | SSM + AMP Query + CloudWatch Read |
+
+#### 컨테이너 / 외부 노출 보안
+
+- Docker 컨테이너는 **비권한 유저(`appuser`)** 로 실행
+- `HEALTHCHECK`: 30초 간격 `/actuator/health` 확인, 3회 실패 시 unhealthy
+- ALB Listener Rule: `/actuator/*` 외부 노출 차단 (`/actuator/health` 만 허용)
+- Grafana: 외부 노출 0 — Private 서브넷 + SSM Port Forward 전용 접근
+
+---
+
+### 모니터링 / 관측성
+
+#### Dev — Self-hosted 스택
+
+- **Prometheus + Grafana + Loki + Promtail + K6 + Exporters** (mysql / redis / node)
+- 모두 같은 EC2 위 Docker 컴포즈로 동거
+
+#### Prod — AWS 관리형 + ADOT 사이드카
+
+**앱 메트릭 흐름**
+
+```text
+Spring Boot /actuator/prometheus
+    └── ADOT 사이드카 (같은 Task, 15초 scrape, localhost)
+    └── SigV4 인증 + remote_write ─────▶  AMP (Managed Prometheus)
+                                            │
+                                            ▼
+                                     Grafana on Private EC2
+```
+
+**AWS 관리형 서비스 메트릭**
+
+```text
+ElastiCache · RDS · ALB · Container Insights
+    └── AWS 자동 publish ───────────────▶  CloudWatch
+                                            │
+                                            ▼
+                                Grafana CloudWatch Datasource
+```
+
+**분산 트레이싱 / 요청 추적**
+
+```text
+MdcFilter ─▶ traceId 부여 ─▶ X-Trace-Id 응답 헤더
+    └── 모든 로그에 traceId 자동 포함 (MDC)
+    └── CloudWatch Logs Insights 에서 traceId 한 줄로 요청 전체 추적
+```
+
+**운영 로그**
+
+- 로그 그룹: `/ecs/potential-prod-ecs-task-definition`
+- 보관 정책: **30일**
+- 스트림 prefix 분리: `ecs/...` (앱) / `adot/...` (사이드카)
+
+**알림**
+
+| 구분 | 항목 |
+| --- | --- |
+| ✅ 현재 운영 | AWS Budget `$50/월` (50 · 80 · 100% 임계치 이메일) + Container Insights 기본 알람 |
+| 🕓 예정 (별도 PR) | CloudWatch Alarm → Slack/이메일 (ECS Task / ALB 5xx / RDS CPU / Redis Memory) |
 
 ### 이미지 / CDN
 
@@ -372,7 +534,335 @@ OpenAI API 호출은 수 초가 소요되어 후기 작성 API 응답이 느려�
 
 ---
 
+<details>
+<summary><b>운영 환경 Fargate 채택 — ADR (Architecture Decision Record)</b></summary>
+
+### 1. 결정 (Decision)
+
+> **운영(Prod) 환경의 컴퓨트 플랫폼으로 AWS ECS Fargate를 채택한다.**
+>
+> - 클러스터: `potential-prod-ecs-cluster` (Container Insights 활성)
+> - Launch Type: Fargate (Serverless)
+> - 배포 전략: Rolling Update + Circuit Breaker + Auto Rollback
+
+---
+
+### 2. 배경 (Context)
+
+졸업 프로젝트의 운영 환경을 구축하면서 다음 제약 조건이 있었습니다.
+
+**비즈니스 / 운영 제약**
+- **인프라 관리 인원**: 본인 1인 — 다른 개발 작업과 병행해야 해서 인프라 관리에 많은 시간을 쓸 수 없음
+- **운영 기간**: 프로젝트 발표 전후 단기간 (약 2주) — 장기 운영 인력 X
+- **장애 대응**: 24/7 대응 불가능 — 자동 복구 메커니즘 필수
+
+**기술적 제약**
+- **Spring Boot 4.0.5 + Spring AI + pgvector** — 콜드 스타트 ~80초의 무거운 의존성
+- **ADOT 사이드카 패턴** 으로 메트릭 수집 필요 (AMP에 remote_write)
+- 무중단 배포 + 자동 롤백 + Health Check 통합 필수
+- DB 자격증명을 **Secrets Manager → 환경변수 자동 주입** 패턴으로 안전하게 운영
+
+**비용 제약**
+- 프로젝트 크레딧 한정 (~$140)
+- 발표 종료 직후 즉시 비용 정지 가능해야 함
+- 트래픽이 거의 없는 데모 환경 — Multi-AZ HA 보다 비용 효율 우선
+
+---
+
+### 3. 고려한 옵션 (Options Considered)
+
+총 6가지 옵션을 검토:
+
+| 옵션 | 설명 |
+| :--- | :--- |
+| **A. EC2 + Docker** (dev 방식) | EC2 인스턴스 위에 Docker로 컨테이너 실행 |
+| **B. ECS on EC2** | ECS가 컨테이너 오케스트레이션, 호스트는 우리가 관리하는 EC2 |
+| **C. ECS Fargate** | ECS + AWS가 microVM 호스트 자동 관리 |
+| **D. EKS** | Kubernetes 클러스터 (AWS 관리형) |
+| **E. AWS Lambda** | 서버리스 함수 (이벤트 기반) |
+| **F. AWS App Runner** | Fully Managed Container Service |
+
+---
+
+### 4. 비교 (Comparison)
+
+#### 4-1. 다축 비교 표
+
+| 옵션 | 운영 부담 | 시간당 비용 | 사이드카 패턴 | 무중단 배포 | 학습 곡선 | 보안 격리 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| A. EC2 + Docker | 🔴 높음 (OS 패치 / 디스크) | 🟢 낮음 | △ (compose 가능) | 🔴 직접 구현 | 🟢 낮음 | 🟡 호스트 공유 |
+| B. ECS on EC2 | 🟡 중간 (EC2 풀 관리) | 🟢 낮음 | ✅ | ✅ | 🟡 중간 | 🟡 호스트 공유 |
+| **C. ECS Fargate** | 🟢 **거의 없음** | 🟡 중간 | ✅ | ✅ | 🟡 중간 | 🟢 **microVM 격리** |
+| D. EKS | 🔴 높음 (k8s 운영) | 🔴 높음 (CP 월 $73) | ✅ | ✅ | 🔴 높음 | 🟢 강함 |
+| E. Lambda | 🟢 없음 | 🟢 호출당 | ❌ | ✅ (자동) | 🟡 중간 | 🟢 강함 |
+| F. App Runner | 🟢 거의 없음 | 🟡 중간 | ❌ | ✅ | 🟢 낮음 | 🟢 강함 |
+
+#### 4-2. 핵심 요구사항 vs 옵션별 매칭
+
+| 요구사항 | A: EC2 | B: ECS/EC2 | **C: Fargate** | D: EKS | E: Lambda | F: App Runner |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| 운영 인력 최소화 (1인) | ❌ | △ | **✅** | ❌ | ✅ | ✅ |
+| 사이드카 (ADOT) 지원 | △ | ✅ | **✅** | ✅ | ❌ | ❌ |
+| Spring Boot 콜드 스타트 80초 수용 | ✅ | ✅ | **✅** | ✅ | ❌ (15분 제한 별개로 부적합) | ✅ |
+| 디스크 누적 사고 방지 | ❌ | ❌ | **✅** | ✅ | ✅ | ✅ |
+| 비용 즉시 정지 (단기 운영) | △ | △ | **✅ (초 단위)** | ❌ | ✅ | △ |
+| 학습 곡선 (졸업 프로젝트) | ✅ | △ | △ | ❌ | △ | ✅ |
+| **합계** | 2 / 6 | 3.5 / 6 | **6 / 6** | 3.5 / 6 | 4 / 6 | 4 / 6 |
+
+→ **C. ECS Fargate** 가 6개 요구사항 모두 충족.
+
+---
+
+### 5. 선택 이유 (Why Fargate)
+
+#### 이유 1 — 서버 관리 부담 거의 0
+- OS 패치 / 보안 업데이트 / 커널 버전 → AWS 책임
+- Auto Scaling Group / AMI / 인스턴스 타입 선택 불필요
+- 우리가 정의한 건 **"1 vCPU / 3 GB 짜리 컨테이너 1개"** 뿐
+- → **dev에서 겪었던 "디스크 풀로 배포 실패" 사고가 구조적으로 불가능**
+
+#### 이유 2 — 사이드카 패턴 네이티브 지원
+- 같은 Task 안에 Spring Boot + ADOT 사이드카 동거
+- localhost 통신 → 네트워크 비용 0, scrape latency 0
+- EKS / Beanstalk / Lambda / App Runner 에서 하려면 별도 작업
+- → **모니터링 인프라를 별도로 띄우지 않고 한 Task로 해결**
+
+#### 이유 3 — Firecracker microVM 보안 격리
+- 각 Task가 자체 microVM 위에서 동작
+- 호스트 OS 공유 X → 컨테이너 탈출 / 권한 상승 위험 ↓
+- ENI도 Task 단위 → SG 격리 강력
+- → **EC2 + Docker 대비 보안 한 단계 위**
+
+#### 이유 4 — 운영 안전망 4중 기본 제공
+- **Health Check Grace Period** 300초 → Spring 콜드 스타트 흡수
+- **Rolling Deployment** (min 100% / max 200%) → 무중단
+- **Circuit Breaker** → N회 실패 시 자동 차단
+- **Auto Rollback** → 실패 시 이전 리비전 즉시 복귀
+- → EC2 + Docker 로 직접 구현하려면 코드 + 인프라 작업 막대
+
+#### 이유 5 — 초 단위 과금 + 즉시 비용 정지
+- 시간 단위 X, **초 단위** 과금
+- `--desired-count 0` 한 줄로 **즉시 비용 정지**
+- EC2 처럼 stopped 인스턴스 EBS / EIP 잔존 비용 X
+- → 졸업 발표 후 비용 통제에 최적
+
+---
+
+### 6. 받아들인 트레이드오프 (Accepted Trade-offs)
+
+#### 트레이드오프 1 — 시간당 비용은 EC2보다 30~50% 비쌈
+- 같은 1 vCPU / 3 GB 라면 EC2가 30~50% 저렴
+- **수용 근거:** 운영 인력 인건비 / 사고 대응 시간을 고려하면 토탈 비용은 오히려 ↓
+- → 단순 인프라 비용보다 "관리 부담 → 0" 이 더 가치 있다고 판단
+
+#### 트레이드오프 2 — 콜드 스타트 시간 발생
+- 새 Task 시작 시 microVM 프로비저닝 + 이미지 pull + Spring 부팅 = 합산 ~3분
+- **수용 근거:** Grace Period 300초로 자연스럽게 흡수
+- → 향후 개선 여지: Spring Boot AOT 컴파일로 콜드 스타트 80s → 20s 단축 가능
+
+#### 트레이드오프 3 — 영구 디스크 마운트 어려움
+- Task 종료 시 ephemeral 디스크 통째 소멸
+- **수용 근거:** 본 앱은 **stateless** — 영구 데이터는 RDS, 파일은 S3로 분리되어 있음
+- → 영구 저장이 필요해지면 EFS 마운트 옵션 존재하지만 현재로선 불필요
+
+#### 트레이드오프 4 — Multi-AZ 분산 안 함 (단일 Task)
+- 실제로 ECS Service `desiredCount = 1` 운영
+- AZ 1개에서만 Task 동작 → 그 AZ 죽으면 일시 중단
+- **수용 근거:** 졸업 데모 트래픽 수준에선 진짜 HA 불필요. 비용 절감 우선
+- → 향후 사용자 늘면 `desiredCount = 2`로 분산 가능 (Fargate라 1줄 변경)
+
+#### 트레이드오프 5 — EKS의 풍부한 생태계 포기
+- Kubernetes Operator / Helm Chart / Service Mesh 등 ecosystem 못 누림
+- **수용 근거:**
+  - 졸업 프로젝트 규모에선 오버킬
+  - EKS 컨트롤 플레인 고정비 월 $73 부담
+  - **Kubernetes 기술 스택 학습 곡선** 도 본인 1인 운영 환경에서 부담
+- → 사용자 수 늘고 마이크로서비스 분리 필요해지면 EKS 마이그레이션 가능
+
+---
+
+> 💡 핵심 한 줄: **"인프라 관리 인원 1인 + 단기 운영 + 사이드카 필요"** 라는 제약 아래에서, 운영 부담을 거의 0으로 만들면서 운영 안전망(Grace Period · Rolling · Circuit Breaker · Auto Rollback)을 기본 제공하는 ECS Fargate가 6개 요구사항을 모두 충족하는 유일한 선택지였습니다.
+
+</details>
+
 ## 🐛 트러블 슈팅
+
+<details>
+<summary><b>Disk Full로 인한 dev 배포 실패 — 자동 prune + Fargate 이펨럴 디스크</b></summary>
+
+### 문제 상황
+
+dev 환경 배포 중 EC2 디스크가 가득 차 새 이미지 pull 단계에서 실패하는 사고가 발생했습니다. 옛 컨테이너는 이미 stop·rm 처리된 뒤라 새 컨테이너도 못 뜨고, 결과적으로 **앱 자체가 다운**되는 상태로 이어졌습니다.
+
+**증상**
+- 배포 로그: `failed to register layer: write /app/app.jar: no space left on device`
+- 기존 컨테이너 종료 후 새 컨테이너 기동 실패 → 사용자 입장에서 사이트 다운
+
+**원인 분석**
+- EC2 (`t4g.small`)의 EBS 디스크 = 20 GB
+- 매 배포마다 새 이미지(~524 MB) 만 받고 **옛 이미지는 명시적으로 지우지 않음**
+- 누적 결과: `potential/dev` 이미지 **63개 = 18.14 GB** (디스크 99% 사용)
+
+### 해결 방법: `scripts/deploy.sh`에 자동 정리 단계 추가 + Fargate 이펨럴 디스크 활용
+
+**dev** 는 배포 스크립트에 `docker image prune` 한 줄을 영구 추가해 누적을 막고, **prod** 는 ECS Fargate의 ephemeral microVM 특성을 활용해 구조적으로 누적이 불가능한 상태로 운영합니다.
+
+**장점:**
+- **자동 청소:** 새 컨테이너가 정상 기동된 다음에 prune 실행 → 안전한 시퀀스
+- **롤백 안전성:** `until=24h` 필터로 직전 배포 이미지는 보존 → 즉시 롤백 가능
+- **실패 격리:** `|| true` 처리로 정리 실패가 배포 실패로 이어지지 않음
+- **구조적 해결 (prod):** Fargate microVM은 Task 종료 시 디스크 자체가 통째로 사라져 누적이 발생할 수 없음
+
+### 코드 예시
+
+**즉시 복구 (수동, 사고 발생 시점)**
+
+```bash
+docker image prune -af    # 99% → 20% 회복
+```
+
+**근본 해결 (`scripts/deploy.sh`, PR #139)**
+
+```bash
+CMDS=(
+  "aws ecr get-login-password --region ${AWS_REGION} | docker login ..."
+  "docker pull ${FULL_URI}"
+  "docker stop ${CONTAINER_NAME} || true"
+  "docker rm   ${CONTAINER_NAME} || true"
+  "docker run -d --name ${CONTAINER_NAME} --restart=always ..."
+  "docker image prune -af --filter \"until=24h\" || true"   # 자동 청소
+)
+```
+
+**Prod (Fargate) — 디스크 누적이 구조적으로 불가능한 흐름**
+
+```text
+[배포 1] 새 microVM 프로비저닝 (Firecracker)
+  └─ 디스크 새로 생성 → 이미지 pull v1 (520 MB)
+  └─ Task 시작
+
+[배포 2 — Rolling]
+  새 microVM 추가 프로비저닝 (별개의 머신)
+    └─ 디스크 새로 생성 → 이미지 pull v2 (520 MB)
+    └─ Task 시작
+  [배포 1의 microVM 종료] → 디스크 통째로 destroy → v1도 사라짐
+
+[배포 60] 새 microVM 프로비저닝
+  └─ 디스크 새로 생성 → v60만 있음 (520 MB)
+  └─ 이전 59개 배포 이미지는 어디에도 없음
+```
+
+### 다른 대안과의 비교
+
+| 구분 | **자동 prune (선택)** | Cron 정기 청소 | EBS 디스크 확장 | Fargate 이전 |
+| :--- | :--- | :--- | :--- | :--- |
+| **작업 범위** | 배포 스크립트 1줄 | 별도 cron job 운영 | 인스턴스 디스크 재설정 | 인프라 재구성 |
+| **즉시 효과** | **매 배포마다 자동** | 정해진 시간에만 | 일시적 (재발 가능) | 영구·구조적 해결 |
+| **운영 부담** | 0 | 별도 모니터링 필요 | 디스크 비용 증가 | 시간당 비용 증가 |
+| **롤백 안전성** | **`until=24h` 필터로 보존** | 필터 별도 설계 필요 | 무관 | Task definition 리비전 단위 |
+| **추천 상황** | **dev 환경 표준** | dev 환경 보조 | 일시 응급 처치 | **prod 환경 표준** |
+
+> 💡 dev 는 “자동 prune”, prod 는 Fargate의 이펨럴 디스크를 활용해 **각 환경에 가장 적합한 해결책**을 적용했습니다.
+
+</details>
+
+---
+
+<details>
+<summary><b>ECS 배포 실패 — Health Check Grace Period 부족</b></summary>
+
+### 문제 상황
+
+`main` 브랜치 머지 후 운영 배포 단계에서, 새로 띄운 Task가 **ALB Health Check를 통과하기 전에 강제 종료**되는 사고가 반복 발생했습니다. ECS Deployment Circuit Breaker가 "배포 실패" 로 판정해 자동 롤백하면서, 같은 흐름이 반복되어 무한 재시도 루프에 빠진 상태였습니다.
+
+**증상**
+- 새 Task가 `RUNNING` 상태 진입 후 짧은 시간 안에 `STOPPED` 처리
+- Circuit Breaker → 자동 롤백 → 재시도 → 다시 실패 반복
+- CI 단계의 `aws ecs wait services-stable` 가 10분 이상 멈춤
+
+**원인 분석** — 실제 시간 측정 결과
+
+| 단계 | 소요 시간 |
+| :--- | :--- |
+| Fargate Task placement (microVM 프로비저닝) | ~30 ~ 60s |
+| ECR 이미지 pull (VPC Endpoint 경유) | ~30s |
+| **Spring Boot 4.0.5 콜드 스타트** | **~80s** *(Spring AI + pgvector + JPA)* |
+| ALB Health Check 5회 통과 (`interval 30s × 5`) | ~30 ~ 150s |
+| **합산** | **약 170 ~ 270s** |
+
+→ 기본 grace period **180s** 로는 빠듯해, Spring Boot 부팅이 끝나기 전에 ALB가 unhealthy 판정 → ECS가 Task 종료.
+
+### 해결 방법: Grace Period 300초 + `wait services-stable` 타임아웃 확장
+
+`aws ecs update-service` 단계에서 `--health-check-grace-period-seconds` 를 **300초** 로 명시하고, CI의 `wait services-stable` 단계 타임아웃을 **25분** 으로 확장했습니다.
+
+**장점:**
+- **즉시 적용:** `update-service` 옵션 1개 추가로 끝 → 코드 변경 0, 인프라 추가 0
+- **측정 기반의 안전 마진:** 실제 측정값(콜드 스타트 80s + 합산 200s 이상)에 보수적 여유 100s 추가
+- **변동성 흡수:** 이미지 캐시 미스 / 일시 네트워크 지연 등에도 견딤
+- **운영 표준화:** prod-cd.yml 워크플로우에 고정 → 수동 실수 가능성 0
+
+### 코드 예시
+
+**`.github/workflows/prod-cd.yml`** — 운영 CI에 영구 반영
+
+```yaml
+# 12. ECS 서비스 업데이트 (강제 재배포)
+- name: ECS 서비스 업데이트
+  run: |
+    aws ecs update-service \
+      --cluster "${ECS_CLUSTER}" \
+      --service "${ECS_SERVICE}" \
+      --task-definition "${{ steps.register.outputs.TASK_DEF_ARN }}" \
+      --health-check-grace-period-seconds 300 \    # ⭐ 콜드 스타트 흡수
+      --force-new-deployment
+
+# 13. 배포 안정화 대기 (헬스체크 통과까지)
+- name: 배포 안정화 대기
+  run: |
+    aws ecs wait services-stable \
+      --cluster "${ECS_CLUSTER}" \
+      --services "${ECS_SERVICE}"
+  timeout-minutes: 25                              # ⭐ 첫 배포 여유
+```
+
+**배포 시점 시각화**
+
+```text
+[T+0s]     ECS update-service 호출
+[T+30s]    Fargate microVM 프로비저닝 시작
+[T+60s]    ECR 이미지 pull 시작
+[T+90s]    컨테이너 실행 → Spring Boot 부팅 시작
+[T+170s]   Spring Boot 부팅 완료 → /actuator/health 200 OK 응답 시작
+[T+200s]   ALB Health Check 5회 통과 → healthy 판정
+[T+200s]   옛 Task DRAINING → 새 Task로 트래픽 전환
+─────────────────────────────────────────────────────
+ 0s ~ 300s : Grace Period — 이 구간 health check 실패는 무시
+            (Spring 부팅 안 끝나도 Task 강제 종료 안 함)
+```
+
+### 다른 대안과의 비교
+
+| 구분 | **Grace Period 300s (선택)** | Spring Boot AOT 컴파일 | 이미지 슬림화 | Capacity Provider 변경 |
+| :--- | :--- | :--- | :--- | :--- |
+| **작업 범위** | 명령어 옵션 1개 추가 | Spring + GraalVM 빌드 재구성 | Dockerfile 재작성 | ECS 인프라 변경 |
+| **콜드 스타트 단축** | 0 (대신 안전하게 견딤) | **80s → ~20s** | 일부 (이미지 pull만 단축) | 무관 |
+| **즉시 적용** | **즉시** | 빌드/호환성 검증 필요 | 빌드 재구성 | 인프라 작업 시간 |
+| **위험도** | 낮음 | 라이브러리 호환성 이슈 가능 | 의존성 충돌 가능 | 클러스터 영향 |
+| **추천 상황** | **즉시 사고 차단** | 장기 성능 개선 | 부수적 개선 | 트래픽 패턴 변화 시 |
+
+> 💡 단기적으로는 **Grace Period 300초** 로 사고를 즉시 차단하고, 장기적으로는 **Spring Boot AOT 컴파일** 을 검토해 콜드 스타트 자체를 줄이는 방향을 후속 과제로 남겼습니다.
+
+### 교훈
+
+- **콜드 스타트는 추정이 아닌 실제 측정으로** 안전 마진을 잡아야 한다
+- Grace Period 는 **Service 레벨 설정** — Task Definition이 아니라 `update-service` 시점에 매번 명시되어야 한다 (워크플로우 자동화로 휘발 방지)
+- Circuit Breaker + Auto Rollback 안전망이 작동했기에 사용자 영향 0 — 안전망의 존재 자체가 핵심
+- 향후 Spring Boot AOT / 의존성 슬림화로 콜드 스타트를 80s → 20s 로 단축할 여지를 남겨둠
+
+</details>
+
+---
 
 <details>
 <summary><b>주문 생성 결과 처리 - Sealed Interface 도입</b></summary>
@@ -1242,9 +1732,3 @@ docker-compose up -d
 # K6 부하 테스트 실행
 docker-compose --profile k6 up k6
 ```
-
----
-
-## 📄 API 명세
-
-> Swagger / Notion API 문서 링크 추가 예정
