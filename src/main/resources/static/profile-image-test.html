@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로필 이미지 업로드 시연</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+            background: #f6f7f9;
+            color: #222;
+            margin: 0;
+            padding: 24px;
+            max-width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        h1 { font-size: 22px; margin: 0 0 6px; }
+        .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+        section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+        }
+        h2 { font-size: 15px; margin: 0 0 12px; color: #2563eb; }
+        label { display: block; font-size: 13px; color: #444; margin-bottom: 4px; margin-top: 8px; }
+        input[type=text], input[type=email], input[type=password] {
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        input[type=file] {
+            padding: 8px 0;
+            font-size: 14px;
+        }
+        button {
+            padding: 9px 18px;
+            background: #2563eb;
+            color: white;
+            border: 0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #9ca3af; cursor: not-allowed; }
+        button.ghost { background: white; color: #2563eb; border: 1px solid #2563eb; }
+        .status {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+        .status.ok { display: block; background: #ecfdf5; color: #047857; }
+        .status.err { display: block; background: #fef2f2; color: #b91c1c; }
+        .log {
+            background: #0b1020;
+            color: #d1fae5;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .log .err { color: #fca5a5; }
+        .log .ok { color: #6ee7b7; }
+        .log .info { color: #93c5fd; }
+        .preview-row { display: flex; gap: 14px; align-items: center; margin-top: 12px; }
+        .preview-row img {
+            width: 96px; height: 96px; border-radius: 999px;
+            border: 2px solid #e5e7eb; object-fit: cover;
+            background: #f3f4f6;
+        }
+        .url-display {
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            padding: 6px 8px;
+            background: #f3f4f6;
+            border-radius: 4px;
+            word-break: break-all;
+            flex: 1;
+        }
+        .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🖼️ 프로필 이미지 업로드 시연</h1>
+    <p class="sub">Presigned URL → S3 PUT → 프로필 PATCH 의 3단계 흐름을 한 페이지에서 시연합니다.</p>
+
+    <section>
+        <h2>1. 로그인 (JWT 발급)</h2>
+        <div class="row2">
+            <div>
+                <label>이메일</label>
+                <input type="email" id="email" autocomplete="email" placeholder="user@example.com">
+            </div>
+            <div>
+                <label>비밀번호</label>
+                <input type="password" id="password" autocomplete="current-password">
+            </div>
+        </div>
+        <button id="loginBtn" type="button">로그인</button>
+        <div id="loginStatus" class="status"></div>
+    </section>
+
+    <section>
+        <h2>2. 이미지 파일 선택 & 업로드</h2>
+        <label>이미지 (JPEG / PNG / WebP, 최대 10MB 권장)</label>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp">
+        <button id="uploadBtn" type="button" disabled>업로드 시작</button>
+        <div id="uploadStatus" class="status"></div>
+    </section>
+
+    <section>
+        <h2>3. 진행 로그 & 결과</h2>
+        <div id="log" class="log">대기 중...</div>
+        <div class="preview-row" id="resultRow" style="display:none">
+            <img id="preview" alt="">
+            <div>
+                <div style="font-size:12px;color:#666;margin-bottom:4px">최종 이미지 URL (CloudFront)</div>
+                <div class="url-display" id="finalUrl"></div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let accessToken = null;
+
+        const logEl = document.getElementById("log");
+        function clearLog() { logEl.textContent = ""; }
+        function log(text, type) {
+            const span = document.createElement("span");
+            if (type) span.className = type;
+            span.textContent = text + "\n";
+            logEl.appendChild(span);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        function setStatus(elId, text, ok) {
+            const el = document.getElementById(elId);
+            el.textContent = text;
+            el.className = "status " + (ok ? "ok" : "err");
+        }
+
+        async function login() {
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            if (!email || !password) {
+                setStatus("loginStatus", "이메일과 비밀번호를 입력하세요.", false);
+                return;
+            }
+            try {
+                const res = await fetch("/v1/auth/login", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                const body = await res.json().catch(() => null);
+                if (!res.ok || !body || body.success === false) {
+                    setStatus("loginStatus", "로그인 실패: " + ((body && body.message) || res.status), false);
+                    return;
+                }
+                accessToken = body.data && body.data.accessToken;
+                if (!accessToken) {
+                    setStatus("loginStatus", "응답에 accessToken 없음", false);
+                    return;
+                }
+                setStatus("loginStatus", "✅ 로그인 성공 — JWT 발급됨 (이 페이지 내부에서만 사용)", true);
+                document.getElementById("uploadBtn").disabled = false;
+            } catch (err) {
+                setStatus("loginStatus", "네트워크 오류: " + err.message, false);
+            }
+        }
+
+        async function upload() {
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) {
+                setStatus("uploadStatus", "파일을 선택하세요.", false);
+                return;
+            }
+            if (!accessToken) {
+                setStatus("uploadStatus", "먼저 로그인하세요.", false);
+                return;
+            }
+            const allowed = ["image/jpeg", "image/png", "image/webp"];
+            if (!allowed.includes(file.type)) {
+                setStatus("uploadStatus", "지원하지 않는 형식: " + file.type + " (JPEG/PNG/WebP만)", false);
+                return;
+            }
+
+            clearLog();
+            document.getElementById("resultRow").style.display = "none";
+            document.getElementById("uploadBtn").disabled = true;
+
+            try {
+                log("[ Step 1 ] Presigned URL 발급 요청", "info");
+                log("  POST /v1/images/presigned-urls");
+                log("  body = { type: \"PROFILE\", contentTypes: [\"" + file.type + "\"] }");
+
+                const presignRes = await fetch("/v1/images/presigned-urls", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": "Bearer " + accessToken,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ type: "PROFILE", contentTypes: [file.type] })
+                });
+                const presignBody = await presignRes.json().catch(() => null);
+                if (!presignRes.ok || !presignBody || presignBody.success === false) {
+                    log("  ❌ 실패: " + ((presignBody && presignBody.message) || presignRes.status), "err");
+                    setStatus("uploadStatus", "Presigned 발급 실패", false);
+                    return;
+                }
+                const item = presignBody.data && presignBody.data.urls && presignBody.data.urls[0];
+                if (!item) {
+                    log("  ❌ urls 비어있음", "err");
+                    return;
+                }
+                log("  ✅ 발급 성공 (만료 10분)", "ok");
+                log("  presignedUrl = " + item.presignedUrl.substring(0, 80) + "...");
+                log("  imageUrl     = " + item.imageUrl);
+                log("");
+
+                log("[ Step 2 ] S3 직접 PUT 업로드", "info");
+                log("  PUT presignedUrl");
+                log("  Content-Type: " + file.type);
+                log("  body = file (" + file.size + " bytes)");
+                const putRes = await fetch(item.presignedUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type },
+                    body: file
+                });
+                if (!putRes.ok) {
+                    log("  ❌ S3 응답: " + putRes.status + " " + putRes.statusText, "err");
+                    setStatus("uploadStatus", "S3 업로드 실패", false);
+                    return;
+                }
+                log("  ✅ S3 업로드 완료 (status " + putRes.status + ")", "ok");
+                log("");
+
+                log("[ Step 3 ] 프로필 업데이트", "info");
+                log("  PATCH /v1/members/me");
+                log("  body = { profileImageUrl: \"" + item.imageUrl + "\" }");
+                const patchRes = await fetch("/v1/members/me", {
+                    method: "PATCH",
+                    headers: {
+                        "Authorization": "Bearer " + accessToken,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ profileImageUrl: item.imageUrl })
+                });
+                const patchBody = await patchRes.json().catch(() => null);
+                if (!patchRes.ok || !patchBody || patchBody.success === false) {
+                    log("  ❌ 실패: " + ((patchBody && patchBody.message) || patchRes.status), "err");
+                    setStatus("uploadStatus", "프로필 업데이트 실패", false);
+                    return;
+                }
+                log("  ✅ DB 반영 완료", "ok");
+                log("");
+                log("🎉 전체 흐름 성공", "ok");
+
+                setStatus("uploadStatus", "✅ 업로드 + 프로필 반영 완료", true);
+                document.getElementById("preview").src = item.imageUrl;
+                document.getElementById("finalUrl").textContent = item.imageUrl;
+                document.getElementById("resultRow").style.display = "flex";
+            } catch (err) {
+                log("❌ 예외: " + err.message, "err");
+                setStatus("uploadStatus", "예외 발생: " + err.message, false);
+            } finally {
+                document.getElementById("uploadBtn").disabled = false;
+            }
+        }
+
+        document.getElementById("loginBtn").addEventListener("click", login);
+        document.getElementById("uploadBtn").addEventListener("click", upload);
+        document.getElementById("password").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") login();
+        });
+    </script>
+</body>
+</html>
