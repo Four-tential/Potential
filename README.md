@@ -217,10 +217,10 @@ src/main/java/four_tential/potential
 - 주문 만료 스케줄링 (Spring Batch)
 
 ### 💳 결제 (Payment)
-- PortOne V2 연동
-- 웹훅 기반 결제 상태 동기화 (멱등성 처리)
-- Resilience4j CircuitBreaker 적용 (PortOne 장애 대응)
-- 환불 처리
+- PortOne V2 연동 및 결제 준비 / Paid 웹훅 최종 확정 분리
+- 웹훅 기반 결제 상태 동기화 (`webhook-id` 멱등 처리)
+- Resilience4j CircuitBreaker 적용 (PortOne 장애 전파 차단)
+- 전체 / 부분 / 강사 취소 일괄 환불 처리
 
 ### ✅ 출석 (Attendance)
 - QR 코드 기반 출석 처리
@@ -243,18 +243,80 @@ src/main/java/four_tential/potential
 
 ## 🔥 기술적 도전
 
-### 선착순 예약 동시성 제어
-> 작성 예정
+<details>
+<summary><b>선착순 예약 동시성 제어</b></summary>
+대규모 트래픽 상황에서도 재고(수강 정원)의 정합성을 보장하고 초과 예약을 방지하기 위해 다음과 같은 기술적 장치를 도입했습니다.
+
+- **Redis Lua 스크립트를 통한 원자적 재고 관리**: `GET-DECR` 로직을 하나의 Lua 스크립트로 묶어 Redis 내부에서 원자적으로 실행되도록 구현했습니다. 이를 통해 애플리케이션 레벨의 별도 락 없이도 Race Condition을 방지하고 초과 예약(Over-selling)을 원천 차단했습니다.
+- **Redis 기반의 실시간 재고 관리**: DB의 부하를 줄이기 위해 Redis를 Primary Inventory Source로 활용합니다. DB 반영 전 Redis에서 먼저 좌석을 점유하도록 설계하여 응답 속도를 극대화했습니다.
+- **Redisson 분산 락 (@DistributedLock)**: 재고 복구(Rollback)나 데이터 정합성 보정이 필요한 핵심 비즈니스 로직에는 Redisson을 이용한 분산 락을 적용하여 다중 인스턴스 환경에서도 데이터 일관성을 유지합니다.
+</details>
 
 ---
 
-### 대기열 시스템 (Waiting Room)
-> 작성 예정
+<details>
+<summary><b>대기열 시스템 (Waiting Room)</b></summary>
+한정된 좌석에 대해 수천 명 이상의 동시 접속자가 몰릴 경우, 서버 부하를 제어하고 사용자에게 공정한 기회를 제공하기 위해 대기열 시스템을 구축했습니다.
+
+- **Redis Sorted Set (ZSET) 활용**: 대기열 진입 순서에 따라 Redis ZSET에 사용자 ID와 시퀀스 번호를 저장합니다. 이를 통해 수만 명의 대기자 중에서도 자신의 순번을 `O(log N)`의 속도로 빠르게 조회할 수 있습니다.
+- **SSE (Server-Sent Events) 기반 실시간 알림**: 사용자가 반복적으로 API를 호출(Polling)하는 대신, 서버에서 대기 순번과 입장 가능 상태를 실시간으로 푸시합니다. 이는 클라이언트와 서버 양측의 네트워크 부하를 획기적으로 줄여줍니다.
+- **원자적 승격 로직**: 좌석이 확보되었을 때 대기열 1순위 사용자를 자동으로 주문 단계로 승격시키는 프로세스 또한 Lua 스크립트로 구현하여, 찰나의 순간에 발생할 수 있는 '과승격' 문제를 해결했습니다.
+</details>
 
 ---
 
-### 결제 안정성
-> 작성 예정
+<details>
+<summary><b>결제 안정성 — 결제 준비와 Paid 웹훅 최종 확정 분리</b></summary>
+
+PortOne 결제는 클라이언트 결제창 응답만으로 성공을 확정하면 중복 결제, 중복 웹훅, 좌석 초과 확정 같은 문제가 발생할 수 있었습니다.  
+특히 같은 주문에 대한 중복 결제 준비와, 같은 코스 좌석을 두고 여러 결제가 동시에 `Paid` 로 확정되는 상황을 함께 다뤄야 했습니다.
+
+### 문제 상황
+
+- 사용자가 결제 버튼을 여러 번 누르거나 재시도하면 같은 주문에 대한 결제 준비 요청이 중복될 수 있음
+- PortOne 웹훅은 같은 결제건에 대해 재전송될 수 있어 같은 `pgKey` 를 여러 번 처리할 위험이 있음
+- 남은 좌석이 적은 상황에서 여러 결제가 동시에 확정되면 `confirmCount` 가 초과 증가할 수 있음
+- 외부 PG 장애가 길어지면 결제/환불 요청이 PortOne 호출에 계속 묶여 서비스 내부 자원까지 잠식할 수 있음
+
+### 설계 결정
+
+결제 준비와 최종 확정을 하나의 흐름으로 묶지 않고, 다음과 같이 단계와 충돌 축을 분리했습니다.
+
+- **결제 준비 단계**
+  - `orderId lock` 으로 같은 주문의 중복 준비를 직렬화
+  - 기존 `PENDING payment` 가 있으면 새 `pgKey` 를 만들지 않고 재사용
+- **웹훅 검증 단계**
+  - PortOne 서명 검증
+  - `webhook-id` 저장으로 중복 웹훅 멱등 처리
+- **Paid 웹훅 최종 확정 단계**
+  - `pgKey lock` 으로 같은 결제건 중복 상태 전이 방지
+  - `courseId lock` 으로 좌석 확정 충돌 방지
+  - `Payment FOR UPDATE` 로 payment row 비관적 잠금
+  - 재검증 통과 후에만 `payment / order / confirmCount / Redis occupancy` 확정
+- **외부 PG 보호**
+  - `ResilientPaymentGateway` 에서 PortOne 조회/취소 호출을 Circuit Breaker로 감싸 장애 전파 차단
+
+### 왜 이렇게 설계했는가
+
+하나의 큰 락으로 결제 전체를 막으면 서로 관계없는 요청까지 모두 직렬화되어 처리량이 급격히 떨어집니다.  
+반대로 DB 락만으로 해결하면 멀티 인스턴스 환경의 외부 이벤트 중복이나 결제 준비 중복을 충분히 제어하기 어렵습니다.
+
+그래서 결제 도메인의 충돌을
+
+- **주문 기준 (`orderId`)**
+- **결제건 기준 (`pgKey`)**
+- **좌석 기준 (`courseId`)**
+
+세 축으로 나눠 제어하는 구조를 선택했습니다.
+
+### 기대 효과
+
+- 같은 주문에 대한 `PENDING payment` 중복 생성 방지
+- 같은 결제건에 대한 중복 웹훅 처리 방지
+- 남은 좌석이 적은 상황에서도 초과 확정 방지
+- 외부 PortOne 장애가 내부 결제/환불 경로 전체로 확산되는 상황 완화
+
+</details>
 
 ---
 
@@ -311,6 +373,62 @@ OpenAI API 호출은 수 초가 소요되어 후기 작성 API 응답이 느려�
 ---
 
 ## 🐛 트러블 슈팅
+
+<details>
+<summary><b>주문 생성 결과 처리 - Sealed Interface 도입</b></summary>
+
+### 문제 상황
+
+주문 생성 과정에서 재고 점유 결과에 따라 201(Created)과 202(Accepted/Queued)라는 서로 다른 HTTP 상태를 반환해야 합니다. 기존 방식(하나의 Response DTO 사용)으로는 성공 시 필요한 `orderId`와 대기 시 필요한 `queueId`를 모두 포함해야 하므로, 특정 상황에서 필드들이 `null`이 되어 데이터 구조가 모호해지는 문제가 발생했습니다.
+
+### 해결 방법: Sealed Interface 도입
+
+**Sealed Interface**와 **Record**를 사용하여 각 상태에 최적화된 데이터 구조를 정의하고, 컴파일 타임의 타입 안전성을 확보했습니다.
+
+**장점:**
+- **제한된 확장성:** `permits` 키워드로 허용된 클래스 외 상속을 금지하여 도메인 결과의 범위를 명확히 규정합니다.
+- **컴파일 타임 체크:** `switch` 문에서 모든 하위 클래스를 다뤘는지 컴파일러가 검사하여 `default` 문 없이 안전하게 처리 가능합니다.
+- **데이터 분리:** 각 결과 상태에 필요한 데이터만 보유하므로 `null` 필드 없이 명확한 API 응답을 생성합니다.
+
+### 코드 예시
+
+```java
+// Sealed Interface 정의 (Java 17+)
+public sealed interface OrderResult 
+    permits OrderResult.Created, OrderResult.Queued, OrderResult.Failed {
+
+    // Record 정의
+    record Created(String orderId, LocalDateTime reservedAt) implements OrderResult {}
+    record Queued(String queueId, long estimatedWaitTime) implements OrderResult {}
+    record Failed(String reason) implements OrderResult {}
+}
+
+@PostMapping("/orders")
+public ResponseEntity<?> createOrder(@RequestBody OrderRequest request) {
+    OrderResult result = orderService.createOrder(request);
+
+    // Java 17 패턴 매칭 switch 사용
+    return switch (result) {
+        case OrderResult.Created created -> ResponseEntity.status(HttpStatus.CREATED).body(created);
+        case OrderResult.Queued queued -> ResponseEntity.status(HttpStatus.ACCEPTED).body(queued);
+        case OrderResult.Failed failed -> ResponseEntity.status(HttpStatus.BAD_REQUEST).body(failed.reason());
+    };
+}
+```
+
+### 다른 대안과의 비교
+
+| 구분 | **Sealed Interface** | 일반 Interface | Enum + 필드 | Result 래퍼 |
+| :--- | :--- | :--- | :--- | :--- |
+| **타입 안정성** | **매우 높음** | 보통 | 낮음 | 높음 |
+| **데이터 구조** | 상태별 최적화 | 상태별 최적화 | 통합 (Null 발생) | 공통 구조 |
+| **확장성** | 폐쇄적 (의도적) | 완전 개방 | 폐쇄적 | 보통 |
+| **추천 상황** | **도메인 결과가 명확할 때** | 프레임워크/라이브러리 | 간단한 상태 구분 | 공통 유틸리티 |
+
+</details>
+
+---
+
 <details>
 
 <summary><b>@Async 타이밍 이슈 - 별점 평균 오류</b></summary>
@@ -468,6 +586,97 @@ public class ReviewSummaryBatchJobScheduler {
 ---
 
 
+<details>
+<summary><b>Redis 캐싱 시 List 역직렬화 이슈</b></summary>
+
+### 문제 상황
+
+`RedisCacheConfig`에서 `RedisSerializer.json()`을 사용하여 캐싱을 처리할 때, `List<MyDto>`와 같은 제네릭 컬렉션을 역직렬화하면 에러가 발생하거나 `List<LinkedHashMap>`으로 복원되어 `ClassCastException`이 발생하는 문제가 있었습니다.
+
+### 원인 분석
+
+1. **타입 소거 (Type Erasure)**: 자바 제네릭은 런타임에 타입 정보가 제거됩니다. `List<ReviewResponse>`는 런타임에 단순히 `List`로 보여, 역직렬화 시점에 Jackson이 내부 원소가 무엇인지 판단하지 못하고 기본값인 `LinkedHashMap`으로 변환합니다.
+2. **POJO vs Collection**: `PageResponse<MyDto>`와 같은 명확한 POJO 클래스는 필드 구조가 명시되어 있어 복원이 쉽지만, `List`와 같은 루트 레벨의 제네릭 컬렉션은 역직렬화 대상 타입이 불분명합니다.
+
+### 해결 방법 및 권장 사항
+
+1. **래퍼(Wrapper) DTO 사용 권장**: 단독 `List<MyDto>`를 캐싱하기보다, 명확한 구조를 가진 래퍼 클래스나 `PageResponse<MyDto>` 형식을 캐싱하는 것이 안전합니다.
+2. **역직렬화 타입 명시**: 꼭 `List`를 단독으로 사용해야 한다면, 역직렬화 시점에 `TypeReference` 등을 통해 타입을 명시하거나 `ObjectMapper` 설정에서 클래스 정보를 JSON에 포함(`activateDefaultTyping`)시켜야 합니다.
+3. **결론**: 프로젝트 전반에서는 정합성과 안정성을 위해 **래퍼 DTO 캐싱**을 기본 원칙으로 채택했습니다.
+
+</details>
+
+
+---
+
+<details>
+<summary><b>중복 결제 준비 요청 - 같은 주문에 PENDING payment가 여러 개 생기는 문제</b></summary>
+
+### 문제 상황
+
+사용자가 결제 버튼을 빠르게 두 번 누르거나, 네트워크 지연으로 같은 요청이 재전송되면 같은 주문에 대해 여러 개의 `PENDING payment` 가 생길 수 있었습니다.  
+이 경우 서로 다른 `pgKey` 가 하나의 주문에 매핑되어 이후 웹훅 처리와 결제 확정 흐름이 복잡해집니다.
+
+### 원인 분석
+
+결제 준비는 PortOne 결제창을 열기 전에 서버가 `pgKey` 와 `payment` row를 먼저 생성하는 구조입니다.  
+따라서 "같은 주문에 대한 중복 준비 요청"을 먼저 막지 않으면, 클라이언트 중복 클릭만으로 내부 상태가 여러 번 만들어질 수 있었습니다.
+
+### 해결 방법
+
+- `orderId lock` 으로 같은 주문의 결제 준비를 직렬화
+- 같은 주문에 기존 `PENDING payment` 가 있으면 새로 만들지 않고 기존 `pgKey` 를 그대로 반환
+- 이미 `PAID` 상태라면 즉시 예외 처리해 중복 결제 진입 자체를 차단
+
+### 결과
+
+- 같은 주문에 대한 중복 결제 준비 요청을 하나의 흐름으로 묶을 수 있게 됨
+- `PENDING payment` 가 불필요하게 여러 개 생기는 문제를 방지
+- 이후 웹훅과 결제 확정 흐름의 기준 키를 안정적으로 유지
+
+</details>
+
+---
+
+<details>
+<summary><b>외부 PG 취소 성공 후 DB 실패 - 부분 환불 정합성 분리</b></summary>
+
+### 문제 상황
+
+부분 환불은 PortOne 취소 성공 이후 내부 DB 상태까지 함께 맞아야 완결됩니다.  
+하지만 외부 PG 취소와 내부 DB 갱신은 하나의 트랜잭션으로 묶을 수 없어서, "외부는 취소됐는데 내부는 실패한 상태"가 발생할 수 있었습니다.
+
+### 원인 분석
+
+부분 환불에는 다음 상태가 동시에 맞아야 했습니다.
+
+- `payment` 상태 (`PAID` / `PART_REFUNDED` / `REFUNDED`)
+- `order` 수량
+- `refund` 이력
+- `course.confirmCount`
+- Redis 좌석 상태
+
+이 중 PortOne 취소는 외부 시스템 호출이므로 DB 트랜잭션 밖에서 처리해야 했고,  
+결과적으로 "외부 성공 후 내부 실패" 시나리오를 별도로 설계할 필요가 있었습니다.
+
+### 해결 방법
+
+- `prepareRefund -> PortOne 취소 -> completeRefund` 3단계로 분리
+- 바깥에서 `pgKey lock`, `course lock`을 잡고 안쪽에서 `Payment FOR UPDATE` 적용
+- PortOne 취소 실패는 `createFailed(REQUIRES_NEW)` 로 별도 이력 저장
+- 성공한 경우에만 후속 트랜잭션에서 `payment / order / refund / course` 를 확정
+
+### 결과
+
+- 환불 가능 여부 검증과 실제 취소 요청을 분리해 외부 실패가 내부 상태를 오염시키지 않도록 제어
+- 실패 이력을 별도로 남겨 운영자가 사후 추적할 수 있게 개선
+- 부분 환불의 정합성과 복구 가능성을 함께 확보
+
+</details>
+
+---
+
+
 ## 📊 성능 테스트
 <details>
 <summary><b>후기 목록 조회 성능 개선 : 캐싱 + 페이지네이션 + 인덱스</b></summary>
@@ -616,6 +825,78 @@ p99 기준 **53.58ms → 34.41ms로 약 1.6배 개선**됐다. 캐싱 없이 인
 
 **Stage 4 — 인덱스 + 캐싱**
 p95 기준 **33.71ms → 9.53ms로 약 3.5배 개선**됐다. Stage 2(캐싱만)와 유사한 수준이며, 인덱스의 효과는 **캐시 미스 상황에서 극대화**된다. 캐시가 만료되거나 처음 요청이 들어올 때 DB 조회 비용을 줄여 캐시 웜업(warm-up) 시간을 단축하는 역할을 한다.
+</details>
+
+---
+<details>
+<summary><b>주문하기 API 성능 테스트 결과 (k6-order-complete)</b></summary>
+
+주문하기 API의 성능 병목 현상을 해결하기 위해 Redis Lua Script를 도입하였으며, k6를 활용해 개선 전후의 성능을 측정 및 비교했습니다.
+
+### 테스트 환경
+- **테스트 도구**: k6
+- **테스트 대상**: 주문하기(Order) API
+- **주요 변경 사항**: 재고 확인 및 차감 로직을 다중 Redis 명령에서 단일 Lua 스크립트로 전환
+
+### 성능 비교 결과 요약
+
+| 지표 (Metric) | 개선 전 (Before) | 개선 후 (After) | 개선 결과 |
+| :--- | :--- | :--- | :--- |
+| **평균 응답 시간 (Avg)** | 5,720 ms | 484.3 ms | 약 91.5% 단축 |
+| **95% 응답 시간 (P95)** | 29,990 ms | 1,470 ms | 약 95.1% 단축 |
+| **HTTP 요청 실패율** | 65.59% | 5.07% | 60.52%p 감소 |
+| **주문 성공 횟수** | 0 건 | 20 건 | 기능 정상화 |
+| **주문 에러 횟수** | 1,328 건 | 6 건 | 99.5% 감소 |
+| **큐 가득 참 (Full)** | 3,242 건 | 177 건 | 자원 효율성 증가 |
+
+### 주요 개선 사항 분석
+
+- **서비스 정상화 및 안정성 확보**
+  - **개선 전**: 65% 이상의 높은 실패율과 함께 주문 성공 건수가 0건으로, 정상적인 서비스 이용이 불가능했습니다.
+  - **개선 후**: 실패율이 5% 대로 급감하였으며, 주문 로직이 정상적으로 작동하여 성공 케이스가 안정적으로 발생함을 확인했습니다.
+
+- **응답 속도의 획기적인 개선 (Latency)**
+  - 평균 응답 시간을 **12배 이상 (5.7s → 0.48s)** 단축했습니다.
+  - 특히 극단적인 지표인 P95(상위 5% 응답 시간)가 30초에서 1.4초로 줄어들어, 부하 상황에서도 사용자가 체감하는 지연 시간이 대폭 개선되었습니다.
+
+- **원자성(Atomicity) 보장을 통한 데이터 정합성 해결**
+  - 기존에는 '재고 조회'와 '재고 차감' 사이의 간극에서 레이스 컨디션(Race Condition)이 발생했으나, Lua Script를 통해 이를 하나의 원자적 연산으로 처리함으로써 데이터 정합성 문제를 해결했습니다.
+
+- **네트워크 오버헤드 최적화**
+  - 애플리케이션과 Redis 서버 간의 다중 왕복 통신(Round Trip)을 단일 통신으로 결합하여 불필요한 네트워크 비용을 제거했습니다.
+
+### 결론
+Redis Lua Script 도입을 통해 주문 시스템의 처리량(Throughput)을 높이고 응답 지연(Latency)을 대폭 개선했습니다. 특히 대규모 트래픽 상황에서 발생하던 시스템 마비 현상을 해결하고 안정적인 주문 환경을 구축했습니다.
+
+</details>
+
+---
+
+<details>
+<summary><b>주문 조회 API 성능 테스트 결과 (k6-order-read)</b></summary>
+
+주문 도메인의 읽기 성능(내 주문 목록 조회 및 상세 조회)을 검증하기 위해 k6를 활용한 부하 테스트를 수행했습니다.
+
+### 테스트 환경
+- **테스트 도구**: k6
+- **테스트 대상**: 
+  - 내 주문 목록 조회 (`GET /v1/orders/me`)
+  - 주문 상세 조회 (`GET /v1/orders/{orderId}`)
+- **부하 프로필**: 30 ~ 45 RPS (Ramping Arrival Rate)
+
+### 성능 목표 (SLO)
+
+| 구분 | API | 목표 (p95) |
+| :--- | :--- | :--- |
+| **목록 조회** | `GET /v1/orders/me` | < 500 ms |
+| **상세 조회** | `GET /v1/orders/{orderId}` | < 200 ms |
+| **공통** | 에러율 | < 1.0% |
+
+### 주요 검증 포인트
+- **인덱스 최적화**: `member_id`와 `created_at` 복합 인덱스가 페이징 조회 시 적절히 활용되는지 검증합니다.
+- **조인 성능**: 주문 상세 조회 시 연관된 엔티티(코스 등)를 조회할 때 불필요한 추가 쿼리 없이 효율적으로 데이터를 가져오는지 확인합니다.
+- **부하 안정성**: 목표 RPS(최대 45) 도달 시에도 시스템이 안정적으로 응답을 유지하는지 측정합니다.
+
 </details>
 
 ---
@@ -820,8 +1101,130 @@ public class AsyncConfig {
 
 ---
 
+<details>
+<summary><b>결제 도메인 성능 테스트 및 개선 (k6 + local/perf)</b></summary>
+
+### 테스트 목적
+
+결제 도메인은 단일 API보다 **결제 준비 → Paid 웹훅 → 학생 환불** 흐름 전체에서 병목이 더 잘 드러났습니다.  
+그래서 기능 단독이 아니라 실제 사용자 흐름을 하나의 시나리오로 묶어 성능을 측정했습니다.
+
+- `POST /v1/payments` 결제 준비/조회 시나리오
+- `POST /v1/webhooks/portone` Paid 웹훅 확정 시나리오
+- `PATCH /v1/orders/{orderId}/cancel` 학생 주문 취소 환불 시나리오
+
+외부 PG 지연이 결과를 흐리지 않도록 `local,perf` 프로필과 `PaymentGateway stub` 기반으로 내부 병목만 분리 측정했습니다.
+
+### 주요 개선 사항
+
+- **인덱스 추가**
+    - `payments(member_id, created_at)`
+    - `payments(member_id, status, created_at)`
+    - `refunds(payment_id, status)`
+    - `webhooks(pg_key, event/status/received_at)` 복합 인덱스
+- **쿼리 개선**
+    - 결제 목록 `count` 쿼리에서 불필요한 `orders JOIN` 제거
+    - `refund-preview` 조회를 `payment / order / course` 3회 조회에서 projection 1회 조회로 축소
+- **락 경합 구간 축소**
+    - `course lock` 안에서는 좌석 재확인과 `confirmCount` 증가만 수행
+    - 검증 로직은 lock 밖으로 이동
+    - `seatsConfirmed = false` 경로에서 `paymentService.fail()` 이 중복 호출되던 버그 수정
+
+### 성능 비교 결과 요약
+
+| 항목 | v1 (Baseline) | v6 (최종) | 해석 |
+| --- | ---: | ---: | --- |
+| 결제 준비/조회 business success | 98.91% | **99.48%** | 목표치에 가깝게 안정화 |
+| 학생 환불 business success | 35.18% | **42.85%** | 환불 시나리오 성공률 개선 |
+| 학생 환불 http_req_failed | 27.30% | **15.38%** | 실패 요청 감소 |
+| Paid 웹훅 http_req_failed | 14.43% | **0.00%** | 웹훅 요청 실패 제거 |
+| Paid 웹훅 interrupted_iterations | 173건 | **0건** | 부하 상황에서도 실행 안정성 회복 |
+
+### 결과 해석
+
+이번 테스트는 기능 단독이 아니라 **사용자 흐름 전체**를 하나의 시나리오로 측정했기 때문에, 인덱스나 쿼리 개선이 모든 API의 p95를 일괄적으로 낮추는 형태로 바로 보이지는 않았습니다.
+
+하지만 최종 버전에서는
+
+- 웹훅 실패율 0%
+- interrupted iterations 0건
+- 학생 환불 성공률 개선
+
+으로 이어지면서, "가장 빠른 한 요청"보다 **혼잡한 상황에서도 끝까지 처리되는 비율**을 높인 개선으로 판단했습니다.
+
+</details>
+
+---
+
+<details>
+<summary><b>결제/환불 목록 조회 성능 개선 : 캐싱 + 인덱스 + 페이지네이션</b></summary>
+
+### 테스트 목적
+
+결제/환불 목록 조회는 사용자 마이페이지에서 반복 호출되는 **read-heavy 경로**입니다.  
+특히 `memberId + status` 조건과 `created_at` 정렬이 함께 걸리기 때문에, 목록 데이터 조회뿐 아니라 count 쿼리 비용과 재조회 부하가 누적되기 쉬웠습니다.
+
+그래서 write 경로 성능과 분리해서 아래 목록 조회 시나리오를 별도로 측정했습니다.
+
+- `GET /v1/payments` 결제 목록 조회 시나리오
+- `GET /v1/refunds` 환불 목록 조회 시나리오
+
+### 주요 개선 사항
+
+- **캐싱 적용**
+    - 결제 목록: `PAYMENT_LIST_CACHE`
+    - 환불 목록: `REFUND_LIST_CACHE`
+    - `memberId + status + page + size + sort` 기준으로 캐시 키를 분리해 동일 조건 재조회 비용 절감
+- **인덱스 추가**
+    - `payments(member_id, created_at)`
+    - `payments(member_id, status, created_at)`
+    - `refunds(payment_id, status)`
+- **쿼리 개선**
+    - 결제 목록 count 쿼리에서 불필요한 `orders JOIN` 제거
+    - 페이지네이션 count 비용과 정렬 비용을 줄여 목록 조회 응답 안정화
+
+### 성능 측정 기준
+
+- `k6-payment-list-read-load.js`
+- `k6-refund-list-read-load.js`
+- 목표치
+    - `business success > 99%`
+    - `http_req_duration p(95) < 400ms`
+    - `p(99) < 700ms`
+
+### 확인된 개선 결과
+
+환불 목록 조회는 동일한 사용자 흐름 기준 측정에서 아래와 같은 개선을 확인했습니다.
+
+| 항목 | 개선 전 | 개선 후 | 해석 |
+| --- | ---: | ---: | --- |
+| `refund_list_read_business_success` | 100% | **100%** | 안정성 유지 |
+| `http_req_failed` | 0.00% | **0.00%** | 요청 실패 없음 |
+| `refund_list_read_ms p(95)` | 7.33s | **4.06s** | 목록 조회 체감 지연 감소 |
+| `http_req_duration p(95)` | 7.10s | **4.48s** | 전체 응답 시간 개선 |
+
+결제 목록 조회도 동일한 캐시/인덱스/페이지네이션 전략으로 분리 측정할 수 있도록 시나리오를 구성했고, 결제/환불 목록 경로 모두 **무조건 DB 재조회하던 구조에서 캐시 우선 + 인덱스 보조 구조**로 전환했습니다.
+
+### 결과 해석
+
+이번 개선은 "한 쿼리를 빠르게 만든 것"보다,  
+반복적으로 열리는 사용자 목록 화면에서 **같은 조건 재조회 비용을 줄이고 DB read 부하를 분산**하는 데 의미가 있었습니다.
+
+특히 환불 목록 조회는 여전히 목표치(p95 < 400ms)에는 못 미쳤지만,
+
+- 실패율 0% 유지
+- business success 100% 유지
+- p95 구간 유의미한 감소
+
+를 통해 read path 개선 방향이 맞음을 확인했습니다.
+
+</details>
+
+
+---
+
 ## 🗂 ERD
-> ![Portential v12.png](image/Portential%20v12.png)
+> ![Portential v14.png](docs/images/Portential%20v14.png)
 ---
 
 ## 🚀 실행 방법
