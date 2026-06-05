@@ -38,13 +38,64 @@
 ---
 
 ## 👥 팀원 소개
-
-| 역할 | 이름 |
-|-----|------|
-| 팀장 | 김영재 |
-| 팀원 | 김대훈 |
-| 팀원 | 김동진 |
-| 팀원 | 이한비 |
+<div align="center">
+<table>
+  <tr height="160px">
+    <td align="center" width="150px">
+      <a href="https://github.com/KYJTHEYJ">
+        <img height="110px" width="110px" src="https://github.com/KYJTHEYJ.png" alt="팀장 프로필"/>
+          <br />
+      </a>
+        <b>팀장</b>
+          <br />
+      <a href="https://github.com/KYJTHEYJ">
+        <b>김영재</b>
+      </a>
+      <br />
+        <sub>인프라 구축<br /> CI/CD<br /> 인증<br /> 회원<br /> 클래스<br /> AI 챗봇<br /></sub>
+    </td>
+    <td align="center" width="150px">
+      <a href="https://github.com/BigMacHun-del">
+        <img height="110px" width="110px" src="https://github.com/BigMacHun-del.png" alt="팀원 프로필"/>
+          <br />
+      </a>
+        <b>팀원</b>
+          <br />
+      <a href="https://github.com/BigMacHun-del">
+        <b>김대훈</b>
+      </a>
+      <br />
+        <sub>출석<br /> 후기<br /> AI 후기 요약<br /><br /><br /><br /></sub>
+    </td>
+    <td align="center" width="150px">
+      <a href="https://github.com/ilsamkim">
+        <img height="110px" width="110px" src="https://github.com/ilsamkim.png" alt="팀원 프로필"/>
+          <br />
+      </a>
+        <b>팀원</b>
+          <br />
+      <a href="https://github.com/ilsamkim">
+        <b>김동진</b>
+      </a>
+      <br />
+        <sub>예약<br /> 주문<br /> 동시성 제어<br /><br /><br /><br /></sub>
+    </td>
+   <td align="center" width="150px">
+      <a href="https://github.com/hanbi67">
+        <img height="110px" width="110px" src="https://github.com/hanbi67.png" alt="팀원 프로필"/>
+          <br />
+      </a>
+        <b>팀원</b>
+          <br />
+      <a href="https://github.com/hanbi67">
+        <b>이한비</b>
+      </a>
+     <br />
+        <sub>결제<br /> 동시성 제어<br /> 모니터링 시스템<br /> 일괄 환불 처리 배치<br /><br /><br /></sub>
+    </td>
+  </tr>
+</table>
+</div>
 
 ---
 
@@ -392,10 +443,6 @@ src/main/java/four_tential/potential
 - 수강 완료 후 후기 작성 / 수정 / 삭제
 - 이미지 첨부 (S3 + CloudFront)
 - 좋아요 토글
-
-### 🎫 쿠폰 (Coupon)
-- 고정 금액 / 퍼센트 할인 정책
-- 쿠폰 발급 및 사용 상태 관리
 
 ### 🤖 AI / 챗봇
 - OpenAI / Ollama 기반 LLM을 통한 후기 요약 기능
