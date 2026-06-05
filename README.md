@@ -136,7 +136,7 @@
 | **컴퓨트** | EC2 (`t4g.small`) + Docker 컴포즈 | **ECS Fargate** (1 vCPU / 3 GB) |
 | **아키텍처** | `linux/arm64` (Graviton) | `linux/amd64` (X86_64) |
 | **DB** | RDS MySQL + RDS PostgreSQL (pgvector) | 동일 (`db.t4g.micro` × 2) |
-| **Cache** | ElastiCache **Valkey 3노드** | ElastiCache **Redis 단일 노드** |
+| **Cache** | ElastiCache Redis 7.1 | 동일 |
 | **외부 노출** | 없음 (SSM 세션 전용) | **ALB HTTPS:443** (ACM TLS 1.3) |
 | **모니터링** | Prometheus + Grafana + Loki (self-host) | **AMP + ADOT 사이드카** + Grafana (Private EC2) |
 | **트리거 브랜치** | `dev` push | `main` push |
@@ -206,7 +206,7 @@ GitHub Actions (.github/workflows/prod-cd.yml)
 
 - RDS MySQL 8.4 — `dev-potential-rds-mysql` (`db.t3.micro`)
 - RDS PostgreSQL 17 + pgvector — `dev-potential-rds-postgre` (`db.t3.micro`)
-- ElastiCache Valkey 7.x **3노드 클러스터** — `dev-potential-elasticache-001/002/003` (`cache.t3.micro`)
+- ElastiCache Redis 7.1 - `potential-prod-redis-001` (`cache.t4g.micro`)
 
 ---
 
