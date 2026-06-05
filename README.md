@@ -206,7 +206,7 @@ GitHub Actions (.github/workflows/prod-cd.yml)
 
 - RDS MySQL 8.4 — `dev-potential-rds-mysql` (`db.t3.micro`)
 - RDS PostgreSQL 17 + pgvector — `dev-potential-rds-postgre` (`db.t3.micro`)
-- ElastiCache Redis 7.1 - `potential-prod-redis-001` (`cache.t4g.micro`)
+- ElastiCache Redis 7.1 - `potential-dev-redis-001` (`cache.t4g.micro`)
 
 ---
 
